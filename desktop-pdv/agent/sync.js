@@ -48,8 +48,21 @@ class SyncEngine {
     return Math.min(60000,5000*Math.pow(2,Math.max(this.failures-1,0)));
   }
 
+  async waitForIdle(maxWaitMs=20000){
+    const started=Date.now();
+    while(this.running && Date.now()-started<maxWaitMs){
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    return !this.running;
+  }
+
   async run(force=false){
-    if(this.running||!this.tokenProvider()) return {ok:false,error:'not_enrolled'};
+    if(!this.tokenProvider()) return {ok:false,error:'not_enrolled'};
+    if(this.running){
+      if(!force) return {ok:false,error:'sync_in_progress'};
+      const idle=await this.waitForIdle();
+      if(!idle) return {ok:false,error:'sync_busy'};
+    }
     if(!force&&this.backoffUntil>Date.now()) return {ok:false,error:'sync_backoff',retryAt:new Date(this.backoffUntil).toISOString()};
 
     this.running=true;
@@ -73,7 +86,7 @@ class SyncEngine {
 
       await this.request('/api/pdv/heartbeat',{
         appVersion:this.appVersion,
-        capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true},
+        capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true,operatorSyncProgress:true,searchOnlySaleCatalog:true,fullProductCatalogScreen:true},
         metrics:{
           queue:this.store.queueStats(),
           operatorId:this.store.get('current_operator_id')||null,
