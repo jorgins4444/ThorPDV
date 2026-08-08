@@ -26,6 +26,12 @@ const menu: MenuGroup[] = [
     ],
   },
   {
+    label: 'Vendas', icon: '▰', items: [
+      { label: 'Operações de Caixa', href: '/dashboard/vendas' },
+      { label: 'Nova Venda', href: '/dashboard/vendas/nova' },
+    ],
+  },
+  {
     label: 'Produtos', icon: '◆', items: [
       { label: 'Produtos', href: '/dashboard/produtos' },
       { label: 'Grupos', href: '/dashboard/grupos' },
@@ -185,13 +191,13 @@ const tabData: Record<TabKey, {
 
 const quickActions = [
   ['Nova venda', '/dashboard/vendas/nova', '▰'],
+  ['Operações de caixa', '/dashboard/vendas', 'PDV'],
   ['Novo produto', '/dashboard/produtos/novo', '+'],
   ['Novo cliente', '/dashboard/clientes/novo', '●'],
   ['Entrada de estoque', '/dashboard/estoque/nova', '⬡'],
   ['Conta a receber', '/dashboard/financeiro/receber/novo', '↓'],
   ['Conta a pagar', '/dashboard/financeiro/pagar/novo', '↑'],
   ['Emitir NF-e', '/dashboard/fiscal/nfe', 'NF'],
-  ['Abrir caixa', '/dashboard/pdv/caixa', 'PDV'],
 ];
 
 function todayInput() {
