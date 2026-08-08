@@ -7,6 +7,7 @@ const { installReturnFix } = require('./agent/v3-return');
 const { installEnrollV3 } = require('./agent/v3-enroll');
 const { installDataConsistency } = require('./agent/consistency');
 const { installProfilePermissions } = require('./agent/v3-profile-permissions');
+const { installSyncPolicy } = require('./agent/sync-policy');
 const { installSyncRecovery } = require('./agent/recovery');
 const { installCashClosing } = require('./agent/cash-closing');
 const { installProductionPrinting } = require('./agent/production');
@@ -16,6 +17,7 @@ installReturnFix(ThorAgent);
 installEnrollV3(ThorAgent);
 installDataConsistency(ThorAgent);
 installProfilePermissions(ThorAgent);
+installSyncPolicy(ThorAgent);
 installSyncRecovery(ThorAgent);
 installCashClosing(ThorAgent);
 installProductionPrinting(ThorAgent);
@@ -45,7 +47,7 @@ async function createWindow() {
     apiBase: process.env.THORPDV_API_URL || 'https://thorpdv.vercel.app',
     codec: codec(),
   });
-  agent.sync.appVersion = '0.3.8';
+  agent.sync.appVersion = '0.3.9';
   if (typeof agent.logoutOperator === 'function') agent.logoutOperator();
   await agent.start();
 
@@ -127,13 +129,14 @@ async function printCashClose(summary) {
 
 function registerIpc() {
   const handle = (name, fn) => ipcMain.handle(name, async (_event, ...args) => fn(...args));
-  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: '0.3.8', operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics() }));
+  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: '0.3.9', operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
   handle('thor:enroll', (payload) => agent.enroll(payload));
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
   handle('thor:recover-sync', () => agent.recoverSync());
   handle('thor:disconnect-device', () => agent.disconnectDevice());
   handle('thor:search-products', (query) => agent.searchProducts(query));
+  handle('thor:all-products', () => agent.store.searchProducts('', 5000));
   handle('thor:customers', (query) => agent.searchCustomers(query));
   handle('thor:quote-sale', (items, discount) => agent.quoteSale(items, discount));
   handle('thor:quote-checkout', (payload) => agent.quoteCheckout(payload));
