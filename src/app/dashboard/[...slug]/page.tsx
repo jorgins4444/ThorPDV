@@ -7,6 +7,7 @@ import './organization.css';
 import './fiscal.css';
 import './reconciliation.css';
 import './cash.css';
+import './sales-cash.css';
 import './operator-admin.css';
 import './pdv-profile.css';
 import './product-workspace.css';
@@ -27,6 +28,7 @@ import { SmartPosPairingPanel } from './smartpos-pairing-panel';
 import { FiscalWorkspace } from './fiscal-workspace';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
 import { CashWorkspace } from './cash-workspace';
+import { SalesCashWorkspace } from './sales-cash-workspace';
 import { OperatorWorkspace } from './operator-workspace';
 import { PdvProfileWorkspace } from './pdv-profile-workspace';
 import { ProductMasterWorkspace } from './product-master-workspace';
@@ -46,7 +48,7 @@ const resourceBySlug: Record<string, string> = {
   'administrativo/empresas': 'companies', 'administrativo/pdvs': 'pos_registers', 'fiscal': 'fiscal_documents', 'fiscal/nfe':'fiscal_documents', 'fiscal/nfce':'fiscal_documents', 'integracoes': 'integrations', 'configuracoes': 'branches',
   'relatorios/financeiro': 'report_finance', 'relatorios/vendas': 'report_sales', 'relatorios/estoque': 'report_stock', 'relatorios/listagens': 'products',
   'atendimento': 'tickets', 'atendimento/mensagens': 'tickets', 'atendimento/sla': 'tickets',
-  'vendas/nova': 'sales', 'pdv/caixa': 'pos_registers', 'ajuda': 'companies',
+  'vendas': 'sales', 'vendas/nova': 'sales', 'pdv/caixa': 'pos_registers', 'ajuda': 'companies',
 };
 
 export default async function ModulePage({ params }: { params: Promise<{ slug: string[] }> }) {
@@ -67,7 +69,8 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
     const orders=await erpProductionOrders();
     return <AdvancedShell title="Produção / Cozinha" subtitle="Comandas geradas automaticamente pelas vendas de produtos configurados como produção sob demanda." activePath="/dashboard/estoque/producao"><ProductionWorkspace initial={orders.data}/></AdvancedShell>;
   }
-  if (slug === 'vendas/nova') return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard"><SaleWorkspace customers={customers.data} priceTables={priceTables.data}/></AdvancedShell>;
+  if (slug === 'vendas') return <AdvancedShell title="Vendas" subtitle="Operações de caixa, vendas, fechamentos, histórico e correções por filial, PDV e operador." activePath="/dashboard/vendas"><SalesCashWorkspace/></AdvancedShell>;
+  if (slug === 'vendas/nova') return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard/vendas/nova"><SaleWorkspace customers={customers.data} priceTables={priceTables.data}/></AdvancedShell>;
   if (slug === 'perfis-pdv') return <AdvancedShell title="Perfis de Usuário PDV" subtitle="Alçadas e permissões sincronizadas com os operadores do ThorPDV Desktop." activePath="/dashboard/perfis-pdv"><PdvProfileWorkspace initialProfiles={profilesPdv.data}/></AdvancedShell>;
   if (slug === 'usuarios-pdv') {
     const operators=await listPdvOperators();
