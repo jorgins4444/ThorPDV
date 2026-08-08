@@ -42,12 +42,12 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith('/dashboard')) {
     if (!user && !hasTempSession) { const url = request.nextUrl.clone(); url.pathname = '/login'; return NextResponse.redirect(url); }
     if (!user && hasTempSession && mustChangePassword) { const url = request.nextUrl.clone(); url.pathname = '/change-password'; return NextResponse.redirect(url); }
-    const module=licensedModule(pathname);
-    if(module && token && hasTempSession){
+    const moduleKey=licensedModule(pathname);
+    if(moduleKey && token && hasTempSession){
       const {data}=await supabase.rpc('erp_license_get',{p_token:token});
       const license=data as {ok?:boolean;status?:string;modules?:Record<string,boolean>}|null;
       const active=license?.ok&&(license.status==='active'||license.status==='trial');
-      if(!active||license?.modules?.[module]!==true){const url=request.nextUrl.clone();url.pathname='/dashboard';url.searchParams.set('license_blocked',module);return NextResponse.redirect(url);}
+      if(!active||license?.modules?.[moduleKey]!==true){const url=request.nextUrl.clone();url.pathname='/dashboard';url.searchParams.set('license_blocked',moduleKey);return NextResponse.redirect(url);}
     }
   }
 
