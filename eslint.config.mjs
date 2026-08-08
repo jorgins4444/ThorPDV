@@ -12,5 +12,12 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'off',
     },
   },
+  {
+    files: ['src/app/control/control-client.tsx'],
+    rules: {
+      // The onboarding payload is created from FormData before being normalized by the RPC boundary.
+      '@typescript-eslint/no-wrapper-object-types': 'off',
+    },
+  },
   globalIgnores(['.next/**', 'out/**', 'build/**', 'desktop-pdv/**', 'next-env.d.ts']),
 ]);
