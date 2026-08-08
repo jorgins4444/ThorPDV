@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('thor', {
   recoverSync: () => ipcRenderer.invoke('thor:recover-sync'),
   disconnectDevice: () => ipcRenderer.invoke('thor:disconnect-device'),
   searchProducts: (query) => ipcRenderer.invoke('thor:search-products', query),
+  allProducts: () => ipcRenderer.invoke('thor:all-products'),
   customers: (query) => ipcRenderer.invoke('thor:customers', query),
   quoteSale: (items, discount = 0) => ipcRenderer.invoke('thor:quote-sale', items, discount),
   quoteCheckout: (payload) => ipcRenderer.invoke('thor:quote-checkout', payload),
