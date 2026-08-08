@@ -17,10 +17,10 @@ installReturnFix(ThorAgent);
 installEnrollV3(ThorAgent);
 installDataConsistency(ThorAgent);
 installProfilePermissions(ThorAgent);
-installSyncPolicy(ThorAgent);
 installSyncRecovery(ThorAgent);
 installCashClosing(ThorAgent);
 installProductionPrinting(ThorAgent);
+installSyncPolicy(ThorAgent);
 
 let mainWindow;
 let agent;
