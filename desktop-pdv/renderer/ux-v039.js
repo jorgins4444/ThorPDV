@@ -104,7 +104,6 @@ function ux39RenderProductListScreen() {
     clearTimeout(timer);
     timer = setTimeout(() => ux39RenderAllProducts(event.target.value), 80);
   };
-  queueMicrotask(ux39LoadAllProducts);
 }
 
 function ux39RenderAllProducts(filter = '') {
