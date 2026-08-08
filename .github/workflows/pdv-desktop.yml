@@ -53,7 +53,8 @@ jobs:
             'renderer/cash-closing.js',
             'renderer/ux-v038.js',
             'renderer/ux-v039.js',
-            'renderer/scanner-v039.js'
+            'renderer/scanner-v039.js',
+            'renderer/cash-cycle-v040.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
