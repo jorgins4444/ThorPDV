@@ -1,120 +1,87 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { erpCashClosureHistory, erpCashManagementClose, erpCashManagementReopen, erpSalesCashDashboard } from './actions';
+import {
+  erpCashClosureHistory, erpCashManagementClose, erpCashManagementReopen,
+  erpSalesCashCancelNfce, erpSalesCashCancelSale, erpSalesCashDashboard,
+  erpSalesCashFiscalXml, erpSalesCashSaleDetail,
+} from './actions';
 
 type Row=Record<string,unknown>;
 type Dashboard={sessions:Row[];operations:Row[];operators:Row[];branches:Row[];summary:Row};
+type SaleDetail={sale:Row;items:Row[];payments:Row[];fiscal:Row;document_kind:string;fiscal_cancellation_transport_ready:boolean};
 const money=(v:unknown)=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const dt=(v:unknown)=>v?new Date(String(v)).toLocaleString('pt-BR'):'—';
 const text=(v:unknown)=>v==null?'':String(v);
 const num=(v:unknown)=>Number(v||0);
-function localDate(offset=0){const d=new Date();d.setDate(d.getDate()+offset);const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`;}
+const esc=(v:unknown)=>text(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]||c));
+function isoDate(d:Date){const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`;}
+function localDate(){return isoDate(new Date())}
 function toRange(date:string,end=false){const d=new Date(`${date}T00:00:00`);if(end)d.setDate(d.getDate()+1);return d.toISOString();}
-
-const operationLabels:Record<string,string>={opening:'Abertura',sale:'Venda',cash_movement:'Movimento',closing:'Fechamento',reopen:'Reabertura'};
-const statusLabels:Record<string,string>={open:'Aberto',closed:'Fechado',completed:'Concluída',cancelled:'Cancelada',supply:'Suprimento',withdrawal:'Sangria',sangria:'Sangria',expense:'Despesa',refund:'Devolução',reopened:'Reaberto'};
+function periodRange(kind:'day'|'month'|'year'){
+  const now=new Date(); let first=new Date(now),last=new Date(now);
+  if(kind==='month'){first=new Date(now.getFullYear(),now.getMonth(),1);last=new Date(now.getFullYear(),now.getMonth()+1,0)}
+  if(kind==='year'){first=new Date(now.getFullYear(),0,1);last=new Date(now.getFullYear(),11,31)}
+  return [isoDate(first),isoDate(last)] as const;
+}
+const operationLabels:Record<string,string>={opening:'Abertura',sale:'Venda',cash_movement:'Movimento'};
+const operationState:Record<string,string>={realized:'Realizada',cancelled:'Cancelada',fiscal_pending:'Pendência fiscal'};
+const paymentLabels:Record<string,string>={cash:'Dinheiro',pix:'Pix',credit_card:'Cartão de crédito',debit_card:'Cartão de débito',voucher:'Voucher',store_credit:'Crédito da loja',other:'Outros'};
 
 export function SalesCashWorkspace(){
   const [tab,setTab]=useState<'operations'|'closures'>('operations');
-  const [start,setStart]=useState(localDate());
-  const [end,setEnd]=useState(localDate());
-  const [operatorId,setOperatorId]=useState('');
-  const [branchId,setBranchId]=useState('');
-  const [status,setStatus]=useState('');
-  const [data,setData]=useState<Dashboard>({sessions:[],operations:[],operators:[],branches:[],summary:{}});
-  const [closures,setClosures]=useState<Row[]>([]);
-  const [message,setMessage]=useState('');
-  const [pending,startTransition]=useTransition();
-  const [modal,setModal]=useState<{type:'close'|'reopen';session:Row}|null>(null);
-  const [closing,setClosing]=useState('');
-  const [reason,setReason]=useState('');
+  const [start,setStart]=useState(localDate()); const [end,setEnd]=useState(localDate());
+  const [operatorId,setOperatorId]=useState(''); const [branchId,setBranchId]=useState(''); const [operationFilter,setOperationFilter]=useState('');
+  const [data,setData]=useState<Dashboard>({sessions:[],operations:[],operators:[],branches:[],summary:{}}); const [closures,setClosures]=useState<Row[]>([]);
+  const [message,setMessage]=useState(''); const [pending,startTransition]=useTransition();
+  const [cashModal,setCashModal]=useState<{type:'close'|'reopen';session:Row}|null>(null); const [closing,setClosing]=useState(''); const [reason,setReason]=useState('');
+  const [detail,setDetail]=useState<SaleDetail|null>(null); const [detailLoading,setDetailLoading]=useState(false);
 
-  const filterPayload=useMemo(()=>({start:toRange(start),end:toRange(end,true),operatorId:operatorId||undefined,branchId:branchId||undefined,status:status||undefined}),[start,end,operatorId,branchId,status]);
-
+  const filterPayload=useMemo(()=>({start:toRange(start),end:toRange(end,true),operatorId:operatorId||undefined,branchId:branchId||undefined,operationFilter:operationFilter||undefined}),[start,end,operatorId,branchId,operationFilter]);
   async function load(){
-    setMessage('');
-    const [dashboard,history]=await Promise.all([
-      erpSalesCashDashboard(filterPayload),
-      erpCashClosureHistory({start:filterPayload.start,end:filterPayload.end,operatorId:filterPayload.operatorId,branchId:filterPayload.branchId}),
-    ]);
-    if(!dashboard.ok){setMessage(text(dashboard.error||'Não foi possível carregar as operações de caixa.'));return;}
+    setMessage(''); const [dashboard,history]=await Promise.all([erpSalesCashDashboard(filterPayload),erpCashClosureHistory({start:filterPayload.start,end:filterPayload.end,operatorId:filterPayload.operatorId,branchId:filterPayload.branchId})]);
+    if(!dashboard.ok){setMessage(text(dashboard.error||'Não foi possível carregar as operações.'));return}
     setData({sessions:dashboard.sessions,operations:dashboard.operations,operators:dashboard.operators,branches:dashboard.branches,summary:dashboard.summary});
-    if(history.ok)setClosures(history.data); else setMessage(text(history.error||'Não foi possível carregar o histórico de fechamentos.'));
+    if(history.ok)setClosures(history.data);else setMessage(text(history.error||'Não foi possível carregar os fechamentos.'));
   }
   useEffect(()=>{startTransition(()=>{void load()})},[]);
-
   function applyFilters(){startTransition(()=>{void load()})}
-  function openClose(session:Row){setClosing(num(session.expected_cash).toFixed(2));setReason('');setModal({type:'close',session})}
-  function openReopen(session:Row){setReason('');setClosing('');setModal({type:'reopen',session})}
+  function preset(kind:'day'|'month'|'year'){const [a,b]=periodRange(kind);setStart(a);setEnd(b);setTimeout(()=>startTransition(()=>{void load()}),0)}
+  function openClose(session:Row){setClosing(num(session.expected_cash).toFixed(2));setReason('');setCashModal({type:'close',session})}
+  function openReopen(session:Row){setReason('');setClosing('');setCashModal({type:'reopen',session})}
+  async function confirmCashAction(){if(!cashModal)return;if(cashModal.type==='close'){const amount=Number(String(closing).replace(',','.'));if(!Number.isFinite(amount)||amount<0){setMessage('Informe um valor contado válido.');return}const r=await erpCashManagementClose(text(cashModal.session.id||cashModal.session.cash_session_id),amount,reason||'Fechamento realizado pelo módulo Vendas do Gestão');if(!r.ok){setMessage(text(r.error||'Não foi possível fechar o caixa.'));return}setMessage(`Caixa fechado. Esperado: ${money(r.expected)} · Contado: ${money(r.closing)} · Diferença: ${money(r.difference)}.`)}else{if(reason.trim().length<3){setMessage('Informe o motivo da reabertura.');return}const r=await erpCashManagementReopen(text(cashModal.session.cash_session_id||cashModal.session.id),reason.trim());if(!r.ok){setMessage(text(r.error||'Não foi possível reabrir o caixa.'));return}setMessage('Caixa reaberto. O fechamento anterior permanece no histórico.')}setCashModal(null);setReason('');setClosing('');await load()}
 
-  async function confirmAction(){
-    if(!modal)return;
-    if(modal.type==='close'){
-      const amount=Number(String(closing).replace(',','.'));
-      if(!Number.isFinite(amount)||amount<0){setMessage('Informe um valor contado válido.');return;}
-      const r=await erpCashManagementClose(text(modal.session.id||modal.session.cash_session_id),amount,reason||'Fechamento realizado pelo módulo Vendas do Gestão');
-      if(!r.ok){setMessage(text(r.error||'Não foi possível fechar o caixa.'));return;}
-      setMessage(`Caixa fechado pelo Gestão. Esperado: ${money(r.expected)} · Contado: ${money(r.closing)} · Diferença: ${money(r.difference)}.`);
-    }else{
-      if(reason.trim().length<3){setMessage('Informe o motivo da reabertura.');return;}
-      const r=await erpCashManagementReopen(text(modal.session.cash_session_id||modal.session.id),reason.trim());
-      if(!r.ok){setMessage(text(r.error||'Não foi possível reabrir o caixa.'));return;}
-      setMessage('Caixa reaberto para correção. O fechamento anterior foi preservado no histórico.');
-    }
-    setModal(null);setReason('');setClosing('');await load();
-  }
+  async function openSale(saleId:string){setDetailLoading(true);setMessage('');const r=await erpSalesCashSaleDetail(saleId);setDetailLoading(false);if(!r.ok){setMessage(text(r.error||'Não foi possível abrir a venda.'));return}setDetail({sale:(r.sale||{}) as Row,items:Array.isArray(r.items)?r.items as Row[]:[],payments:Array.isArray(r.payments)?r.payments as Row[]:[],fiscal:(r.fiscal&&typeof r.fiscal==='object'&&!Array.isArray(r.fiscal)?r.fiscal:{}) as Row,document_kind:text(r.document_kind),fiscal_cancellation_transport_ready:Boolean(r.fiscal_cancellation_transport_ready)})}
+  function printOperation(){if(!detail)return;const s=detail.sale;const f=detail.fiscal;const win=window.open('','_blank','width=820,height=900');if(!win){setMessage('O navegador bloqueou a janela de impressão.');return}const items=detail.items.map(i=>`<tr><td>${esc(i.sku||'')}</td><td>${esc(i.description)}</td><td>${num(i.quantity).toLocaleString('pt-BR',{maximumFractionDigits:3})}</td><td>${money(i.unit_price)}</td><td>${money(i.total)}</td></tr>`).join('');const pays=detail.payments.map(p=>`<li>${esc(paymentLabels[text(p.method)]||p.method)} — ${money(p.amount)}</li>`).join('');win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Venda ${esc(s.number)}</title><style>body{font:14px Arial;color:#111;padding:28px}h1{font-size:22px;margin:0}small{color:#666}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{padding:8px;border-bottom:1px solid #ddd;text-align:left}.total{font-size:20px;font-weight:bold;text-align:right;margin-top:18px}.warn{border:1px solid #aaa;padding:10px;margin:15px 0}</style></head><body><h1>ThorPDV — Operação de Venda #${esc(s.number)}</h1><p>${esc(s.branch)} · ${esc(s.pos)} · Operador: ${esc(s.operator||'—')}</p><p>Data: ${esc(dt(s.completed_at||s.created_at))}</p>${text(f.status)==='authorized'?`<p>NFC-e ${esc(f.number)} série ${esc(f.series)} · Chave ${esc(f.access_key)}</p>`:'<div class="warn">Comprovante/espelho da operação — NÃO substitui documento fiscal.</div>'}<table><thead><tr><th>Cód.</th><th>Produto</th><th>Qtd.</th><th>Unit.</th><th>Total</th></tr></thead><tbody>${items}</tbody></table><div class="total">Total: ${money(s.total)}</div><h3>Pagamentos</h3><ul>${pays}</ul><script>window.onload=()=>window.print()<\/script></body></html>`);win.document.close()}
+  async function downloadXml(){if(!detail?.fiscal?.id)return;const r=await erpSalesCashFiscalXml(text(detail.fiscal.id));if(!r.ok){setMessage(text(r.error==='xml_not_available'?'XML autorizado ainda não está disponível.':r.error||'Não foi possível obter o XML.'));return}if(text(r.xml)){const blob=new Blob([text(r.xml)],{type:'application/xml;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=text(r.filename)||'NFCe.xml';a.click();URL.revokeObjectURL(url);return}if(text(r.xml_path)){const a=document.createElement('a');a.href=text(r.xml_path);a.target='_blank';a.rel='noopener';a.download=text(r.filename)||'NFCe.xml';a.click();return}setMessage('XML não disponível.')}
+  async function cancelSale(){if(!detail)return;const reason=window.prompt('Informe o motivo do cancelamento da operação:','');if(!reason)return;if(reason.trim().length<3){setMessage('Informe um motivo com pelo menos 3 caracteres.');return}if(!window.confirm(`Confirmar cancelamento da venda #${text(detail.sale.number)}?`))return;const r=await erpSalesCashCancelSale(text(detail.sale.id),reason.trim());if(!r.ok){setMessage(text(r.error||'Não foi possível cancelar a venda.'));return}setMessage(r.warning==='production_already_started_components_not_returned'?'Venda cancelada. Atenção: havia produção já iniciada; os insumos não foram devolvidos ao estoque.':'Venda cancelada com sucesso.');setDetail(null);await load()}
+  async function cancelNfce(){if(!detail)return;const reason=window.prompt('Justificativa do cancelamento da NFC-e (mínimo 15 caracteres):','');if(!reason)return;if(reason.trim().length<15){setMessage('A justificativa da NFC-e deve ter pelo menos 15 caracteres.');return}const r=await erpSalesCashCancelNfce(text(detail.sale.id),reason.trim());if(!r.ok){if(r.error==='nfce_cancellation_window_expired')setMessage('Prazo fiscal de 30 minutos expirado para esta NFC-e.');else if(r.error==='fiscal_cancellation_transport_not_configured')setMessage('A NFC-e está dentro da janela de 30 minutos, mas a transmissão do evento de cancelamento ainda depende da integração fiscal homologada com o provedor/SEFAZ.');else setMessage(text(r.error||'Não foi possível cancelar a NFC-e.'));return}setDetail(null);await load()}
 
   const openSessions=data.sessions.filter(s=>text(s.status)==='open');
-  const negativeOp=(o:Row)=>['withdrawal','sangria','expense','refund'].includes(text(o.status));
-
+  const negativeOp=(o:Row)=>/Sangria|Despesa|Devolução/.test(text(o.description));
   return <div className="sales-cash-workspace">
-    <section className="sales-cash-kpis">
-      <article><span>Caixas abertos</span><strong>{num(data.summary.open_cash)}</strong><small>sessões em operação</small></article>
-      <article><span>Caixas fechados</span><strong>{num(data.summary.closed_cash)}</strong><small>sessões encontradas</small></article>
-      <article><span>Vendas no período</span><strong>{money(data.summary.sales_total)}</strong><small>operações sincronizadas</small></article>
-      <article><span>Sessões</span><strong>{num(data.summary.sessions)}</strong><small>no filtro atual</small></article>
-    </section>
+    <section className="sales-cash-kpis"><article><span>Caixas abertos</span><strong>{num(data.summary.open_cash)}</strong><small>em operação</small></article><article><span>Caixas fechados</span><strong>{num(data.summary.closed_cash)}</strong><small>sessões registradas</small></article><article><span>Vendas no período</span><strong>{money(data.summary.sales_total)}</strong><small>vendas concluídas</small></article><article><span>Operações</span><strong>{data.operations.length}</strong><small>no filtro atual</small></article></section>
 
     <section className="sales-cash-card filters-card">
-      <div className="sales-cash-tabs"><button className={tab==='operations'?'active':''} onClick={()=>setTab('operations')}>Operações de Caixa</button><button className={tab==='closures'?'active':''} onClick={()=>setTab('closures')}>Fechamentos / Histórico</button></div>
-      <div className="sales-cash-filters">
-        <label><span>De</span><input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label>
-        <label><span>Até</span><input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label>
-        <label><span>Operador</span><select value={operatorId} onChange={e=>setOperatorId(e.target.value)}><option value="">Todos</option>{data.operators.map(o=><option key={text(o.id)} value={text(o.id)}>{text(o.name)}</option>)}</select></label>
-        <label><span>Filial</span><select value={branchId} onChange={e=>setBranchId(e.target.value)}><option value="">Todas</option>{data.branches.map(b=><option key={text(b.id)} value={text(b.id)}>{text(b.name)}</option>)}</select></label>
-        {tab==='operations'&&<label><span>Status do caixa</span><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">Todos</option><option value="open">Aberto</option><option value="closed">Fechado</option></select></label>}
-        <button className="sales-cash-filter-button" disabled={pending} onClick={applyFilters}>{pending?'Atualizando...':'Aplicar filtros'}</button>
-      </div>
+      <div className="sales-cash-tabs"><button className={tab==='operations'?'active':''} onClick={()=>setTab('operations')}>Operações do Caixa</button><button className={tab==='closures'?'active':''} onClick={()=>setTab('closures')}>Fechamentos de Caixa</button></div>
+      <div className="period-shortcuts"><span>Período rápido</span><button onClick={()=>preset('day')}>Hoje</button><button onClick={()=>preset('month')}>Este mês</button><button onClick={()=>preset('year')}>Este ano</button></div>
+      <div className="sales-cash-filters"><label><span>De</span><input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label><label><span>Até</span><input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label><label><span>Operador</span><select value={operatorId} onChange={e=>setOperatorId(e.target.value)}><option value="">Todos</option>{data.operators.map(o=><option key={text(o.id)} value={text(o.id)}>{text(o.name)}</option>)}</select></label><label><span>Filial</span><select value={branchId} onChange={e=>setBranchId(e.target.value)}><option value="">Todas</option>{data.branches.map(b=><option key={text(b.id)} value={text(b.id)}>{text(b.name)}</option>)}</select></label>{tab==='operations'&&<label><span>Situação</span><select value={operationFilter} onChange={e=>setOperationFilter(e.target.value)}><option value="">Todas</option><option value="realized">Realizadas</option><option value="cancelled">Canceladas</option><option value="fiscal_pending">Pendências fiscais</option></select></label>}<button className="sales-cash-filter-button" disabled={pending} onClick={applyFilters}>{pending?'Atualizando...':'Aplicar filtros'}</button></div>
       {message&&<div className="sales-cash-message">{message}</div>}
     </section>
 
-    {tab==='operations'?<>
-      <section className="sales-cash-card">
-        <div className="sales-cash-section-head"><div><h2>Caixas em operação</h2><p>Feche uma sessão diretamente pelo Gestão quando necessário.</p></div><span>{openSessions.length} aberto(s)</span></div>
-        {openSessions.length===0?<div className="sales-cash-empty">Nenhum caixa aberto no filtro atual.</div>:<div className="sales-cash-open-grid">{openSessions.map(s=><article key={text(s.id)}>
-          <div className="cash-session-title"><div><strong>{text(s.pos)||'PDV'}</strong><small>{text(s.branch)}</small></div><span className="cash-state open">ABERTO</span></div>
-          <dl><div><dt>Operador</dt><dd>{text(s.operator)||'Não identificado'}</dd></div><div><dt>Aberto em</dt><dd>{dt(s.opened_at)}</dd></div><div><dt>Fundo inicial</dt><dd>{money(s.opening_amount)}</dd></div><div><dt>Vendas</dt><dd>{num(s.sales_count)} · {money(s.sales_total)}</dd></div><div><dt>Dinheiro recebido</dt><dd>{money(s.cash_received)}</dd></div><div><dt>Esperado em caixa</dt><dd><strong>{money(s.expected_cash)}</strong></dd></div></dl>
-          <button className="cash-close-management" onClick={()=>openClose(s)}>Fechar pelo Gestão</button>
-        </article>)}</div>}
-      </section>
+    {tab==='operations'?<section className="sales-cash-card"><div className="sales-cash-section-head"><div><h2>Operações realizadas no caixa</h2><p>Aberturas, vendas, suprimentos, sangrias, despesas e devoluções. Fechamentos ficam na aba própria.</p></div><span>{data.operations.length} operação(ões)</span></div><div className="sales-cash-table-wrap"><table><thead><tr><th>Data / hora</th><th>Tipo</th><th>PDV / Filial</th><th>Operador</th><th>Operação</th><th>Documento</th><th className="right">Valor</th><th>Situação</th><th></th></tr></thead><tbody>{data.operations.length===0?<tr><td colSpan={9} className="sales-cash-empty">Nenhuma operação encontrada.</td></tr>:data.operations.map((o,i)=><tr key={text(o.op_key)||String(i)} className={o.sale_id?'sale-operation-row':''} onDoubleClick={()=>o.sale_id&&void openSale(text(o.sale_id))}><td>{dt(o.occurred_at)}</td><td><span className={`op-type ${text(o.op_type)}`}>{operationLabels[text(o.op_type)]||text(o.op_type)}</span></td><td><strong>{text(o.pos)}</strong><small>{text(o.branch)}</small></td><td>{text(o.operator)||'—'}</td><td>{text(o.description)}</td><td>{o.sale_id?(o.document_type==='nfce'?<span className={`fiscal-chip ${text(o.fiscal_status)}`}>NFC-e · {text(o.fiscal_status)||'pendente'}</span>:<span className="fiscal-chip pre">Pré-venda</span>):'—'}</td><td className={`right amount ${negativeOp(o)?'negative':''}`}>{negativeOp(o)?'− ':''}{money(o.amount)}</td><td><span className={`op-status state-${text(o.operation_state)}`}>{operationState[text(o.operation_state)]||text(o.operation_state)||'—'}</span></td><td>{o.sale_id?<button className="sale-detail-button" onClick={()=>void openSale(text(o.sale_id))}>{detailLoading?'...':'Ver detalhes'}</button>:null}</td></tr>)}</tbody></table></div></section>:<>
+      <section className="sales-cash-card"><div className="sales-cash-section-head"><div><h2>Caixas abertos</h2><p>Confira o esperado e feche pelo Gestão quando necessário.</p></div><span>{openSessions.length} aberto(s)</span></div>{openSessions.length===0?<div className="sales-cash-empty">Nenhum caixa aberto.</div>:<div className="sales-cash-open-grid">{openSessions.map(s=><article key={text(s.id)}><div className="cash-session-title"><div><strong>{text(s.pos)||'PDV'}</strong><small>{text(s.branch)}</small></div><span className="cash-state open">ABERTO</span></div><dl><div><dt>Operador</dt><dd>{text(s.operator)||'Não identificado'}</dd></div><div><dt>Aberto em</dt><dd>{dt(s.opened_at)}</dd></div><div><dt>Fundo</dt><dd>{money(s.opening_amount)}</dd></div><div><dt>Vendas</dt><dd>{num(s.sales_count)} · {money(s.sales_total)}</dd></div><div><dt>Dinheiro</dt><dd>{money(s.cash_received)}</dd></div><div><dt>Esperado</dt><dd><strong>{money(s.expected_cash)}</strong></dd></div></dl><button className="cash-close-management" onClick={()=>openClose(s)}>Fechar pelo Gestão</button></article>)}</div>}</section>
+      <section className="sales-cash-card"><div className="sales-cash-section-head"><div><h2>Histórico de fechamentos</h2><p>Fechamentos e reaberturas ficam isolados das operações do caixa.</p></div><span>{closures.length} fechamento(s)</span></div><div className="sales-cash-table-wrap"><table><thead><tr><th>Fechamento</th><th>PDV / Filial</th><th>Operador</th><th>Abertura</th><th>Vendas</th><th className="right">Esperado</th><th className="right">Contado</th><th className="right">Diferença</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{closures.length===0?<tr><td colSpan={10} className="sales-cash-empty">Nenhum fechamento encontrado.</td></tr>:closures.map((c,i)=><tr key={`${text(c.cash_session_id)}-${text(c.closed_at)}-${i}`}><td><strong>{dt(c.closed_at)}</strong>{c.reopened_at?<small>Reaberto em {dt(c.reopened_at)}</small>:null}</td><td><strong>{text(c.pos)}</strong><small>{text(c.branch)}</small></td><td>{text(c.operator)||'—'}</td><td>{dt(c.opened_at)}</td><td>{num(c.sales_count)}<small>{money(c.sales_total)}</small></td><td className="right">{money(c.expected_cash)}</td><td className="right">{money(c.closing_amount)}</td><td className={`right ${Math.abs(num(c.difference))>.009?'difference-bad':'difference-ok'}`}>{money(c.difference)}</td><td>{text(c.record_state)==='reopened'?<span className="cash-state reopened">REABERTO DEPOIS</span>:<span className="cash-state closed">FECHADO</span>}{c.reopen_reason?<small>{text(c.reopen_reason)}</small>:null}</td><td>{text(c.record_state)==='current'?<button className="cash-reopen-management" onClick={()=>openReopen(c)}>Reabrir</button>:<span className="history-preserved">Histórico preservado</span>}</td></tr>)}</tbody></table></div></section>
+    </>}
 
-      <section className="sales-cash-card">
-        <div className="sales-cash-section-head"><div><h2>Listagem de operações</h2><p>Aberturas, vendas, suprimentos, sangrias, devoluções, fechamentos e reaberturas.</p></div><span>{data.operations.length} operação(ões)</span></div>
-        <div className="sales-cash-table-wrap"><table><thead><tr><th>Data / hora</th><th>Tipo</th><th>PDV / Filial</th><th>Operador</th><th>Operação</th><th className="right">Valor</th><th>Status</th></tr></thead><tbody>
-          {data.operations.length===0?<tr><td colSpan={7} className="sales-cash-empty">Nenhuma operação encontrada no período.</td></tr>:data.operations.map((o,i)=><tr key={text(o.op_key)||String(i)}><td>{dt(o.occurred_at)}</td><td><span className={`op-type ${text(o.op_type)}`}>{operationLabels[text(o.op_type)]||text(o.op_type)}</span></td><td><strong>{text(o.pos)}</strong><small>{text(o.branch)}</small></td><td>{text(o.operator)||'—'}</td><td>{text(o.description)}</td><td className={`right amount ${negativeOp(o)?'negative':''}`}>{negativeOp(o)?'− ':''}{money(o.amount)}</td><td><span className="op-status">{statusLabels[text(o.status)]||text(o.status)||'—'}</span></td></tr>)}
-        </tbody></table></div>
-      </section>
-    </>:<section className="sales-cash-card">
-      <div className="sales-cash-section-head"><div><h2>Histórico de fechamentos</h2><p>Filtre por dia, período, filial ou operador. Fechamentos reabertos permanecem registrados.</p></div><span>{closures.length} fechamento(s)</span></div>
-      <div className="sales-cash-table-wrap"><table><thead><tr><th>Fechamento</th><th>PDV / Filial</th><th>Operador</th><th>Abertura</th><th>Vendas</th><th className="right">Esperado</th><th className="right">Contado</th><th className="right">Diferença</th><th>Situação</th><th>Ação</th></tr></thead><tbody>
-        {closures.length===0?<tr><td colSpan={10} className="sales-cash-empty">Nenhum fechamento encontrado no período.</td></tr>:closures.map((c,i)=><tr key={`${text(c.cash_session_id)}-${text(c.closed_at)}-${i}`}><td><strong>{dt(c.closed_at)}</strong>{c.reopened_at?<small>Reaberto em {dt(c.reopened_at)}</small>:null}</td><td><strong>{text(c.pos)}</strong><small>{text(c.branch)}</small></td><td>{text(c.operator)||'—'}</td><td>{dt(c.opened_at)}</td><td>{num(c.sales_count)}<small>{money(c.sales_total)}</small></td><td className="right">{money(c.expected_cash)}</td><td className="right">{money(c.closing_amount)}</td><td className={`right ${Math.abs(num(c.difference))>.009?'difference-bad':'difference-ok'}`}>{money(c.difference)}</td><td>{text(c.record_state)==='reopened'?<span className="cash-state reopened">REABERTO DEPOIS</span>:<span className="cash-state closed">FECHADO</span>}{c.reopen_reason?<small className="reopen-reason">{text(c.reopen_reason)}</small>:null}</td><td>{text(c.record_state)==='current'?<button className="cash-reopen-management" onClick={()=>openReopen(c)}>Reabrir</button>:<span className="history-preserved">Histórico preservado</span>}</td></tr>)}
-      </tbody></table></div>
-    </section>}
+    {detail&&<div className="sale-detail-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}><aside className="sale-detail-drawer"><header><div><small>OPERAÇÃO DE VENDA</small><h2>Venda #{text(detail.sale.number)}</h2><p>{dt(detail.sale.completed_at||detail.sale.created_at)} · {text(detail.sale.pos)} · {text(detail.sale.operator)||'—'}</p></div><button onClick={()=>setDetail(null)}>×</button></header><div className="sale-detail-status"><span className={`sale-status ${text(detail.sale.status)}`}>{text(detail.sale.status)==='cancelled'?'CANCELADA':'REALIZADA'}</span>{detail.document_kind==='nfce'?<span className={`fiscal-chip ${text(detail.fiscal.status)}`}>NFC-e {text(detail.fiscal.status)||'pendente'}</span>:<span className="fiscal-chip pre">PRÉ-VENDA / NÃO FISCAL</span>}</div>
+      <section className="sale-detail-summary"><div><span>Subtotal</span><strong>{money(detail.sale.subtotal)}</strong></div><div><span>Desconto</span><strong>{money(detail.sale.discount)}</strong></div><div><span>Acréscimo</span><strong>{money(detail.sale.surcharge)}</strong></div><div><span>Total</span><strong>{money(detail.sale.total)}</strong></div></section>
+      <section><h3>Itens</h3><div className="detail-table"><table><thead><tr><th>Produto</th><th>Qtd.</th><th>Unit.</th><th>Total</th></tr></thead><tbody>{detail.items.map((i,n)=><tr key={text(i.id)||String(n)}><td><strong>{text(i.description)}</strong><small>{text(i.sku)}</small></td><td>{num(i.quantity).toLocaleString('pt-BR',{maximumFractionDigits:3})} {text(i.unit)}</td><td>{money(i.unit_price)}</td><td>{money(i.total)}</td></tr>)}</tbody></table></div></section>
+      <section><h3>Pagamentos</h3><div className="payment-detail-list">{detail.payments.map((p,n)=><div key={text(p.id)||String(n)}><span>{paymentLabels[text(p.method)]||text(p.method)}</span><strong>{money(p.amount)}</strong><small>{text(p.status)}</small></div>)}</div></section>
+      {detail.document_kind==='nfce'&&<section className="fiscal-detail"><h3>NFC-e</h3><dl><div><dt>Status</dt><dd>{text(detail.fiscal.status)||'—'}</dd></div><div><dt>Número / série</dt><dd>{text(detail.fiscal.number)||'—'} / {text(detail.fiscal.series)||'—'}</dd></div><div><dt>Autorização</dt><dd>{dt(detail.fiscal.authorization_at)}</dd></div><div><dt>Protocolo</dt><dd>{text(detail.fiscal.protocol)||'—'}</dd></div><div className="wide"><dt>Chave de acesso</dt><dd className="mono">{text(detail.fiscal.access_key)||'—'}</dd></div>{detail.fiscal.cancel_deadline?<div className="wide"><dt>Prazo normal para cancelamento</dt><dd>{dt(detail.fiscal.cancel_deadline)} {detail.fiscal.can_cancel_window?'· dentro da janela':'· prazo expirado'}</dd></div>:null}</dl></section>}
+      <footer className="sale-detail-actions"><button onClick={printOperation}>Imprimir operação</button>{detail.fiscal.pdf_path?<button onClick={()=>window.open(text(detail.fiscal.pdf_path),'_blank','noopener')}>Abrir DANFE</button>:null}{detail.fiscal.xml_available?<button onClick={()=>void downloadXml()}>Baixar XML</button>:null}{text(detail.sale.status)==='completed'&&text(detail.fiscal.status)!=='authorized'?<button className="danger" onClick={()=>void cancelSale()}>Cancelar operação</button>:null}{text(detail.sale.status)==='completed'&&text(detail.fiscal.status)==='authorized'&&detail.fiscal.can_cancel_window?<button className="danger" onClick={()=>void cancelNfce()}>Cancelar NFC-e</button>:null}{text(detail.fiscal.status)==='authorized'&&!detail.fiscal.can_cancel_window?<span className="deadline-expired">Cancelamento normal: prazo de 30 min expirado</span>:null}</footer>
+    </aside></div>}
 
-    {modal&&<div className="sales-cash-modal-backdrop"><section className="sales-cash-modal">
-      {modal.type==='close'?<><small>FECHAMENTO PELO GESTÃO</small><h3>Fechar {text(modal.session.pos)||'caixa'}</h3><p>Confira o valor esperado antes de fechar. O fechamento será registrado no histórico.</p><div className="modal-summary"><span>Esperado em espécie</span><strong>{money(modal.session.expected_cash)}</strong></div><label><span>Dinheiro contado</span><input autoFocus type="number" min="0" step="0.01" value={closing} onChange={e=>setClosing(e.target.value)}/></label><label><span>Observação</span><textarea rows={3} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Opcional"/></label></>:<><small>REABERTURA PARA CORREÇÃO</small><h3>Reabrir {text(modal.session.pos)||'caixa'}</h3><p>O fechamento anterior continuará no histórico. A sessão voltará ao estado aberto para uma nova conferência.</p><div className="modal-summary"><span>Fechamento anterior</span><strong>{money(modal.session.closing_amount)}</strong></div><label><span>Motivo da reabertura *</span><textarea autoFocus rows={4} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Ex.: valor contado informado incorretamente"/></label></>}
-      <div className="sales-cash-modal-actions"><button onClick={()=>setModal(null)}>Cancelar</button><button className={modal.type==='close'?'danger':'primary'} onClick={()=>startTransition(()=>{void confirmAction()})} disabled={pending}>{pending?'Processando...':modal.type==='close'?'Confirmar fechamento':'Reabrir caixa'}</button></div>
-    </section></div>}
+    {cashModal&&<div className="sales-cash-modal-backdrop"><section className="sales-cash-modal">{cashModal.type==='close'?<><small>FECHAMENTO PELO GESTÃO</small><h3>Fechar {text(cashModal.session.pos)||'caixa'}</h3><p>Confira o valor esperado antes de fechar.</p><div className="modal-summary"><span>Esperado em espécie</span><strong>{money(cashModal.session.expected_cash)}</strong></div><label><span>Dinheiro contado</span><input autoFocus type="number" min="0" step="0.01" value={closing} onChange={e=>setClosing(e.target.value)}/></label><label><span>Observação</span><textarea rows={3} value={reason} onChange={e=>setReason(e.target.value)}/></label></>:<><small>REABERTURA PARA CORREÇÃO</small><h3>Reabrir {text(cashModal.session.pos)||'caixa'}</h3><p>O fechamento anterior permanecerá no histórico.</p><div className="modal-summary"><span>Fechamento anterior</span><strong>{money(cashModal.session.closing_amount)}</strong></div><label><span>Motivo *</span><textarea autoFocus rows={4} value={reason} onChange={e=>setReason(e.target.value)}/></label></>}<div className="sales-cash-modal-actions"><button onClick={()=>setCashModal(null)}>Cancelar</button><button className={cashModal.type==='close'?'danger':'primary'} onClick={()=>startTransition(()=>{void confirmCashAction()})} disabled={pending}>{pending?'Processando...':cashModal.type==='close'?'Confirmar fechamento':'Reabrir caixa'}</button></div></section></div>}
   </div>;
 }
