@@ -47,7 +47,7 @@ async function createWindow() {
     apiBase: process.env.THORPDV_API_URL || 'https://thorpdv.vercel.app',
     codec: codec(),
   });
-  agent.sync.appVersion = '0.3.9';
+  agent.sync.appVersion = '0.4.0';
   if (typeof agent.logoutOperator === 'function') agent.logoutOperator();
   await agent.start();
 
@@ -129,7 +129,7 @@ async function printCashClose(summary) {
 
 function registerIpc() {
   const handle = (name, fn) => ipcMain.handle(name, async (_event, ...args) => fn(...args));
-  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: '0.3.9', operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
+  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: '0.4.0', operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
   handle('thor:enroll', (payload) => agent.enroll(payload));
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
