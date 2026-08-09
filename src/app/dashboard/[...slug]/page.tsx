@@ -88,7 +88,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (slug === 'pdv/caixa') return <AdvancedShell title="Caixa / PDV" subtitle="Abertura, vendas vinculadas e fechamento com valor esperado e diferença por terminal." activePath="/dashboard/administrativo/pdvs"><CashWorkspace posRegisters={initial.data}/></AdvancedShell>;
   if (slug === 'fiscal' || slug === 'fiscal/nfe' || slug === 'fiscal/nfce') {
     const [settings, sales] = await Promise.all([erpFiscalSettingsGet(), erpLoad('sales')]);
-    return <AdvancedShell title="Fiscal" subtitle="Validação e preparação de NF-e/NFC-e com transmissão bloqueada até configurar credenciais reais." activePath="/dashboard/fiscal"><FiscalWorkspace initialDocs={initial.data} sales={sales.data} settings={(settings.settings ?? {}) as Record<string, unknown>} preselect={slug.endsWith('nfce')?'nfce':'nfe'}/></AdvancedShell>;
+    return <AdvancedShell title="Fiscal" subtitle="NF-e e NFC-e com certificado A1, homologação/produção e transmissão direta pelo ThorFiscal para a SVRS." activePath="/dashboard/fiscal"><FiscalWorkspace initialDocs={initial.data} sales={sales.data} settings={(settings.settings ?? {}) as Record<string, unknown>} preselect={slug.endsWith('nfce')?'nfce':'nfe'}/></AdvancedShell>;
   }
   if (slug === 'financeiro/conciliacao') {
     const reconciliation = await reconciliationData();
