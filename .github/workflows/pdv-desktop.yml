@@ -62,7 +62,8 @@ jobs:
             'renderer/cart-ui-v043.js',
             'renderer/messages-v044.js',
             'renderer/discount-v045.js',
-            'renderer/weighable-v046.js'
+            'renderer/weighable-v046.js',
+            'renderer/product-policy-v046.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
