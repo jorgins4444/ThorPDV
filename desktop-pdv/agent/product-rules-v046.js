@@ -1,4 +1,7 @@
+const { installCustomerCreditRules } = require('./customer-credit-v050');
+
 function installProductRules(ThorAgent, Store) {
+  installCustomerCreditRules(ThorAgent, Store);
   const originalMigrate = Store.prototype.migrate;
   const originalApplyPull = Store.prototype.applyPull;
   const originalInflateProduct = Store.prototype.inflateProduct;
