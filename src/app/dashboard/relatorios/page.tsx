@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { AdvancedShell } from '../[...slug]/advanced-shell';
 import '../[...slug]/module.css';
 import './reports-hub.css';
+import '../[...slug]/management-shell.css';
 
 const groups = [
   ['Caixa',[
