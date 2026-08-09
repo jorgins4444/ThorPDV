@@ -36,7 +36,7 @@ function installScaleLabelRules(ThorAgent, Store) {
         from products p left join inventory i on i.product_id=p.id left join price_items pi on pi.product_id=p.id
         where p.active=1 and p.product_code=? limit 1`).get(Number(digits));
       if (exact) {
-        const rest = originalSearchProducts.call(this, query, Math.max(Number(limit || 50) - 1, 0));
+        const rest = originalSearchProducts.call(this, query, Math.max(Number(limit || 50) - 1, 0))
           .filter((item) => String(item.id) !== String(exact.id));
         return [this.inflateProduct(exact), ...rest];
       }
