@@ -131,7 +131,7 @@
     panel.classList.add('v47-summary');
 
     const search = searchRow.querySelector('#search');
-    if (search) search.placeholder = 'Buscar produto por nome, SKU ou código de barras...';
+    if (search) search.placeholder = 'Buscar por código principal, referência interna, EAN ou nome...';
 
     const searchZone = document.createElement('section');
     searchZone.className = 'v47-search-zone';

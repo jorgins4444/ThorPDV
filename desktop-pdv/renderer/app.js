@@ -40,7 +40,7 @@ function renderWorkspace(){if(state.view==='fiscal')renderFiscalWorkspace();else
 
 function renderSaleWorkspace(){
   const box=document.getElementById('workspace');
-  box.innerHTML=`<main class="work"><section class="catalog"><div class="search-row"><input id="search" class="search" placeholder="Código de barras, SKU ou descrição..." autofocus><button class="secondary" id="cash">Caixa <kbd>F4</kbd></button></div><div id="products" class="products"></div></section><aside class="cart-panel"><div class="cart-head"><div><small>VENDA ATUAL</small><h2>Cupom</h2></div><button class="secondary" id="clear">Limpar</button></div><div id="cart" class="cart"></div><div><div class="totals"><div class="total-row"><span>Itens</span><b id="itemsCount">0</b></div><div class="total-row grand"><span>Total</span><span id="grand">R$ 0,00</span></div></div><div class="payment-methods">${Object.entries(paymentLabels).map(([k,n])=>`<button class="pay ${state.payment===k?'active':''}" data-pay="${k}"><span>${n}</span><kbd>${esc(state.settings?.shortcuts?.[k]||'')}</kbd></button>`).join('')}</div><button class="primary finalize" id="finalize">Finalizar venda <kbd>F2</kbd></button></div></aside></main>`;
+  box.innerHTML=`<main class="work"><section class="catalog"><div class="search-row"><input id="search" class="search" placeholder="Código principal, referência interna, EAN ou descrição..." autofocus><button class="secondary" id="cash">Caixa <kbd>F4</kbd></button></div><div id="products" class="products"></div></section><aside class="cart-panel"><div class="cart-head"><div><small>VENDA ATUAL</small><h2>Cupom</h2></div><button class="secondary" id="clear">Limpar</button></div><div id="cart" class="cart"></div><div><div class="totals"><div class="total-row"><span>Itens</span><b id="itemsCount">0</b></div><div class="total-row grand"><span>Total</span><span id="grand">R$ 0,00</span></div></div><div class="payment-methods">${Object.entries(paymentLabels).map(([k,n])=>`<button class="pay ${state.payment===k?'active':''}" data-pay="${k}"><span>${n}</span><kbd>${esc(state.settings?.shortcuts?.[k]||'')}</kbd></button>`).join('')}</div><button class="primary finalize" id="finalize">Finalizar venda <kbd>F2</kbd></button></div></aside></main>`;
   bindSale();renderProducts();renderCart();
 }
 
@@ -59,7 +59,7 @@ function selectPayment(method){state.payment=method;document.querySelectorAll('[
 
 function renderProducts(){
   const box=document.getElementById('products');if(!box)return;
-  box.innerHTML=state.products.length?state.products.map((p,i)=>`<div class="product" data-index="${i}"><div><strong>${esc(p.name)}</strong><small>${esc(p.sku||'Sem SKU')} • ${esc((p.barcodes||[])[0]||'sem EAN')}</small></div><div class="stock">Estoque<br><b>${Number(p.quantity||0).toFixed(3).replace(/\.000$/,'')}</b></div><div class="price">${money(p.base_price)}</div></div>`).join(''):`<div class="empty">Nenhum produto encontrado.</div>`;
+  box.innerHTML=state.products.length?state.products.map((p,i)=>`<div class="product" data-index="${i}"><div><strong>${esc(p.name)}</strong><small>Cód. ${esc(p.product_code||'—')} • Ref. ${esc(p.sku||'—')} • EAN ${esc((p.barcodes||[])[0]||'—')}</small></div><div class="stock">Estoque<br><b>${Number(p.quantity||0).toFixed(3).replace(/\.000$/,'')}</b></div><div class="price">${money(p.base_price)}</div></div>`).join(''):`<div class="empty">Nenhum produto encontrado.</div>`;
   box.querySelectorAll('.product').forEach(el=>el.onclick=()=>add(state.products[Number(el.dataset.index)]));
 }
 

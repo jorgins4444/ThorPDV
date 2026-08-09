@@ -57,6 +57,8 @@
       state.cart.push({
         productId: product.id,
         name: product.name || product.description || 'Produto',
+        productCode: product.product_code || '',
+        reference: product.sku || '',
         sku: product.sku || String(product.product_code || ''),
         quantity: qty,
         unitPrice: sl60Number(product.base_price ?? product.sale_price ?? product.price),

@@ -77,7 +77,7 @@
     const canRemove = cartV43Allowed('sale.remove_item', true);
 
     if (!state.cart.length) {
-      box.innerHTML = '<div class="cart-v43-empty"><strong>Nenhum item na venda</strong><span>Leia um código de barras, digite o SKU ou clique em um produto.</span></div>';
+      box.innerHTML = '<div class="cart-v43-empty"><strong>Nenhum item na venda</strong><span>Leia um EAN, digite o código principal ou a referência interna, ou clique em um produto.</span></div>';
     } else {
       box.innerHTML = `<div class="cart-v43-list-head"><span>Produto</span><span>Qtd.</span><span>Unitário</span><span>Total</span><span></span></div>${state.cart.map((item, index) => {
         const quantity = Number(item.quantity || 0);
@@ -85,7 +85,7 @@
         const lineTotal = quantity * unitPrice;
         const blockMinus = !canRemove && quantity <= 1;
         return `<div class="cart-v43-item" data-cart-index="${index}">
-          <div class="cart-v43-product"><strong title="${esc(item.name || 'Produto')}">${esc(item.name || 'Produto')}</strong><small>${esc(item.sku || 'Sem SKU')}</small></div>
+          <div class="cart-v43-product"><strong title="${esc(item.name || 'Produto')}">${esc(item.name || 'Produto')}</strong><small>Cód. ${esc(item.productCode || '—')} • Ref. ${esc(item.reference || item.sku || '—')}</small></div>
           <div class="cart-v43-qty"><button data-minus="${index}" title="${blockMinus ? 'Sem permissão para remover item' : 'Diminuir quantidade'}" ${blockMinus ? 'disabled' : ''}>−</button><b>${cartV43Qty(quantity)}</b><button data-plus="${index}" title="Aumentar quantidade">+</button></div>
           <div class="cart-v43-unit">${money(unitPrice)}</div>
           <div class="cart-v43-total">${money(lineTotal)}</div>
@@ -146,8 +146,8 @@
     const productId = String(product.id);
     const found = state.cart.find((item) => String(item.productId) === productId);
 
-    if (found) found.quantity = Number(found.quantity || 0) + 1;
-    else state.cart.push({ productId: product.id, name: product.name || product.description || 'Produto', sku: product.sku || '', quantity: 1, unitPrice: cartV43Price(product) });
+    if (found) { found.quantity = Number(found.quantity || 0) + 1; found.productCode = product.product_code || found.productCode || ''; found.reference = product.sku || found.reference || ''; }
+    else state.cart.push({ productId: product.id, name: product.name || product.description || 'Produto', productCode: product.product_code || '', reference: product.sku || '', sku: product.sku || '', quantity: 1, unitPrice: cartV43Price(product) });
 
     v.lastProductId = product.id;
     const subtotal = cartV43Subtotal();
