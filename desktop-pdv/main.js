@@ -47,7 +47,7 @@ async function createWindow() {
     apiBase: process.env.THORPDV_API_URL || 'https://thorpdv.vercel.app',
     codec: codec(),
   });
-  agent.sync.appVersion = '0.4.0';
+  agent.sync.appVersion = '0.4.1';
   if (typeof agent.logoutOperator === 'function') agent.logoutOperator();
   await agent.start();
 
@@ -109,8 +109,12 @@ async function printHtmlDocument(doc, printerName) {
   } finally { win.destroy(); }
 }
 
-async function printSale(saleKey, type = 'pre_sale') {
-  if (agent.currentOperator?.() && !agent.canPrint(type, false)) throw new Error(type === 'nfce' ? 'nfce_print_not_allowed' : 'receipt_print_not_allowed');
+async function printSale(saleKey, type = 'pre_sale', reprint = false) {
+  if (agent.currentOperator?.() && !agent.canPrint(type, Boolean(reprint))) {
+    if (reprint && type === 'nfce') throw new Error('nfce_reprint_not_allowed');
+    if (reprint) throw new Error('document_reprint_not_allowed');
+    throw new Error(type === 'nfce' ? 'nfce_print_not_allowed' : 'receipt_print_not_allowed');
+  }
   const doc = agent.documentData(saleKey, type);
   const target = agent.settings().printerName;
   if (!target) throw new Error('printer_not_configured');
@@ -129,7 +133,7 @@ async function printCashClose(summary) {
 
 function registerIpc() {
   const handle = (name, fn) => ipcMain.handle(name, async (_event, ...args) => fn(...args));
-  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: '0.4.0', operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
+  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: '0.4.1', operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
   handle('thor:enroll', (payload) => agent.enroll(payload));
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
@@ -167,8 +171,8 @@ function registerIpc() {
   handle('thor:read-scale', () => agent.readScale());
   handle('thor:payment-integrations', () => agent.paymentIntegrations());
   handle('thor:begin-payment', (payload) => agent.beginIntegratedPayment(payload));
-  handle('thor:print-sale', (saleKey, type) => printSale(saleKey, type));
-  handle('thor:print-last', () => printSale(null, 'pre_sale'));
+  handle('thor:print-sale', (saleKey, type, reprint) => printSale(saleKey, type, reprint));
+  handle('thor:print-last', () => printSale(null, 'pre_sale', true));
 }
 
 app.whenReady().then(async () => {
