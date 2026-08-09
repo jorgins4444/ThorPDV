@@ -1,6 +1,7 @@
 import '../[...slug]/module.css';
 import '../[...slug]/advanced.css';
 import '../[...slug]/purchase.css';
+import '../[...slug]/management-shell.css';
 import { AdvancedShell } from '../[...slug]/advanced-shell';
 import { PurchaseWorkspace } from '../[...slug]/purchase-workspace';
 import { erpLoad } from '../[...slug]/actions';
