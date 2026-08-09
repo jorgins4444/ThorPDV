@@ -49,6 +49,7 @@ jobs:
             'agent/consistency.js',
             'agent/cash-closing.js',
             'agent/production.js',
+            'agent/pre-sale-v064.js',
             'renderer/app.js',
             'renderer/checkout-v3.js',
             'renderer/hotfix-v042.js',
