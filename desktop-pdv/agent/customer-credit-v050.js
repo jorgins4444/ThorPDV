@@ -1,6 +1,8 @@
 function installCustomerCreditRules(ThorAgent, Store) {
   const originalMigrate = Store.prototype.migrate;
   const originalApplyPull = Store.prototype.applyPull;
+  const originalFiscalSales = Store.prototype.fiscalSales;
+  const originalFiscalSale = Store.prototype.fiscalSale;
   const originalFinalizeSale = ThorAgent.prototype.finalizeSale;
   const originalReturnSale = ThorAgent.prototype.returnSale;
 
@@ -48,12 +50,14 @@ function installCustomerCreditRules(ThorAgent, Store) {
   Store.prototype.searchCustomers = function (query = '') {
     const q = String(query || '').trim().toLowerCase();
     if (!q) return this.db.prepare('select * from customers where active=1 order by name limit 40').all();
+    const digits = q.replace(/\D/g, '');
     const like = `%${q}%`;
+    const docLike = `%${digits || q}%`;
     return this.db.prepare(`select * from customers where active=1 and (
       lower(name) like ? or lower(coalesce(trade_name,'')) like ? or lower(coalesce(document,'')) like ? or
       lower(coalesce(phone,'')) like ? or lower(coalesce(email,'')) like ?
     ) order by case when lower(coalesce(document,''))=? then 0 when lower(name)=? then 1 else 2 end,name limit 40`)
-      .all(like, like, like, like, like, q.replace(/\D/g, ''), q);
+      .all(like, like, docLike, like, like, digits, q);
   };
 
   Store.prototype.customer = function (id) {
@@ -65,6 +69,31 @@ function installCustomerCreditRules(ThorAgent, Store) {
     if (!customerId || !Number.isFinite(Number(delta))) return null;
     this.db.prepare('update customers set store_credit_balance=max(store_credit_balance+?,0) where id=?').run(Number(delta), String(customerId));
     return this.customer(customerId);
+  };
+
+  function enrichSale(store, sale) {
+    if (!sale) return sale;
+    let customerId = sale.customer_id || null;
+    if (!customerId && sale.client_event_id) {
+      const receipt = store.receiptByEvent(String(sale.client_event_id));
+      customerId = receipt?.payload?.customerId || receipt?.payload?.customer_id || null;
+    }
+    if (!customerId) return sale;
+    const customer = store.customer(customerId);
+    return {
+      ...sale,
+      customer_id: customerId,
+      customer_name: sale.customer_name || customer?.name || '',
+      customer_store_credit_balance: Number(customer?.store_credit_balance || 0),
+    };
+  }
+
+  Store.prototype.fiscalSales = function (query = '') {
+    return originalFiscalSales.call(this, query).map((sale) => enrichSale(this, sale));
+  };
+
+  Store.prototype.fiscalSale = function (key) {
+    return enrichSale(this, originalFiscalSale.call(this, key));
   };
 
   ThorAgent.prototype.finalizeSale = async function (payload = {}) {
@@ -86,11 +115,7 @@ function installCustomerCreditRules(ThorAgent, Store) {
     if (payload.refundMethod !== 'store_credit') return originalReturnSale.call(this, payload);
     const sale = this.store.fiscalSale(payload.saleKey);
     if (!sale) throw new Error('sale_not_found');
-    let customerId = sale.customer_id || null;
-    if (!customerId && sale.client_event_id) {
-      const receipt = this.store.receiptByEvent(String(sale.client_event_id));
-      customerId = receipt?.payload?.customerId || receipt?.payload?.customer_id || null;
-    }
+    const customerId = sale.customer_id || null;
     if (!customerId) throw new Error('store_credit_requires_customer');
     const customer = this.store.customer(customerId);
     if (!customer) throw new Error('customer_not_found');
