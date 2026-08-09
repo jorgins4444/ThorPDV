@@ -40,6 +40,7 @@ jobs:
             'agent/v3-return.js',
             'agent/v3-enroll.js',
             'agent/v3-profile-permissions.js',
+            'agent/v4-permissions.js',
             'agent/sync-policy.js',
             'agent/recovery.js',
             'agent/consistency.js',
