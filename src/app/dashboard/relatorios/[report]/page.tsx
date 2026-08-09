@@ -5,6 +5,7 @@ import { erpReportV2 } from '../../[...slug]/report-actions';
 import { erpLoad } from '../../[...slug]/actions';
 import '../../[...slug]/module.css';
 import '../../[...slug]/report-v2.css';
+import '../../[...slug]/management-shell.css';
 
 const reports: Record<string,{type:string;title:string;subtitle:string}> = {
   'fechamento-caixa':{type:'cash_closures',title:'Relatório de Fechamento de Caixa',subtitle:'Resumo por sessão, operador, PDV, vendas, movimentações e diferença de caixa.'},
