@@ -1,3 +1,6 @@
+const { Store } = require('./store');
+const { installProductRules } = require('./product-rules-v046');
+
 function getPath(obj, path, fallback = undefined) {
   return path.split('.').reduce((value, key) => {
     if (!value || typeof value !== 'object') return undefined;
@@ -6,7 +9,9 @@ function getPath(obj, path, fallback = undefined) {
 }
 
 function installAdvancedPermissions(ThorAgent) {
+  installProductRules(ThorAgent, Store);
   const originalFinalizeSale = ThorAgent.prototype.finalizeSale;
+  const originalAuthorizeSupervisor = ThorAgent.prototype.authorizeSupervisor;
 
   function validateSupervisor(agent, supervisorAuthorization, requestedPercent, errorCode = 'discount_exceeds_supervisor_limit') {
     const auth = supervisorAuthorization || null;
@@ -18,6 +23,18 @@ function installAdvancedPermissions(ThorAgent) {
     if (!supervisorOverride && requestedPercent > supervisorLimit + 0.0001) throw new Error(errorCode);
     return auth;
   }
+
+  ThorAgent.prototype.authorizeSupervisor = function (payload = {}) {
+    const result = originalAuthorizeSupervisor.call(this, payload);
+    if (String(payload.action || '').startsWith('discount')) {
+      const supervisor = this._staffUsersWithHash().find((user) => String(user.id) === String(payload.userId));
+      const requestedPercent = Math.max(Number(payload.requestedValue || 0), 0);
+      const override = Boolean(getPath(supervisor || {}, 'permissions.discount.override_limit', false));
+      const limit = Number(getPath(supervisor || {}, 'permissions.discount.max_percent', 0) || 0);
+      if (!override && requestedPercent > limit + 0.0001) throw new Error('discount_exceeds_supervisor_limit');
+    }
+    return result;
+  };
 
   ThorAgent.prototype._validateAdjustmentAuthorization = function ({ operator, subtotal, discount, surcharge, supervisorAuthorization }) {
     const saleDiscount = Math.max(Number(discount || 0), 0);
@@ -64,6 +81,7 @@ function installAdvancedPermissions(ThorAgent) {
 
       const product = this.store.product(input.productId);
       if (!product || !product.active) throw new Error('product_not_found');
+      if (product.allow_discount === false) throw new Error('product_discount_not_allowed');
       const quantity = Number(input.quantity || 0);
       if (quantity <= 0) throw new Error('invalid_quantity');
       const unitPrice = Number(this.resolvePrice(product, quantity) || 0);
