@@ -7,6 +7,7 @@ const { installReturnFix } = require('./agent/v3-return');
 const { installEnrollV3 } = require('./agent/v3-enroll');
 const { installDataConsistency } = require('./agent/consistency');
 const { installProfilePermissions } = require('./agent/v3-profile-permissions');
+const { installAdvancedPermissions } = require('./agent/v4-permissions');
 const { installSyncPolicy } = require('./agent/sync-policy');
 const { installSyncRecovery } = require('./agent/recovery');
 const { installCashClosing } = require('./agent/cash-closing');
@@ -17,6 +18,7 @@ installReturnFix(ThorAgent);
 installEnrollV3(ThorAgent);
 installDataConsistency(ThorAgent);
 installProfilePermissions(ThorAgent);
+installAdvancedPermissions(ThorAgent);
 installSyncRecovery(ThorAgent);
 installCashClosing(ThorAgent);
 installProductionPrinting(ThorAgent);
@@ -47,7 +49,7 @@ async function createWindow() {
     apiBase: process.env.THORPDV_API_URL || 'https://thorpdv.vercel.app',
     codec: codec(),
   });
-  agent.sync.appVersion = '0.4.1';
+  agent.sync.appVersion = '0.4.4';
   if (typeof agent.logoutOperator === 'function') agent.logoutOperator();
   await agent.start();
 
@@ -133,7 +135,7 @@ async function printCashClose(summary) {
 
 function registerIpc() {
   const handle = (name, fn) => ipcMain.handle(name, async (_event, ...args) => fn(...args));
-  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: '0.4.1', operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
+  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: '0.4.4', operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
   handle('thor:enroll', (payload) => agent.enroll(payload));
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
