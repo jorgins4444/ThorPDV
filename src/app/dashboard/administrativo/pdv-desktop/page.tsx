@@ -1,6 +1,7 @@
 import '../../[...slug]/module.css';
 import '../../[...slug]/advanced.css';
 import '../../[...slug]/pdv-device.css';
+import '../../[...slug]/management-shell.css';
 import { AdvancedShell } from '../../[...slug]/advanced-shell';
 import { PdvDeviceWorkspace } from '../../[...slug]/pdv-device-workspace';
 import { pdvDeviceList } from '../../[...slug]/pdv-device-actions';
