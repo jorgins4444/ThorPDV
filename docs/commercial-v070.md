@@ -21,3 +21,7 @@
 ## Pré-venda
 - Cupom explicitamente não fiscal.
 - Itens exibem quantidade, unidade de medida, valor unitário e total.
+
+## Validação
+- Regras financeiras e de motivo de caixa possuem validação também no servidor.
+- O Desktop v0.7.0 inclui os módulos comerciais e o modelo de pré-venda não fiscal.
