@@ -43,6 +43,7 @@ jobs:
             'agent/v4-permissions.js',
             'agent/product-rules-v046.js',
             'agent/customer-credit-v050.js',
+            'agent/scale-label-v060.js',
             'agent/sync-policy.js',
             'agent/recovery.js',
             'agent/consistency.js',
@@ -68,7 +69,8 @@ jobs:
             'renderer/sale-layout-v047.js',
             'renderer/state-hotfix-v048.js',
             'renderer/customer-identification-v049.js',
-            'renderer/store-credit-v050.js'
+            'renderer/store-credit-v050.js',
+            'renderer/scale-label-v060.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
