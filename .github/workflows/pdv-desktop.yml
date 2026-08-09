@@ -56,7 +56,8 @@ jobs:
             'renderer/ux-v039.js',
             'renderer/scanner-v039.js',
             'renderer/cash-cycle-v040.js',
-            'renderer/permissions-v041.js'
+            'renderer/permissions-v041.js',
+            'renderer/cart-ui-v043.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
