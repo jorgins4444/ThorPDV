@@ -39,6 +39,6 @@ contextBridge.exposeInMainWorld('thor', {
   readScale: () => ipcRenderer.invoke('thor:read-scale'),
   paymentIntegrations: () => ipcRenderer.invoke('thor:payment-integrations'),
   beginPayment: (payload) => ipcRenderer.invoke('thor:begin-payment', payload),
-  printSale: (saleKey, type = 'pre_sale') => ipcRenderer.invoke('thor:print-sale', saleKey, type),
+  printSale: (saleKey, type = 'pre_sale', reprint = false) => ipcRenderer.invoke('thor:print-sale', saleKey, type, reprint),
   printLast: () => ipcRenderer.invoke('thor:print-last'),
 });
