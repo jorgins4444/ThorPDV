@@ -1,0 +1,70 @@
+name: One-off Product Code UI v0.6.2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/oneoff-product-code-ui-v062.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply product code UI patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def patch(path, replacements):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              for old, new in replacements:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f'{path}: expected one match, got {count}: {old[:100]!r}')
+                  text = text.replace(old, new)
+              p.write_text(text, encoding='utf-8')
+
+          patch('src/app/dashboard/[...slug]/product-master-workspace.tsx', [
+              ("id:'', sku:'', barcode:'',", "id:'', product_code:'', sku:'', barcode:'',"),
+              ("id:text(p.id), sku:text(p.sku), barcode:text(barcodes.find(b=>b.is_primary)?.barcode || barcodes[0]?.barcode),", "id:text(p.id), product_code:text(p.product_code), sku:text(p.sku), barcode:text(barcodes.find(b=>b.is_primary)?.barcode || barcodes[0]?.barcode),"),
+              ("<p>{draft.id ? `${productTypeLabel(draft.product_type)} • ${draft.unit} • Código ${draft.sku || 'sem SKU'}` : 'Cadastre o produto e depois configure estoque, composição e produção.'}</p>", "<p>{draft.id ? `${productTypeLabel(draft.product_type)} • ${draft.unit} • Código principal ${draft.product_code || '—'}${draft.sku ? ` • Ref. ${draft.sku}` : ''}` : 'O código principal será gerado automaticamente ao salvar o produto.'}</p>"),
+              ("<label><span>Código de venda / SKU</span><input value={draft.sku} onChange={e=>set('sku',e.target.value)}/></label>", "<label><span>Código principal</span><input value={draft.product_code || 'Automático ao salvar'} readOnly/><small>Sequencial, exclusivo e imutável.</small></label><label><span>Referência interna</span><input value={draft.sku} onChange={e=>set('sku',e.target.value)} placeholder=\"Opcional: código legado, fornecedor...\"/><small>Campo livre; não substitui o código principal.</small></label>"),
+              ("{text(p.sku)} - {text(p.name)}", "Cód. {text(p.product_code)||'—'} - {text(p.name)}{p.sku?` • Ref. ${text(p.sku)}`:''}"),
+              ("placeholder=\"Buscar descrição, SKU ou código de barras...\"", "placeholder=\"Buscar descrição, código principal, referência interna ou EAN...\""),
+              ("<th>Código</th><th>EAN</th><th>Produto</th>", "<th>Código principal</th><th>Referência interna</th><th>EAN</th><th>Produto</th>"),
+              ("<tr><td colSpan={10} className=\"product-empty\">Nenhum produto encontrado.</td></tr>", "<tr><td colSpan={11} className=\"product-empty\">Nenhum produto encontrado.</td></tr>"),
+              ("<td>{text(product.sku)||'—'}</td><td className=\"mono\">{text(product.barcode)||'—'}</td>", "<td><strong>{text(product.product_code)||'—'}</strong></td><td>{text(product.sku)||'—'}</td><td className=\"mono\">{text(product.barcode)||'—'}</td>"),
+          ])
+
+          patch('desktop-pdv/renderer/app.js', [
+              ("placeholder=\"Código de barras, SKU ou descrição...\"", "placeholder=\"Código principal, referência interna, EAN ou descrição...\""),
+              ("<small>${esc(p.sku||'Sem SKU')} • ${esc((p.barcodes||[])[0]||'sem EAN')}</small>", "<small>Cód. ${esc(p.product_code||'—')} • Ref. ${esc(p.sku||'—')} • EAN ${esc((p.barcodes||[])[0]||'—')}</small>"),
+          ])
+
+          patch('desktop-pdv/renderer/sale-layout-v047.js', [
+              ("search.placeholder = 'Buscar produto por nome, SKU ou código de barras...';", "search.placeholder = 'Buscar por código principal, referência interna, EAN ou nome...';"),
+          ])
+
+          patch('desktop-pdv/renderer/cart-ui-v043.js', [
+              ("Leia um código de barras, digite o SKU ou clique em um produto.", "Leia um EAN, digite o código principal ou a referência interna, ou clique em um produto."),
+              ("<small>${esc(item.sku || 'Sem SKU')}</small>", "<small>Cód. ${esc(item.productCode || '—')} • Ref. ${esc(item.reference || item.sku || '—')}</small>"),
+              ("if (found) found.quantity = Number(found.quantity || 0) + 1;\n    else state.cart.push({ productId: product.id, name: product.name || product.description || 'Produto', sku: product.sku || '', quantity: 1, unitPrice: cartV43Price(product) });", "if (found) { found.quantity = Number(found.quantity || 0) + 1; found.productCode = product.product_code || found.productCode || ''; found.reference = product.sku || found.reference || ''; }\n    else state.cart.push({ productId: product.id, name: product.name || product.description || 'Produto', productCode: product.product_code || '', reference: product.sku || '', sku: product.sku || '', quantity: 1, unitPrice: cartV43Price(product) });"),
+          ])
+
+          patch('desktop-pdv/renderer/scale-label-v060.js', [
+              ("sku: product.sku || String(product.product_code || ''),\n        quantity: qty,", "productCode: product.product_code || '',\n        reference: product.sku || '',\n        sku: product.sku || String(product.product_code || ''),\n        quantity: qty,"),
+          ])
+      - name: Commit patch
+        run: |
+          git config user.name "ThorPDV Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/app/dashboard/'[...slug]'/product-master-workspace.tsx desktop-pdv/renderer/app.js desktop-pdv/renderer/sale-layout-v047.js desktop-pdv/renderer/cart-ui-v043.js desktop-pdv/renderer/scale-label-v060.js
+          git commit -m "feat: distinguish product code from internal reference"
+          git push origin HEAD:main
