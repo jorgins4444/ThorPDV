@@ -38,12 +38,13 @@ export async function POST(request: Request) {
   if (result.ok && Array.isArray(result.results)) {
     for (const event of result.results) {
       if (event.type !== 'fiscal_nfce_request' || event.status !== 'processed') continue;
-      const documentId = String(event.result?.document_id ?? '').trim();
+      const documentId = String(event.result?.fiscal_document_id ?? event.result?.document_id ?? '').trim();
       if (!documentId) continue;
 
       const authorization = await authorizeNfceDocument(documentId, { deviceToken: token });
       event.result = {
         ...(event.result ?? {}),
+        document_id: documentId,
         authorization,
       };
     }
