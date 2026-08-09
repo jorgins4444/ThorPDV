@@ -7,7 +7,7 @@ import { erpLicenseGet } from './license-actions';
 
 const menu: [string, [string,string][]][] = [
   ['Pessoas',[['Clientes','/dashboard/clientes'],['Fornecedores','/dashboard/fornecedores'],['Perfis PDV','/dashboard/perfis-pdv'],['Usuários PDV','/dashboard/usuarios-pdv'],['Perfis ADM','/dashboard/perfis-adm'],['Usuários ADM','/dashboard/usuarios-adm']]],
-  ['Vendas',[['Operações de Caixa','/dashboard/vendas'],['Nova Venda','/dashboard/vendas/nova']]],
+  ['Vendas',[['Operações de Caixa','/dashboard/vendas'],['Nova Venda','/dashboard/vendas/nova'],['Pedidos de Venda','/dashboard/vendas/pedidos']]],
   ['Produtos',[['Produtos','/dashboard/produtos'],['Grupos','/dashboard/grupos'],['Classes','/dashboard/classes'],['Modificadores','/dashboard/modificadores']]],
   ['Tabela de Preços',[['Tabelas','/dashboard/tabelas-precos'],['Copiar','/dashboard/tabelas-precos/copiar'],['Ajustes Programados','/dashboard/tabelas-precos/ajustes'],['Promoções','/dashboard/promocoes']]],
   ['Estoque',[['Movimentações','/dashboard/estoque'],['Compras / Entradas','/dashboard/compras'],['Inventário','/dashboard/estoque/inventario'],['Produção / Cozinha','/dashboard/estoque/producao'],['Ajustes','/dashboard/estoque/ajustes'],['Transferências','/dashboard/estoque/transferencias']]],
