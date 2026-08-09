@@ -1,7 +1,12 @@
 (function () {
+  let sl60Settings = { scaleLabelEnabled:true, scaleLabelCodeDigits:5, scaleLabelMode:'weight', scaleLabelPrefix:'2' };
   function sl60Digits(value) { return String(value || '').replace(/\D/g, ''); }
   function sl60Number(value) { const n = Number(value || 0); return Number.isFinite(n) ? n : 0; }
   function sl60Qty(value) { return Number(value || 0).toFixed(3).replace(/\.000$/, '').replace(/(\.\d*[1-9])0+$/, '$1'); }
+  function sl60CurrentSettings() {
+    try { return { ...sl60Settings, ...(typeof v3State === 'function' ? (v3State().settings || {}) : {}) }; } catch { return sl60Settings; }
+  }
+  async function sl60RefreshSettings() { sl60Settings = { ...sl60Settings, ...(await window.thor.v3Settings().catch(() => ({}))) }; return sl60Settings; }
 
   function sl60ValidEan13(code) {
     const digits = sl60Digits(code);
@@ -64,8 +69,7 @@
     await v3Reprice();
   }
 
-  async function sl60Handle(code, search) {
-    const settings = await window.thor.v3Settings().catch(() => ({}));
+  async function sl60Handle(code, search, settings) {
     const parsed = sl60Parse(code, settings);
     if (!parsed) return false;
     const results = await window.thor.searchProducts(String(parsed.productCode));
@@ -114,21 +118,21 @@
     const search = document.getElementById('search');
     if (!search || search.dataset.scaleLabelV060 === '1') return;
     search.dataset.scaleLabelV060 = '1';
-    search.addEventListener('keydown', async (event) => {
+    search.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter') return;
       const code = String(search.value || '').trim();
-      const settings = await window.thor.v3Settings().catch(() => ({}));
+      const settings = sl60CurrentSettings();
       if (!sl60Parse(code, settings)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      await sl60Handle(code, search);
+      void sl60Handle(code, search, settings);
     }, true);
   }
 
   const previousWorkspace = renderSaleWorkspace;
   renderSaleWorkspace = function () {
     const result = previousWorkspace();
-    queueMicrotask(sl60BindScanner);
+    queueMicrotask(() => { sl60BindScanner(); void sl60RefreshSettings(); });
     return result;
   };
 
@@ -138,7 +142,7 @@
     const modals = document.querySelectorAll('.modal');
     const m = modals[modals.length - 1];
     if (!m || m.querySelector('#scaleLabelCodeDigits')) return;
-    const settings = await window.thor.v3Settings().catch(() => ({}));
+    const settings = await sl60RefreshSettings();
     const grid = m.querySelector('.v3-settings-grid') || m.querySelector('.settings-grid');
     if (!grid) return;
     const section = document.createElement('section');
@@ -162,7 +166,7 @@
     if (save) {
       const previousSave = save.onclick;
       save.onclick = async function (event) {
-        await window.thor.saveV3Settings({
+        sl60Settings = await window.thor.saveV3Settings({
           scaleLabelEnabled: m.querySelector('#scaleLabelEnabled').checked,
           scaleLabelPrefix: sl60Digits(m.querySelector('#scaleLabelPrefix').value).slice(0,1) || '2',
           scaleLabelCodeDigits: Number(m.querySelector('#scaleLabelCodeDigits').value || 5),
