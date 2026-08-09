@@ -12,6 +12,7 @@ const { installSyncPolicy } = require('./agent/sync-policy');
 const { installSyncRecovery } = require('./agent/recovery');
 const { installCashClosing } = require('./agent/cash-closing');
 const { installProductionPrinting } = require('./agent/production');
+const { installPreSaleReceipt } = require('./agent/pre-sale-v064');
 const { version: DESKTOP_VERSION } = require('./package.json');
 
 installThorAgentV3(ThorAgent);
@@ -23,6 +24,7 @@ installAdvancedPermissions(ThorAgent);
 installSyncRecovery(ThorAgent);
 installCashClosing(ThorAgent);
 installProductionPrinting(ThorAgent);
+installPreSaleReceipt(ThorAgent);
 installSyncPolicy(ThorAgent);
 
 let mainWindow;
