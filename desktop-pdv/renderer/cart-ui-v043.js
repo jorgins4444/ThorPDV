@@ -3,6 +3,14 @@
     try { return v3State(); } catch { return state.v3 || {}; }
   }
 
+  function cartV43Allowed(path, fallback = false) {
+    try {
+      if (typeof p41Allowed === 'function') return p41Allowed(path, fallback);
+      if (typeof v3Perm === 'function') return Boolean(v3Perm(path, fallback));
+    } catch {}
+    return fallback;
+  }
+
   function cartV43Price(product) {
     const value = Number(product?.base_price ?? product?.sale_price ?? product?.price ?? 0);
     return Number.isFinite(value) ? value : 0;
@@ -66,6 +74,7 @@
     const v = cartV43State();
     const box = document.getElementById('cart');
     if (!box) return;
+    const canRemove = cartV43Allowed('sale.remove_item', true);
 
     if (!state.cart.length) {
       box.innerHTML = '<div class="cart-v43-empty"><strong>Nenhum item na venda</strong><span>Leia um código de barras, digite o SKU ou clique em um produto.</span></div>';
@@ -74,12 +83,13 @@
         const quantity = Number(item.quantity || 0);
         const unitPrice = Number(item.unitPrice || 0);
         const lineTotal = quantity * unitPrice;
+        const blockMinus = !canRemove && quantity <= 1;
         return `<div class="cart-v43-item" data-cart-index="${index}">
           <div class="cart-v43-product"><strong title="${esc(item.name || 'Produto')}">${esc(item.name || 'Produto')}</strong><small>${esc(item.sku || 'Sem SKU')}</small></div>
-          <div class="cart-v43-qty"><button data-minus="${index}" title="Diminuir quantidade">−</button><b>${cartV43Qty(quantity)}</b><button data-plus="${index}" title="Aumentar quantidade">+</button></div>
+          <div class="cart-v43-qty"><button data-minus="${index}" title="${blockMinus ? 'Sem permissão para remover item' : 'Diminuir quantidade'}" ${blockMinus ? 'disabled' : ''}>−</button><b>${cartV43Qty(quantity)}</b><button data-plus="${index}" title="Aumentar quantidade">+</button></div>
           <div class="cart-v43-unit">${money(unitPrice)}</div>
           <div class="cart-v43-total">${money(lineTotal)}</div>
-          <button class="cart-v43-remove" data-remove-item="${index}" title="Remover item">×</button>
+          <button class="cart-v43-remove" data-remove-item="${index}" title="${canRemove ? 'Remover item' : 'Perfil sem permissão para remover item'}" ${canRemove ? '' : 'disabled'}>×</button>
         </div>`;
       }).join('')}`;
 
@@ -88,6 +98,10 @@
           const index = Number(button.dataset.minus);
           const item = state.cart[index];
           if (!item) return;
+          if (Number(item.quantity || 0) <= 1 && !cartV43Allowed('sale.remove_item', true)) {
+            infoModal('Remover item', 'O perfil deste operador não possui permissão para remover itens da venda.');
+            return;
+          }
           item.quantity = Number(item.quantity || 0) - 1;
           if (item.quantity <= 0) state.cart.splice(index, 1);
           cartV43Render();
@@ -107,6 +121,10 @@
 
       box.querySelectorAll('[data-remove-item]').forEach((button) => {
         button.onclick = async () => {
+          if (!cartV43Allowed('sale.remove_item', true)) {
+            infoModal('Remover item', 'O perfil deste operador não possui permissão para remover itens da venda.');
+            return;
+          }
           state.cart.splice(Number(button.dataset.removeItem), 1);
           cartV43Render();
           await v3Reprice();
@@ -128,37 +146,70 @@
     const productId = String(product.id);
     const found = state.cart.find((item) => String(item.productId) === productId);
 
-    if (found) {
-      found.quantity = Number(found.quantity || 0) + 1;
-    } else {
-      state.cart.push({
-        productId: product.id,
-        name: product.name || product.description || 'Produto',
-        sku: product.sku || '',
-        quantity: 1,
-        unitPrice: cartV43Price(product),
-      });
-    }
+    if (found) found.quantity = Number(found.quantity || 0) + 1;
+    else state.cart.push({ productId: product.id, name: product.name || product.description || 'Produto', sku: product.sku || '', quantity: 1, unitPrice: cartV43Price(product) });
 
     v.lastProductId = product.id;
-
     const subtotal = cartV43Subtotal();
     const discount = Number(v.discount || 0);
     const surcharge = Number(v.surcharge || 0);
-    v.quote = {
-      ...(v.quote || {}),
-      subtotal,
-      discount,
-      surcharge,
-      total: Math.max(subtotal - discount + surcharge, 0),
-    };
+    v.quote = { ...(v.quote || {}), subtotal, discount, surcharge, total: Math.max(subtotal - discount + surcharge, 0) };
 
     cartV43Render();
     await v3Reprice();
 
     const current = state.cart.find((item) => String(item.productId) === productId);
-    if (current && Number(current.unitPrice || 0) <= 0) {
-      showToast(`${current.name} adicionado, mas está sem preço de venda.`);
+    if (current && Number(current.unitPrice || 0) <= 0) showToast(`${current.name} adicionado, mas está sem preço de venda.`);
+  }
+
+  function cartV43ApplyControls() {
+    const v = cartV43State();
+    const clear = document.getElementById('clear');
+    if (clear) {
+      const canRemove = cartV43Allowed('sale.remove_item', true);
+      clear.disabled = !canRemove;
+      clear.title = canRemove ? 'Limpar itens da venda' : 'Perfil sem permissão para remover itens';
+      clear.onclick = () => {
+        if (!cartV43Allowed('sale.remove_item', true)) return infoModal('Limpar venda', 'O perfil deste operador não possui permissão para remover itens da venda.');
+        state.cart = [];
+        if (typeof v3ResetSale === 'function') v3ResetSale();
+        renderSaleWorkspace();
+      };
+    }
+
+    const discountInput = document.getElementById('saleDiscount');
+    if (discountInput) {
+      const canDiscount = cartV43Allowed('discount.apply', true);
+      discountInput.disabled = !canDiscount;
+      discountInput.title = canDiscount ? 'Desconto da venda' : 'Perfil sem permissão para aplicar desconto';
+      if (!canDiscount) {
+        v.discount = 0;
+        discountInput.value = '0.00';
+      } else {
+        const originalChange = discountInput.onchange;
+        discountInput.onchange = async (event) => {
+          if (originalChange) await originalChange.call(discountInput, event);
+          const subtotal = Number(v.quote?.subtotal ?? cartV43Subtotal());
+          const discount = Number(v.discount || 0);
+          if (discount <= 0 || subtotal <= 0) return;
+          const percent = (discount / subtotal) * 100;
+          const limit = Number(v.operator?.permissions?.discount?.max_percent || 0);
+          const canOverride = cartV43Allowed('discount.override_limit', false);
+          if (percent <= limit + 0.0001 || canOverride) return;
+          try {
+            await v3NeedSupervisor('discount', percent, `Desconto de ${percent.toFixed(2)}% acima da alçada de ${limit.toFixed(2)}%`);
+            showToast('Desconto acima da alçada autorizado pelo supervisor.');
+          } catch (error) {
+            if (error?.message !== 'authorization_cancelled') infoModal('Desconto', friendlyError(error?.message));
+            const allowedAmount = Math.round((subtotal * limit / 100) * 100) / 100;
+            v.discount = allowedAmount;
+            v.supervisorAuthorization = null;
+            discountInput.value = allowedAmount.toFixed(2);
+            await v3Reprice();
+            if (error?.message === 'authorization_cancelled') showToast(`Desconto ajustado para a alçada permitida de ${limit.toFixed(2)}%.`);
+          }
+        };
+      }
     }
   }
 
@@ -170,7 +221,7 @@
   const previousRenderSaleWorkspace = renderSaleWorkspace;
   renderSaleWorkspace = function () {
     const result = previousRenderSaleWorkspace();
-    queueMicrotask(cartV43Render);
+    queueMicrotask(() => { cartV43Render(); cartV43ApplyControls(); });
     return result;
   };
 })();
