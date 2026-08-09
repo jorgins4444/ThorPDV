@@ -13,6 +13,7 @@ const { installSyncRecovery } = require('./agent/recovery');
 const { installCashClosing } = require('./agent/cash-closing');
 const { installProductionPrinting } = require('./agent/production');
 const { installPreSaleReceipt } = require('./agent/pre-sale-v064');
+const { installCommercialV070 } = require('./agent/commercial-v070');
 const { version: DESKTOP_VERSION } = require('./package.json');
 
 installThorAgentV3(ThorAgent);
@@ -25,6 +26,7 @@ installSyncRecovery(ThorAgent);
 installCashClosing(ThorAgent);
 installProductionPrinting(ThorAgent);
 installPreSaleReceipt(ThorAgent);
+installCommercialV070(ThorAgent);
 installSyncPolicy(ThorAgent);
 
 let mainWindow;
@@ -136,6 +138,14 @@ async function printCashClose(summary) {
   return printHtmlDocument(doc, target);
 }
 
+async function printCashMovement(receipt) {
+  const doc = agent.cashMovementDocument(receipt || {});
+  const target = agent.settings().printerName;
+  if (!target) throw new Error('printer_not_configured');
+  if (target === '__PDF__') return saveAsPdf(doc);
+  return printHtmlDocument(doc, target);
+}
+
 function registerIpc() {
   const handle = (name, fn) => ipcMain.handle(name, async (_event, ...args) => fn(...args));
   handle('thor:status', async () => ({ ...(await agent.status()), appVersion: DESKTOP_VERSION, operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
@@ -147,6 +157,9 @@ function registerIpc() {
   handle('thor:search-products', (query) => agent.searchProducts(query));
   handle('thor:all-products', () => agent.store.searchProducts('', 5000));
   handle('thor:customers', (query) => agent.searchCustomers(query));
+  handle('thor:sales-orders', (query) => agent.salesOrders(query));
+  handle('thor:payment-terms', () => agent.paymentTerms());
+  handle('thor:set-commercial-context', (payload) => agent.setCommercialContext(payload));
   handle('thor:quote-sale', (items, discount) => agent.quoteSale(items, discount));
   handle('thor:quote-checkout', (payload) => agent.quoteCheckout(payload));
   handle('thor:operators', () => agent.staffUsers());
@@ -159,6 +172,7 @@ function registerIpc() {
   handle('thor:close-cash', (payload) => agent.closeCash(payload));
   handle('thor:last-cash-close', () => agent.lastCashCloseSummary());
   handle('thor:print-cash-close', (summary) => printCashClose(summary));
+  handle('thor:print-cash-movement', (receipt) => printCashMovement(receipt));
   handle('thor:finalize-sale', (payload) => agent.finalizeSale(payload));
   handle('thor:cancel-sale', (payload) => agent.cancelSale(payload));
   handle('thor:return-sale', (payload) => agent.returnSale(payload));
