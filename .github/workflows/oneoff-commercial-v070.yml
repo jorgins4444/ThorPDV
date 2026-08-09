@@ -1,0 +1,70 @@
+name: One-off Commercial v0.7.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/oneoff-commercial-v070.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Wire commercial features
+        shell: python
+        run: |
+          from pathlib import Path
+          def rep(path, old, new):
+              p=Path(path); s=p.read_text(encoding='utf-8'); c=s.count(old)
+              if c!=1: raise SystemExit(f'{path}: expected one match, got {c}: {old!r}')
+              p.write_text(s.replace(old,new),encoding='utf-8')
+
+          rep('desktop-pdv/main.js',
+              "const { installPreSaleReceipt } = require('./agent/pre-sale-v064');\n",
+              "const { installPreSaleReceipt } = require('./agent/pre-sale-v064');\nconst { installCommercialV070 } = require('./agent/commercial-v070');\n")
+          rep('desktop-pdv/main.js',
+              "installPreSaleReceipt(ThorAgent);\ninstallSyncPolicy(ThorAgent);",
+              "installPreSaleReceipt(ThorAgent);\ninstallCommercialV070(ThorAgent);\ninstallSyncPolicy(ThorAgent);")
+          rep('desktop-pdv/main.js',
+              "async function printCashClose(summary) {\n  const doc = agent.cashCloseDocument(summary || null);\n  const target = agent.settings().printerName;\n  if (!target) throw new Error('printer_not_configured');\n  if (target === '__PDF__') return saveAsPdf(doc);\n  return printHtmlDocument(doc, target);\n}\n",
+              "async function printCashClose(summary) {\n  const doc = agent.cashCloseDocument(summary || null);\n  const target = agent.settings().printerName;\n  if (!target) throw new Error('printer_not_configured');\n  if (target === '__PDF__') return saveAsPdf(doc);\n  return printHtmlDocument(doc, target);\n}\n\nasync function printCashMovement(receipt) {\n  const doc = agent.cashMovementDocument(receipt || {});\n  const target = agent.settings().printerName;\n  if (!target) throw new Error('printer_not_configured');\n  if (target === '__PDF__') return saveAsPdf(doc);\n  return printHtmlDocument(doc, target);\n}\n")
+          rep('desktop-pdv/main.js',
+              "  handle('thor:customers', (query) => agent.searchCustomers(query));\n",
+              "  handle('thor:customers', (query) => agent.searchCustomers(query));\n  handle('thor:sales-orders', (query) => agent.salesOrders(query));\n  handle('thor:payment-terms', () => agent.paymentTerms());\n  handle('thor:set-commercial-context', (payload) => agent.setCommercialContext(payload));\n")
+          rep('desktop-pdv/main.js',
+              "  handle('thor:print-cash-close', (summary) => printCashClose(summary));\n",
+              "  handle('thor:print-cash-close', (summary) => printCashClose(summary));\n  handle('thor:print-cash-movement', (receipt) => printCashMovement(receipt));\n")
+
+          rep('desktop-pdv/preload.js',
+              "  customers: (query) => ipcRenderer.invoke('thor:customers', query),\n",
+              "  customers: (query) => ipcRenderer.invoke('thor:customers', query),\n  salesOrders: (query = '') => ipcRenderer.invoke('thor:sales-orders', query),\n  paymentTerms: () => ipcRenderer.invoke('thor:payment-terms'),\n  setCommercialContext: (payload = {}) => ipcRenderer.invoke('thor:set-commercial-context', payload),\n")
+          rep('desktop-pdv/preload.js',
+              "  printCashClose: (summary) => ipcRenderer.invoke('thor:print-cash-close', summary),\n",
+              "  printCashClose: (summary) => ipcRenderer.invoke('thor:print-cash-close', summary),\n  printCashMovement: (receipt) => ipcRenderer.invoke('thor:print-cash-movement', receipt),\n")
+
+          rep('desktop-pdv/renderer/index.html',
+              '<link rel="stylesheet" href="quick-entry-v063.css"></head>',
+              '<link rel="stylesheet" href="quick-entry-v063.css"><link rel="stylesheet" href="commercial-v070.css"></head>')
+          rep('desktop-pdv/renderer/index.html',
+              '<script src="quick-entry-v063.js"></script></body>',
+              '<script src="quick-entry-v063.js"></script><script src="commercial-v070.js"></script></body>')
+          rep('desktop-pdv/package.json','"version": "0.6.4"','"version": "0.7.0"')
+      - name: Validate patched files
+        run: |
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/preload.js
+          node --check desktop-pdv/agent/commercial-v070.js
+          node --check desktop-pdv/renderer/commercial-v070.js
+      - name: Commit patch
+        run: |
+          git config user.name "ThorPDV Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add desktop-pdv/main.js desktop-pdv/preload.js desktop-pdv/renderer/index.html desktop-pdv/package.json
+          git commit -m "feat: wire commercial operations and term sales v0.7.0"
+          git push origin HEAD:main
