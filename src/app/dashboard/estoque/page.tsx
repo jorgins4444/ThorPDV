@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import '../[...slug]/module.css';
 import '../[...slug]/advanced.css';
+import '../[...slug]/management-shell.css';
 import { AdvancedShell } from '../[...slug]/advanced-shell';
 import { StockWorkspace } from '../[...slug]/stock-workspace';
 import { erpLoad } from '../[...slug]/actions';
