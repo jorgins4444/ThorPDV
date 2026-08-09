@@ -8,6 +8,7 @@ import { erpLoad, erpSaleCatalog } from '../../[...slug]/actions';
 import { listPdvOperators } from '../../[...slug]/operator-actions';
 import { paymentTermList, salesOrderList } from '../../[...slug]/sales-order-actions';
 
+// ThorPDV Gestão v0.7.0 — pedidos de venda e negociação a prazo.
 export default async function SalesOrdersPage(){
   const [orders,customers,sellers,catalog,terms]=await Promise.all([
     salesOrderList(),erpLoad('customers'),listPdvOperators(),erpSaleCatalog(),paymentTermList(),
