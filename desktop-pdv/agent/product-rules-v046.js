@@ -1,7 +1,9 @@
 const { installCustomerCreditRules } = require('./customer-credit-v050');
+const { installScaleLabelRules } = require('./scale-label-v060');
 
 function installProductRules(ThorAgent, Store) {
   installCustomerCreditRules(ThorAgent, Store);
+  installScaleLabelRules(ThorAgent, Store);
   const originalMigrate = Store.prototype.migrate;
   const originalApplyPull = Store.prototype.applyPull;
   const originalInflateProduct = Store.prototype.inflateProduct;
@@ -45,6 +47,8 @@ function installProductRules(ThorAgent, Store) {
       fractioned: Boolean(product.is_weighable) || Boolean(product.fractioned),
       prompt_quantity: Boolean(product.prompt_quantity),
       allow_discount: product.allow_discount !== 0,
+      label_scale: Boolean(product.label_scale),
+      product_code: Number(product.product_code || 0),
     };
   };
 
