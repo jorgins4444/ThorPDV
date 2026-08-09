@@ -50,6 +50,7 @@ jobs:
             'agent/cash-closing.js',
             'agent/production.js',
             'agent/pre-sale-v064.js',
+            'agent/commercial-v070.js',
             'renderer/app.js',
             'renderer/checkout-v3.js',
             'renderer/hotfix-v042.js',
@@ -73,7 +74,8 @@ jobs:
             'renderer/store-credit-v050.js',
             'renderer/scale-label-v060.js',
             'renderer/scale-label-v061.js',
-            'renderer/quick-entry-v063.js'
+            'renderer/quick-entry-v063.js',
+            'renderer/commercial-v070.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
