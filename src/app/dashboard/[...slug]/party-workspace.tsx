@@ -4,7 +4,12 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { partyList, partySave } from './party-actions';
 import styles from './party-workspace.module.css';
 
-type Row = Record<string, unknown>;
+type Row = {
+  id?: string; name?: string; trade_name?: string; document?: string; type?: string; birth_date?: string;
+  email?: string; phone?: string; state_registration?: string; postal_code?: string; street?: string; number?: string;
+  complement?: string; district?: string; city?: string; state?: string; ibge_city_code?: string; active?: boolean;
+  store_credit_balance?: number | string; created_at?: string;
+};
 type Resource = 'customers' | 'suppliers';
 type PartyType = 'PF' | 'PJ';
 type FormState = {
@@ -42,7 +47,7 @@ export function PartyWorkspace({ resource, initial }: { resource: Resource; init
   const activeCount=useMemo(()=>rows.filter(r=>r.active!==false).length,[rows]); const creditTotal=useMemo(()=>isCustomer?rows.reduce((s,r)=>s+Number(r.store_credit_balance||0),0):0,[rows,isCustomer]);
   const set=(key:keyof FormState,value:string|boolean)=>setForm(v=>({...v,[key]:value}));
 
-  const refresh=async(q=search)=>{const r=await partyList(resource,q);if(r.ok)setRows(r.data);else{setError(true);setMessage(String(r.error||'Erro ao carregar registros.'));}};
+  const refresh=async(q=search)=>{const r=await partyList(resource,q);if(r.ok)setRows(r.data as Row[]);else{setError(true);setMessage(String(r.error||'Erro ao carregar registros.'));}};
   const openNew=()=>{setForm({...EMPTY,type:isCustomer?'PF':'PJ'});setDocHint('');setCepHint('');setMessage('');setModal(true);lastCnpj.current='';lastCep.current='';};
   const openEdit=(row:Row)=>{setForm(rowToForm(row,resource));setDocHint('');setCepHint('');setMessage('');setModal(true);lastCnpj.current='';lastCep.current='';};
 
@@ -69,7 +74,7 @@ export function PartyWorkspace({ resource, initial }: { resource: Resource; init
     </section>
 
     {modal&&<div className={styles.backdrop} onMouseDown={()=>setModal(false)}><div className={styles.modal} onMouseDown={e=>e.stopPropagation()}><div className={styles.modalHead}><div><h2>{form.id?'Editar':'Novo'} {isCustomer?'cliente':'fornecedor'}</h2><p>Documento validado, consulta cadastral e endereço completo integrado ao ThorPDV.</p></div><button className={styles.close} onClick={()=>setModal(false)}>×</button></div><form className={`${styles.form} ${saving?styles.loading:''}`} onSubmit={submit}>
-      <section className={styles.section}><div className={styles.sectionTitle}><div><b>Identificação</b><small>Defina pessoa física ou jurídica.</small></div><span className={styles.tag}>{form.type}</span></div><div className={styles.typeSwitch}><button type="button" className={form.type==='PF'?styles.active:''} onClick={()=>{setForm(v=>({...v,type:'PF',trade_name:'',state_registration:'',birth_date:isCustomer?v.birth_date:'' ,document:''}));setDocHint('');lastCnpj.current='';}}>Pessoa Física</button><button type="button" className={form.type==='PJ'?styles.active:''} onClick={()=>{setForm(v=>({...v,type:'PJ',birth_date:'',document:''}));setDocHint('');lastCnpj.current='';}}>Pessoa Jurídica</button></div>
+      <section className={styles.section}><div className={styles.sectionTitle}><div><b>Identificação</b><small>Defina pessoa física ou jurídica.</small></div><span className={styles.tag}>{form.type}</span></div><div className={styles.typeSwitch}><button type="button" className={form.type==='PF'?styles.active:''} onClick={()=>{setForm(v=>({...v,type:'PF',trade_name:'',state_registration:'',birth_date:isCustomer?v.birth_date:'',document:''}));setDocHint('');lastCnpj.current='';}}>Pessoa Física</button><button type="button" className={form.type==='PJ'?styles.active:''} onClick={()=>{setForm(v=>({...v,type:'PJ',birth_date:'',document:''}));setDocHint('');lastCnpj.current='';}}>Pessoa Jurídica</button></div>
         <div className={styles.grid} style={{marginTop:12}}><label className={styles.field}><span>{form.type==='PF'?'Nome completo':'Razão social'}</span><input value={form.name} onChange={e=>set('name',e.target.value)} required/></label>{form.type==='PJ'&&<label className={styles.field}><span>Nome fantasia</span><input value={form.trade_name} onChange={e=>set('trade_name',e.target.value)}/></label>}
           <label className={styles.field}><span>{form.type==='PF'?'CPF':'CNPJ'}</span><div className={styles.lookupRow}><input value={fmtDocument(form.document)} onChange={e=>{const d=digits(e.target.value).slice(0,form.type==='PF'?11:14);set('document',d);lastCnpj.current='';}} onBlur={()=>form.type==='PJ'?lookupCnpj():setDocHint(cpfValid(form.document)?'CPF válido.':'CPF inválido.')} inputMode="numeric" required/>{form.type==='PJ'&&<button type="button" onClick={()=>lookupCnpj()}>Consultar CNPJ</button>}</div><small className={`${styles.hint} ${docHint.includes('inválido')?styles.error:docHint.includes('válido')?styles.ok:''}`}>{docHint}</small></label>
           {form.type==='PF'&&isCustomer&&<label className={styles.field}><span>Data de nascimento</span><input type="date" value={form.birth_date} onChange={e=>set('birth_date',e.target.value)}/></label>}{form.type==='PJ'&&<label className={styles.field}><span>Inscrição Estadual</span><input value={form.state_registration} onChange={e=>set('state_registration',e.target.value)}/></label>}
