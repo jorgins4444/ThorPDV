@@ -47,6 +47,7 @@ jobs:
             'agent/production.js',
             'renderer/app.js',
             'renderer/checkout-v3.js',
+            'renderer/hotfix-v042.js',
             'renderer/validation-v3.js',
             'renderer/sync-recovery.js',
             'renderer/operator-gate.js',
