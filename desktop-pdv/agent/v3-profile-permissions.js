@@ -11,11 +11,18 @@ function installProfilePermissions(ThorAgent) {
   const originalFiscalSales = ThorAgent.prototype.fiscalSales;
   const originalFiscalSale = ThorAgent.prototype.fiscalSale;
   const originalLoginOperator = ThorAgent.prototype.loginOperator;
+  const originalSaveSettings = ThorAgent.prototype.saveSettings;
+  const originalSaveV3Settings = ThorAgent.prototype.saveV3Settings;
+  const originalSetPrinter = ThorAgent.prototype.setPrinter;
 
-  ThorAgent.prototype._profileAllows = function (path, fallback = false) {
+  ThorAgent.prototype._profileValue = function (path, fallback = undefined) {
     const operator = this.currentOperator?.();
     if (!operator) return fallback;
-    return Boolean(getPath(operator.permissions || {}, path, fallback));
+    return getPath(operator.permissions || {}, path, fallback);
+  };
+
+  ThorAgent.prototype._profileAllows = function (path, fallback = false) {
+    return Boolean(this._profileValue(path, fallback));
   };
 
   ThorAgent.prototype._requireProfilePermission = function (path, error = 'permission_denied') {
@@ -77,8 +84,16 @@ function installProfilePermissions(ThorAgent) {
   };
 
   ThorAgent.prototype.requestNfce = async function (payload = {}) {
-    this._requireProfilePermission('fiscal.request_nfce', 'nfce_request_not_allowed');
-    return originalRequestNfce.call(this, payload);
+    const operator = this._requireProfilePermission('fiscal.request_nfce', 'nfce_request_not_allowed');
+    const result = await originalRequestNfce.call(this, payload);
+    if (result?.eventId) {
+      const pending = this.store.pending(20).find((event) => event.id === result.eventId);
+      if (pending) {
+        const merged = { ...pending.payload, operator_user_id: operator.id };
+        this.store.db.prepare('update queue set payload=?,updated_at=? where id=?').run(JSON.stringify(merged), new Date().toISOString(), result.eventId);
+      }
+    }
+    return result;
   };
 
   ThorAgent.prototype.fiscalSales = function (query = '') {
@@ -91,6 +106,21 @@ function installProfilePermissions(ThorAgent) {
     return originalFiscalSale.call(this, key);
   };
 
+  ThorAgent.prototype.saveSettings = function (input = {}) {
+    this._requireProfilePermission('settings.edit', 'settings_edit_not_allowed');
+    return originalSaveSettings.call(this, input);
+  };
+
+  ThorAgent.prototype.saveV3Settings = function (input = {}) {
+    this._requireProfilePermission('settings.edit', 'settings_edit_not_allowed');
+    return originalSaveV3Settings.call(this, input);
+  };
+
+  ThorAgent.prototype.setPrinter = function (name) {
+    this._requireProfilePermission('settings.edit', 'settings_edit_not_allowed');
+    return originalSetPrinter.call(this, name);
+  };
+
   ThorAgent.prototype.manualSync = async function () {
     const operator = this.currentOperator?.();
     if (operator && !this._profileAllows('sync.manual', true)) throw new Error('manual_sync_not_allowed');
@@ -98,9 +128,12 @@ function installProfilePermissions(ThorAgent) {
   };
 
   ThorAgent.prototype.canPrint = function (type = 'pre_sale', reprint = false) {
-    if (reprint && !this._profileAllows('print.reprint', true)) return false;
-    if (type === 'nfce') return this._profileAllows('print.nfce', true);
-    return this._profileAllows('print.receipt', true);
+    if (reprint && !this._profileAllows('print.reprint', false)) return false;
+    if (type === 'nfce') {
+      if (reprint && !this._profileAllows('fiscal.reprint', false)) return false;
+      return this._profileAllows('print.nfce', false);
+    }
+    return this._profileAllows('print.receipt', false);
   };
 }
 
