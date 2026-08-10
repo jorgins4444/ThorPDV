@@ -8,7 +8,7 @@ import { StockWorkspace } from '../[...slug]/stock-workspace';
 import { erpLoad } from '../[...slug]/actions';
 import { erpStockOverview } from '../[...slug]/stock-location-actions';
 
-// Stock locations v0.7.4: deploy anchor for the location-aware inventory UI.
+// Stock locations v0.7.4: production redeploy anchor.
 export default async function StockPage() {
   const [products, overview] = await Promise.all([erpLoad('products'), erpStockOverview()]);
   return <AdvancedShell title="Gestão de Estoque" subtitle="Movimentações e saldos separados por Local de Estoque, com Matriz como padrão." activePath="/dashboard/estoque">
