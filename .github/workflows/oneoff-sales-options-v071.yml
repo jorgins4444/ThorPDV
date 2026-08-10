@@ -1,0 +1,93 @@
+name: One-off Sales Options v0.7.1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/oneoff-sales-options-v071.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Wire Desktop Sales Options
+        shell: python
+        run: |
+          from pathlib import Path
+          def rep(path, old, new):
+              p=Path(path); s=p.read_text(encoding='utf-8'); c=s.count(old)
+              if c!=1: raise SystemExit(f'{path}: expected one match, got {c}: {old!r}')
+              p.write_text(s.replace(old,new),encoding='utf-8')
+
+          rep('desktop-pdv/main.js',
+              "const { installCommercialV070 } = require('./agent/commercial-v070');\n",
+              "const { installCommercialV070 } = require('./agent/commercial-v070');\nconst { installSalesOptionsV071 } = require('./agent/sales-options-v071');\n")
+          rep('desktop-pdv/main.js',
+              "installCommercialV070(ThorAgent);\ninstallSyncPolicy(ThorAgent);",
+              "installCommercialV070(ThorAgent);\ninstallSalesOptionsV071(ThorAgent);\ninstallSyncPolicy(ThorAgent);")
+
+          p=Path('desktop-pdv/renderer/commercial-v070.js')
+          s=p.read_text(encoding='utf-8')
+          start=s.index('  async function c70OpenTerm() {')
+          end=s.index('\n  function c70OtherOptions()',start)
+          new_block='''  async function c70OpenTerm() {
+            const v=v3State();if(!v.customerId)return infoModal('Venda a Prazo','Selecione primeiro um cliente cadastrado no Gestão. Vendas a prazo exigem cliente identificado.');
+            const terms=await window.thor.paymentTerms().catch(()=>[]);if(!terms.length)return infoModal('Venda a Prazo','Nenhum plano de Boleto/Crediário foi sincronizado. Cadastre em Gestão → Administrativo → Configurações → Opções de Vendas.');
+            const c=c70State();
+            const m=modal(`<div class="v47-modal-head"><div><small>NEGOCIAÇÃO</small><h3>Venda a Prazo</h3><p>Escolha uma condição cadastrada no Gestão. Parcelas, vencimentos e taxa são controlados centralmente.</p></div><span>📅</span></div>
+              <div class="field"><label>Plano<select id="c70TermPlan">${terms.map((t,i)=>`<option value="${i}">${esc(t.name)} — ${esc(c70TermLabel(t.method))}</option>`).join('')}</select></label></div>
+              <div id="c70TermPreview" class="c70-term-preview"></div><div class="actions"><button class="secondary" id="c70TermCancel">Cancelar</button><button class="primary" id="c70TermApply">Usar venda a prazo</button></div>`, 'wide');
+            const plan=m.querySelector('#c70TermPlan'),preview=m.querySelector('#c70TermPreview');
+            const calc=()=>{const t=terms[Number(plan.value)]||terms[0],principal=Math.max(v3Remaining(),0),rate=c70Num(t.interest_percent),total=principal+(principal*rate/100),count=Math.max(Number(t.installments||1),1);preview.innerHTML=`<span>${esc(c70TermLabel(t.method))} • <b>${count}x</b></span><span>1º vencimento em <b>${Number(t.first_due_days??30)} dias</b> • intervalo <b>${Number(t.interval_days??30)} dias</b></span><span>Saldo <b>${money(principal)}</b>${rate>0?` + taxa ${rate.toLocaleString('pt-BR')}%`:''} = <b>${money(total)}</b> • aprox. ${money(total/count)}/parcela</span>`;};
+            plan.onchange=calc;m.querySelector('#c70TermCancel').onclick=()=>m.remove();m.querySelector('#c70TermApply').onclick=()=>{const t=terms[Number(plan.value)]||terms[0];c.term={payment_term_id:t.id,method:t.method,installments:Number(t.installments||1),first_due_days:Number(t.first_due_days??30),interval_days:Number(t.interval_days??30),interest_percent:c70Num(t.interest_percent)};m.remove();c70PatchCommercialUi();showToast(`${c70TermLabel(t.method)} selecionado: ${c.term.installments} parcela(s).`);};calc();
+          }
+'''
+          s=s[:start]+new_block+s[end:]
+          old="      c.salesOrderId=order.id;c.salesOrderNumber=order.number;c.orderPriceLock=true;c.preferredPaymentMethod=order.payment_condition==='immediate'?order.payment_method:null;\n"
+          new=old+"      v.salesOptionsOrderCard={brand:order.card_brand_code||'',acquirer:order.card_acquirer_cnpj||'',installments:Number(order.card_installments||1)};\n"
+          if old not in s: raise SystemExit('commercial order context target not found')
+          s=s.replace(old,new,1)
+          oldreset="  v3ResetSale=function(){const result=previousReset();const c=c70State();c.salesOrderId=null;c.salesOrderNumber=null;c.orderPriceLock=false;c.term=null;c.preferredPaymentMethod=null;return result;};"
+          newreset="  v3ResetSale=function(){const result=previousReset();const c=c70State(),v=v3State();c.salesOrderId=null;c.salesOrderNumber=null;c.orderPriceLock=false;c.term=null;c.preferredPaymentMethod=null;v.salesOptionsOrderCard=null;return result;};"
+          if oldreset not in s: raise SystemExit('commercial reset target not found')
+          s=s.replace(oldreset,newreset,1)
+          p.write_text(s,encoding='utf-8')
+
+          rep('desktop-pdv/renderer/index.html',
+              '<link rel="stylesheet" href="commercial-v070.css"></head>',
+              '<link rel="stylesheet" href="commercial-v070.css"><link rel="stylesheet" href="sales-options-v071.css"></head>')
+          rep('desktop-pdv/renderer/index.html',
+              '<script src="commercial-v070.js"></script></body>',
+              '<script src="commercial-v070.js"></script><script src="sales-options-v071.js"></script></body>')
+          rep('desktop-pdv/package.json','"version": "0.7.0"','"version": "0.7.1"')
+
+          p=Path('.github/workflows/pdv-desktop.yml')
+          s=p.read_text(encoding='utf-8')
+          old="            'agent/pre-sale-v064.js',\n"
+          new=old+"            'agent/sales-options-v071.js',\n"
+          if old not in s: raise SystemExit('agent validation insertion target not found')
+          s=s.replace(old,new,1)
+          old="            'renderer/quick-entry-v063.js'\n"
+          new="            'renderer/quick-entry-v063.js',\n            'renderer/commercial-v070.js',\n            'renderer/sales-options-v071.js'\n"
+          if old not in s: raise SystemExit('renderer validation insertion target not found')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+      - name: Validate JavaScript
+        run: |
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/agent/sales-options-v071.js
+          node --check desktop-pdv/renderer/commercial-v070.js
+          node --check desktop-pdv/renderer/sales-options-v071.js
+      - name: Commit patch
+        run: |
+          git config user.name "ThorPDV Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add desktop-pdv/main.js desktop-pdv/renderer/commercial-v070.js desktop-pdv/renderer/index.html desktop-pdv/package.json .github/workflows/pdv-desktop.yml
+          git commit -m "feat: centralize Desktop sales options v0.7.1"
+          git push origin HEAD:main
