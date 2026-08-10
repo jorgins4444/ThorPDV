@@ -9,7 +9,7 @@ const num=(v:unknown)=>Number(v??0)||0;
 export function StockLocationsWorkspace({locations,branches}:{locations:Row[];branches:Row[]}){
   const [name,setName]=useState('');
   const [code,setCode]=useState('');
-  const [branchId,setBranchId]=useState(String(branches.find(b=>b.is_headquarters)?.id??branches[0]?.id??''));
+  const [branchId,setBranchId]=useState(String(branches.find(b=>Boolean(b.is_headquarters))?.id??branches[0]?.id??''));
   const [makeDefault,setMakeDefault]=useState(false);
   const [message,setMessage]=useState('');
   const [saving,setSaving]=useState(false);
@@ -33,7 +33,7 @@ export function StockLocationsWorkspace({locations,branches}:{locations:Row[];br
       <form className="erp-form-grid erp-advanced-form" onSubmit={create}>
         <label>Nome<input required minLength={2} maxLength={80} value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Filial, Depósito, Loja 2"/></label>
         <label>Código<input maxLength={30} value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="Opcional"/></label>
-        <label>Filial vinculada<select required value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={String(b.id)} value={String(b.id)}>{String(b.name)}{b.is_headquarters?' — Matriz':''}</option>)}</select></label>
+        <label>Filial vinculada<select required value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={String(b.id)} value={String(b.id)}>{String(b.name)}{Boolean(b.is_headquarters)?' — Matriz':''}</option>)}</select></label>
         <label className="erp-stock-checkbox"><input type="checkbox" checked={makeDefault} onChange={e=>setMakeDefault(e.target.checked)}/><span>Tornar padrão desta filial</span></label>
         <button className="erp-primary" disabled={saving||!name.trim()||!branchId}>{saving?'Salvando...':'Criar local'}</button>
       </form>
@@ -42,9 +42,9 @@ export function StockLocationsWorkspace({locations,branches}:{locations:Row[];br
     <section className="erp-module-card">
       <div className="erp-advanced-head"><h2>Locais cadastrados</h2><p>O local padrão recebe as movimentações quando nenhum outro local for informado.</p></div>
       <div className="erp-stock-location-grid">{locations.map(row=><article className={`erp-stock-location-card ${row.active===false?'disabled':''}`} key={String(row.id)}>
-        <div><small>{String(row.branch_name??'')}</small><h3>{String(row.name)}</h3><p>{row.code?`Código ${String(row.code)}`:'Sem código'} · {num(row.product_count)} produto(s) com saldo</p></div>
-        <div className="erp-stock-location-badges">{row.is_default&&<span className="erp-pill">Padrão</span>}<span>{num(row.total_quantity).toLocaleString('pt-BR',{maximumFractionDigits:3})} un. líquidas</span></div>
-        <div className="erp-stock-location-actions">{!row.is_default&&row.active!==false&&<button className="erp-ghost" type="button" onClick={()=>saveRow(row,true,true)}>Tornar padrão</button>}<button className="erp-ghost" type="button" onClick={()=>saveRow(row,Boolean(row.is_default),row.active===false)}>{row.active===false?'Ativar':'Desativar'}</button></div>
+        <div><small>{String(row.branch_name??'')}</small><h3>{String(row.name)}</h3><p>{Boolean(row.code)?`Código ${String(row.code)}`:'Sem código'} · {num(row.product_count)} produto(s) com saldo</p></div>
+        <div className="erp-stock-location-badges">{Boolean(row.is_default)&&<span className="erp-pill">Padrão</span>}<span>{num(row.total_quantity).toLocaleString('pt-BR',{maximumFractionDigits:3})} un. líquidas</span></div>
+        <div className="erp-stock-location-actions">{!Boolean(row.is_default)&&row.active!==false&&<button className="erp-ghost" type="button" onClick={()=>saveRow(row,true,true)}>Tornar padrão</button>}<button className="erp-ghost" type="button" onClick={()=>saveRow(row,Boolean(row.is_default),row.active===false)}>{row.active===false?'Ativar':'Desativar'}</button></div>
       </article>)}</div>
     </section>
   </div>;
