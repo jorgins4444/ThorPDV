@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Apply patch
-        run: python .github/scripts/patch-sales-options-v071.py
+        run: python .github/scripts/patch-desktop-sales-options-core-v071.py
       - name: Validate JavaScript
         run: |
           node --check desktop-pdv/main.js
@@ -28,6 +28,6 @@ jobs:
         run: |
           git config user.name "ThorPDV Automation"
           git config user.email "actions@users.noreply.github.com"
-          git add desktop-pdv/main.js desktop-pdv/renderer/commercial-v070.js desktop-pdv/renderer/index.html desktop-pdv/package.json .github/workflows/pdv-desktop.yml
+          git add desktop-pdv/main.js desktop-pdv/renderer/commercial-v070.js desktop-pdv/renderer/index.html desktop-pdv/package.json
           git commit -m "feat: centralize Desktop sales options v0.7.1"
           git push origin HEAD:main
