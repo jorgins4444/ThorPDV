@@ -42,8 +42,6 @@ export function ReceivablesWorkspace({initial,customers,accounts,cashSessions,pa
   function openSettlement(row:Row){
     const firstMethod=String(paymentMethods.find(m=>m.code!=='store_credit')?.code??'cash');
     const isCash=firstMethod==='cash';
-    const nextDestination:isCash extends true?never:never = undefined as never;
-    void nextDestination;
     setSelected(row);setMethod(firstMethod);setSettleAmount(Number(row.remaining??Math.max(Number(row.amount||0)-Number(row.paid_amount||0),0)));setSettleDate(today());setNotes('');
     if(isCash&&cashSessions.length){setDestination('cash_session');setCashId(String(cashSessions[0]?.id??''));setAccountId('')}
     else{setDestination('bank_account');const pool=isCash?activeAccounts:bankOnly;setAccountId(String(pool[0]?.id??''));setCashId('')}
@@ -93,7 +91,7 @@ export function ReceivablesWorkspace({initial,customers,accounts,cashSessions,pa
         <label>Valor recebido<input type="number" min="0.01" max={Number(selected.remaining||0)} step="0.01" value={settleAmount} onChange={e=>setSettleAmount(Number(e.target.value))}/></label>
         <label>Data do recebimento<input type="date" value={settleDate} onChange={e=>setSettleDate(e.target.value)}/></label>
         <label>Forma de pagamento<select value={method} onChange={e=>changeMethod(e.target.value)}>{paymentMethods.map(m=>{const code=String(m.code);const isCredit=code==='store_credit';const disabled=isCredit&&selectedCredit<=0;return <option key={code} value={code} disabled={disabled}>{String(m.name)}{isCredit?` — disponível ${money(selectedCredit)}`:''}</option>})}</select></label>
-        {method!=='store_credit'&&method==='cash'&&<label>Destino<select value={destination} onChange={e=>{const d=e.target.value as 'bank_account'|'cash_session';setDestination(d);if(d==='cash_session'){setCashId(String(cashSessions[0]?.id??''));setAccountId('')}else{setAccountId(String(activeAccounts[0]?.id??''));setCashId('')}}}><option value="cash_session" disabled={!cashSessions.length}>Caixa aberto do dia</option><option value="bank_account">Conta financeira / Caixa Interno</option></select></label>}
+        {method==='cash'&&<label>Destino<select value={destination} onChange={e=>{const d=e.target.value as 'bank_account'|'cash_session';setDestination(d);if(d==='cash_session'){setCashId(String(cashSessions[0]?.id??''));setAccountId('')}else{setAccountId(String(activeAccounts[0]?.id??''));setCashId('')}}}><option value="cash_session" disabled={!cashSessions.length}>Caixa aberto do dia</option><option value="bank_account">Conta financeira / Caixa Interno</option></select></label>}
         {method!=='store_credit'&&method!=='cash'&&<label>Destino<input readOnly value="Conta bancária"/></label>}
         {destination==='bank_account'&&method!=='store_credit'&&<label>Conta de destino<select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Selecione...</option>{destinationAccounts.map(a=><option key={String(a.id)} value={String(a.id)}>{String(a.name)} — saldo {money(a.balance)}</option>)}</select></label>}
         {destination==='cash_session'&&method==='cash'&&<label>Caixa do dia<select value={cashId} onChange={e=>setCashId(e.target.value)}><option value="">Selecione...</option>{cashSessions.map(c=><option key={String(c.id)} value={String(c.id)}>{String(c.pos)} · {String(c.branch)} · aberto {date(c.opened_at)} · esperado {money(c.expected_cash)}</option>)}</select></label>}
