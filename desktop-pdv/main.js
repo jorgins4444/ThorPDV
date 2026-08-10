@@ -14,6 +14,7 @@ const { installCashClosing } = require('./agent/cash-closing');
 const { installProductionPrinting } = require('./agent/production');
 const { installPreSaleReceipt } = require('./agent/pre-sale-v064');
 const { installCommercialV070 } = require('./agent/commercial-v070');
+const { installSalesOptionsV071 } = require('./agent/sales-options-v071');
 const { version: DESKTOP_VERSION } = require('./package.json');
 
 installThorAgentV3(ThorAgent);
@@ -27,6 +28,7 @@ installCashClosing(ThorAgent);
 installProductionPrinting(ThorAgent);
 installPreSaleReceipt(ThorAgent);
 installCommercialV070(ThorAgent);
+installSalesOptionsV071(ThorAgent);
 installSyncPolicy(ThorAgent);
 
 let mainWindow;

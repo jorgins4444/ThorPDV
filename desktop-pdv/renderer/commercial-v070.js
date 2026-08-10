@@ -67,6 +67,7 @@
       v.customerId=order.customer_id;v.customerName=order.customer_name||'';v.payments=[];v.discount=c70Num(order.discount);v.surcharge=c70Num(order.surcharge);v.supervisorAuthorization=null;
       try{const customers=await window.thor.customers(order.customer_name||'');const cust=(customers||[]).find(x=>String(x.id)===String(order.customer_id));if(cust){v.consumerDocument=String(cust.document||'').replace(/\D/g,'');v.customerEmail=cust.email||'';v.customerPhone=cust.phone||'';}}catch{}
       c.salesOrderId=order.id;c.salesOrderNumber=order.number;c.orderPriceLock=true;c.preferredPaymentMethod=order.payment_condition==='immediate'?order.payment_method:null;
+      v.salesOptionsOrderCard={brand:order.card_brand_code||'',acquirer:order.card_acquirer_cnpj||'',installments:Number(order.card_installments||1)};
       c.term=order.payment_condition==='term'?{payment_term_id:order.payment_term_id||null,method:order.term_method,installments:Number(order.installments||1),first_due_days:Number(order.first_due_days??30),interval_days:Number(order.interval_days??30),interest_percent:c70Num(order.interest_percent)}:null;
       v.quote={subtotal:c70Num(order.subtotal),discount:v.discount,surcharge:v.surcharge,total:c70Num(order.total)};
       m.remove();renderSaleWorkspace();queueMicrotask(()=>{v.quote={subtotal:c70Num(order.subtotal),discount:v.discount,surcharge:v.surcharge,total:c70Num(order.total)};v3RenderCart();c70PatchCommercialUi();});
@@ -76,17 +77,14 @@
 
   async function c70OpenTerm() {
     const v=v3State();if(!v.customerId)return infoModal('Venda a Prazo','Selecione primeiro um cliente cadastrado no Gestão. Vendas a prazo exigem cliente identificado.');
-    const terms=await window.thor.paymentTerms().catch(()=>[]);if(!terms.length)return infoModal('Venda a Prazo','Nenhum plano de Boleto/Crediário foi sincronizado. Cadastre um plano em Gestão → Vendas → Pedidos de Venda.');
+    const terms=await window.thor.paymentTerms().catch(()=>[]);if(!terms.length)return infoModal('Venda a Prazo','Nenhum plano de Boleto/Crediário foi sincronizado. Cadastre em Gestão → Administrativo → Configurações → Opções de Vendas.');
     const c=c70State();
-    const m=modal(`<div class="v47-modal-head"><div><small>NEGOCIAÇÃO</small><h3>Venda a Prazo</h3><p>O saldo não pago agora será enviado para Contas a Receber.</p></div><span>📅</span></div>
+    const m=modal(`<div class="v47-modal-head"><div><small>NEGOCIAÇÃO</small><h3>Venda a Prazo</h3><p>Escolha uma condição cadastrada no Gestão. Parcelas, vencimentos e taxa são controlados centralmente.</p></div><span>📅</span></div>
       <div class="field"><label>Plano<select id="c70TermPlan">${terms.map((t,i)=>`<option value="${i}">${esc(t.name)} — ${esc(c70TermLabel(t.method))}</option>`).join('')}</select></label></div>
-      <div class="c70-term-grid"><label>Parcelas<input id="c70Installments" type="number" min="1" max="60"></label><label>1º vencimento (dias)<input id="c70FirstDue" type="number" min="0"></label><label>Intervalo (dias)<input id="c70Interval" type="number" min="1"></label><label>Taxa %<input id="c70Interest" type="number" min="0" step="0.01"></label></div>
       <div id="c70TermPreview" class="c70-term-preview"></div><div class="actions"><button class="secondary" id="c70TermCancel">Cancelar</button><button class="primary" id="c70TermApply">Usar venda a prazo</button></div>`, 'wide');
-    const plan=m.querySelector('#c70TermPlan'),ins=m.querySelector('#c70Installments'),first=m.querySelector('#c70FirstDue'),interval=m.querySelector('#c70Interval'),interest=m.querySelector('#c70Interest'),preview=m.querySelector('#c70TermPreview');
-    const fill=()=>{const t=terms[Number(plan.value)]||terms[0];ins.value=t.installments||1;first.value=t.first_due_days??30;interval.value=t.interval_days??30;interest.value=t.interest_percent||0;calc();};
-    const calc=()=>{const principal=Math.max(v3Remaining(),0),rate=c70Num(interest.value),total=principal+(principal*rate/100),n=Math.max(Number(ins.value||1),1);preview.innerHTML=`<span>Saldo a financiar <b>${money(principal)}</b></span><span>Total com taxa <b>${money(total)}</b></span><span>${n} parcela(s) de aprox. <b>${money(total/n)}</b></span>`;};
-    plan.onchange=fill;[ins,first,interval,interest].forEach(x=>x.oninput=calc);m.querySelector('#c70TermCancel').onclick=()=>m.remove();m.querySelector('#c70TermApply').onclick=()=>{const t=terms[Number(plan.value)]||terms[0];c.term={payment_term_id:t.id,method:t.method,installments:Math.max(Number(ins.value||1),1),first_due_days:Math.max(Number(first.value||0),0),interval_days:Math.max(Number(interval.value||1),1),interest_percent:Math.max(c70Num(interest.value),0)};m.remove();c70PatchCommercialUi();showToast(`${c70TermLabel(t.method)} configurado em ${c.term.installments} parcela(s).`);};
-    fill();
+    const plan=m.querySelector('#c70TermPlan'),preview=m.querySelector('#c70TermPreview');
+    const calc=()=>{const t=terms[Number(plan.value)]||terms[0],principal=Math.max(v3Remaining(),0),rate=c70Num(t.interest_percent),total=principal+(principal*rate/100),count=Math.max(Number(t.installments||1),1);preview.innerHTML=`<span>${esc(c70TermLabel(t.method))} • <b>${count}x</b></span><span>1º vencimento em <b>${Number(t.first_due_days??30)} dias</b> • intervalo <b>${Number(t.interval_days??30)} dias</b></span><span>Saldo <b>${money(principal)}</b>${rate>0?` + taxa ${rate.toLocaleString('pt-BR')}%`:''} = <b>${money(total)}</b> • aprox. ${money(total/count)}/parcela</span>`;};
+    plan.onchange=calc;m.querySelector('#c70TermCancel').onclick=()=>m.remove();m.querySelector('#c70TermApply').onclick=()=>{const t=terms[Number(plan.value)]||terms[0];c.term={payment_term_id:t.id,method:t.method,installments:Number(t.installments||1),first_due_days:Number(t.first_due_days??30),interval_days:Number(t.interval_days??30),interest_percent:c70Num(t.interest_percent)};m.remove();c70PatchCommercialUi();showToast(`${c70TermLabel(t.method)} selecionado: ${c.term.installments} parcela(s).`);};calc();
   }
 
   function c70OtherOptions() {
@@ -108,7 +106,7 @@
   v3CompleteCheckout=async function(){const c=c70State(),v=v3State();const remaining=v3Remaining();if(c.term&&!v.customerId)return infoModal('Venda a Prazo','Venda a prazo exige um cliente cadastrado e identificado.');if(!c.term&&remaining>0.01)return infoModal('Pagamento pendente','A venda à vista precisa estar totalmente paga. Para deixar saldo, escolha Venda a Prazo (Boleto ou Crediário).');if(c.term&&remaining<=0.01)return infoModal('Venda a Prazo','Não existe saldo restante para financiar. Remova a venda a prazo ou reduza os pagamentos à vista.');try{await window.thor.setCommercialContext({salesOrderId:c.salesOrderId,term:c.term});return await previousComplete();}finally{try{await window.thor.setCommercialContext({});}catch{}}};
 
   const previousReset=v3ResetSale;
-  v3ResetSale=function(){const result=previousReset();const c=c70State();c.salesOrderId=null;c.salesOrderNumber=null;c.orderPriceLock=false;c.term=null;c.preferredPaymentMethod=null;return result;};
+  v3ResetSale=function(){const result=previousReset();const c=c70State(),v=v3State();c.salesOrderId=null;c.salesOrderNumber=null;c.orderPriceLock=false;c.term=null;c.preferredPaymentMethod=null;v.salesOptionsOrderCard=null;return result;};
 
   const previousWorkspace=renderSaleWorkspace;
   renderSaleWorkspace=function(){const result=previousWorkspace();queueMicrotask(c70PatchCommercialUi);return result;};
