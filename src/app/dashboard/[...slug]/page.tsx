@@ -5,6 +5,7 @@ import './sale.css';
 import './promotion.css';
 import './organization.css';
 import './fiscal.css';
+import './fiscal-configuration.css';
 import './reconciliation.css';
 import './cash.css';
 import './sales-cash.css';
@@ -88,7 +89,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (slug === 'pdv/caixa') return <AdvancedShell title="Caixa / PDV" subtitle="Abertura, vendas vinculadas e fechamento com valor esperado e diferença por terminal." activePath="/dashboard/administrativo/pdvs"><CashWorkspace posRegisters={initial.data}/></AdvancedShell>;
   if (slug === 'fiscal' || slug === 'fiscal/nfe' || slug === 'fiscal/nfce') {
     const [settings, sales] = await Promise.all([erpFiscalSettingsGet(), erpLoad('sales')]);
-    return <AdvancedShell title="Fiscal" subtitle="NF-e e NFC-e com certificado A1, homologação/produção e transmissão direta pelo ThorFiscal para a SVRS." activePath="/dashboard/fiscal"><FiscalWorkspace initialDocs={initial.data} sales={sales.data} settings={(settings.settings ?? {}) as Record<string, unknown>} preselect={slug.endsWith('nfce')?'nfce':'nfe'}/></AdvancedShell>;
+    return <AdvancedShell title="Fiscal" subtitle="Configuração de NFC-e/NF-e, séries, numeração, caixas, DANFE, CFOPs, certificado A1 e transmissão fiscal." activePath="/dashboard/fiscal"><FiscalWorkspace initialDocs={initial.data} sales={sales.data} settings={(settings.settings ?? {}) as Record<string, unknown>} preselect={slug.endsWith('nfce')?'nfce':'nfe'}/></AdvancedShell>;
   }
   if (slug === 'financeiro/conciliacao') {
     const reconciliation = await reconciliationData();
