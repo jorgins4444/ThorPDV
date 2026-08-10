@@ -10,6 +10,6 @@ import { erpStockOverview } from '../../[...slug]/stock-location-actions';
 export default async function StockLocationsPage(){
   const [overview,branches]=await Promise.all([erpStockOverview(),erpLoad('branches')]);
   return <AdvancedShell title="Locais de Estoque" subtitle="Separe os saldos por Matriz, Filial, Depósito ou qualquer outro local físico." activePath="/dashboard/estoque/locais">
-    <StockLocationsWorkspace locations={overview.locations} branches={branches.data}/>
+    <StockLocationsWorkspace locations={overview.locations} branches={branches.data} balances={overview.balances}/>
   </AdvancedShell>;
 }
