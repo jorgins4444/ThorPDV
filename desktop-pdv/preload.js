@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('thor', {
   printCashClose: (summary) => ipcRenderer.invoke('thor:print-cash-close', summary),
   printCashMovement: (receipt) => ipcRenderer.invoke('thor:print-cash-movement', receipt),
   finalizeSale: (payload) => ipcRenderer.invoke('thor:finalize-sale', payload),
+  saveTermDuplicatesPdf: (payload) => ipcRenderer.invoke('thor:save-term-duplicates-pdf', payload),
   cancelSale: (payload) => ipcRenderer.invoke('thor:cancel-sale', payload),
   returnSale: (payload) => ipcRenderer.invoke('thor:return-sale', payload),
   requestNfce: (payload) => ipcRenderer.invoke('thor:request-nfce', payload),
