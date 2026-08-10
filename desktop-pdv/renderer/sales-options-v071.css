@@ -1,0 +1,1 @@
+.s71-card-grid{display:grid;grid-template-columns:1fr 1.6fr .75fr;gap:10px;padding:10px 0}.s71-card-grid .field{margin:0}.s71-card-grid select{width:100%}.payment-method-grid button[style*="display: none"]{display:none!important}@media(max-width:900px){.s71-card-grid{grid-template-columns:1fr}.s71-card-grid .field{grid-column:auto}}
