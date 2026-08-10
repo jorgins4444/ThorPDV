@@ -25,3 +25,11 @@ export async function erpReceivablesList(filters:ReceivableFilters={}){
   const result=(data??{}) as {ok?:boolean;error?:string;data?:Record<string,unknown>[]};
   return {ok:Boolean(result.ok),error:result.error,data:Array.isArray(result.data)?result.data:[]};
 }
+
+export async function erpSettleReceivable(entryId:string,payload:Record<string,unknown>){
+  const pToken=await token();
+  const supabase=await createClient();
+  const {data,error}=await supabase.rpc('erp_financial_settle',{p_token:pToken,p_entry_id:entryId,p_payload:payload});
+  if(error)return {ok:false,error:error.message};
+  return (data??{ok:false}) as Record<string,unknown>;
+}
