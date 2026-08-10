@@ -4,13 +4,14 @@ import { useMemo, useState, useTransition } from 'react';
 import { erpReceivablesList, type ReceivableFilters } from './receivables-actions';
 
 type Row=Record<string,unknown>;
-
 type Props={initial:Row[];customers:Row[]};
 
+const statusLabels:Record<string,string>={open:'Em aberto',paid:'Quitado',partial:'Parcial',overdue:'Vencido',cancelled:'Cancelado'};
+const documentLabels:Record<string,string>={boleto:'Boleto',crediario:'Crediário',manual:'Manual',venda:'Venda',devolucao:'Devolução'};
 const money=(value:unknown)=>Number(value||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const date=(value:unknown)=>{if(!value)return '—';const raw=String(value);const d=new Date(raw.length===10?`${raw}T12:00:00`:raw);return Number.isNaN(d.getTime())?raw:d.toLocaleDateString('pt-BR')};
-const statusLabel=(value:unknown)=>({open:'Em aberto',paid:'Quitado',partial:'Parcial',overdue:'Vencido',cancelled:'Cancelado'}[String(value)]||String(value||'—'));
-const docLabel=(value:unknown)=>({boleto:'Boleto',crediario:'Crediário',manual:'Manual',venda:'Venda',devolucao:'Devolução'}[String(value)]||String(value||'—'));
+const statusLabel=(value:unknown)=>statusLabels[String(value)]||String(value||'—');
+const docLabel=(value:unknown)=>documentLabels[String(value)]||String(value||'—');
 
 const empty:ReceivableFilters={issuedFrom:'',issuedTo:'',documentType:'',customerId:'',dueFrom:'',dueTo:'',paidFrom:'',paidTo:''};
 
