@@ -52,6 +52,7 @@ jobs:
             'agent/pre-sale-v064.js',
             'agent/commercial-v070.js',
             'agent/sales-options-v071.js',
+            'agent/sales-settlement-v073.js',
             'renderer/app.js',
             'renderer/checkout-v3.js',
             'renderer/hotfix-v042.js',
@@ -78,7 +79,8 @@ jobs:
             'renderer/quick-entry-v063.js',
             'renderer/commercial-v070.js',
             'renderer/sales-options-v071.js',
-            'renderer/term-settlement-v072.js'
+            'renderer/term-settlement-v072.js',
+            'renderer/sales-settlement-v073.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
