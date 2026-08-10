@@ -15,6 +15,7 @@ const { installProductionPrinting } = require('./agent/production');
 const { installPreSaleReceipt } = require('./agent/pre-sale-v064');
 const { installCommercialV070 } = require('./agent/commercial-v070');
 const { installSalesOptionsV071 } = require('./agent/sales-options-v071');
+const { installSalesSettlementV073 } = require('./agent/sales-settlement-v073');
 const { version: DESKTOP_VERSION } = require('./package.json');
 
 installThorAgentV3(ThorAgent);
@@ -29,6 +30,7 @@ installProductionPrinting(ThorAgent);
 installPreSaleReceipt(ThorAgent);
 installCommercialV070(ThorAgent);
 installSalesOptionsV071(ThorAgent);
+installSalesSettlementV073(ThorAgent);
 installSyncPolicy(ThorAgent);
 
 let mainWindow;
@@ -176,6 +178,7 @@ function registerIpc() {
   handle('thor:print-cash-close', (summary) => printCashClose(summary));
   handle('thor:print-cash-movement', (receipt) => printCashMovement(receipt));
   handle('thor:finalize-sale', (payload) => agent.finalizeSale(payload));
+  handle('thor:save-term-duplicates-pdf', (payload) => saveAsPdf(agent.termDuplicateDocument(payload || {})));
   handle('thor:cancel-sale', (payload) => agent.cancelSale(payload));
   handle('thor:return-sale', (payload) => agent.returnSale(payload));
   handle('thor:request-nfce', (payload) => agent.requestNfce(payload));
