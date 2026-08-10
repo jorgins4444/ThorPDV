@@ -21,7 +21,7 @@ export function ReceivablesWorkspace({initial,customers}:Props){
   const [message,setMessage]=useState('');
   const [pending,startTransition]=useTransition();
 
-  const totals=useMemo(()=>rows.reduce((acc,row)=>{acc.amount+=Number(row.amount||0);acc.paid+=Number(row.paid_amount||0);return acc;},{amount:0,paid:0}),[rows]);
+  const totals=useMemo(()=>rows.reduce<{amount:number;paid:number}>((acc,row)=>{acc.amount+=Number(row.amount||0);acc.paid+=Number(row.paid_amount||0);return acc;},{amount:0,paid:0}),[rows]);
   const set=(key:keyof ReceivableFilters,value:string)=>setFilters(current=>({...current,[key]:value}));
   const load=(next:ReceivableFilters=filters)=>startTransition(async()=>{const result=await erpReceivablesList(next);if(result.ok){setRows(result.data);setMessage('');}else setMessage(String(result.error||'Não foi possível consultar as contas a receber.'));});
   const clear=()=>{setFilters(empty);load(empty);};
