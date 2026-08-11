@@ -46,7 +46,7 @@ class ThorAgent {
   }
 
   fiscalSales(query=''){ return this.store.fiscalSales(query); }
-  fiscalSale(key){ const sale=this.store.fiscalSale(key); if(!sale) throw new Error('sale_not_found'); return sale; }
+  fiscalSale(key){ const sale=this.store.fiscalSale(key); if(!sale) throw new Error('sale_not_found'); const items=(sale.items||[]).map(i=>{const product=i.product_id?this.store.product(String(i.product_id)):null;return {...i,name:i.name||i.description||product?.name||'',description:i.description||i.name||product?.name||'',sku:i.sku||product?.sku||product?.code||'',unit:i.unit||product?.unit||''};}); return {...sale,items}; }
 
   async cancelSale({saleKey,saleClientEventId=null,saleId=null,reason=''}){
     const sale=saleKey?this.fiscalSale(saleKey):null;
@@ -65,7 +65,7 @@ class ThorAgent {
 
   async returnSale({saleKey,items,refundMethod='cash',reason=''}){
     const sale=this.fiscalSale(saleKey);
-    if(String(sale.status)==='cancelled'||String(sale.status)==='cancel_pending') throw new Error('sale_cancelled');
+    if(String(sale.status)==='cancelled'||String(sale.status)==='cancel_pending'||sale.fiscal?.status==='cancelled') throw new Error('sale_cancelled');
     if(refundMethod==='cash'&&!this.store.get('cash_open_event_id')) throw new Error('cash_required_for_cash_refund');
     if(!Array.isArray(items)||!items.length) throw new Error('return_without_items');
     const normalized=[];
@@ -90,6 +90,7 @@ class ThorAgent {
 
   async requestNfce({saleKey}){
     const sale=this.fiscalSale(saleKey);
+    if(String(sale.status)==='cancelled'||String(sale.status)==='cancel_pending'||sale.fiscal?.status==='cancelled') throw new Error('sale_cancelled');
     if(sale.fiscal?.status==='authorized') return {ok:true,alreadyAuthorized:true,fiscal:sale.fiscal};
     const e=this.event('fiscal_nfce_request',{sale_id:sale.id||null,sale_client_event_id:sale.client_event_id||null});
     this.store.patchLocalSale(sale,{fiscal:{...(sale.fiscal||{}),status:'requested'}});
@@ -106,6 +107,7 @@ class ThorAgent {
     let sale=saleKey?this.store.fiscalSale(saleKey):null;
     if(!sale){ const r=this.store.lastReceipt(); if(r){ sale={id:r.server_sale_id||null,client_event_id:r.event_id,number:r.server_number||null,status:'completed',total:r.total,items:r.payload.items||[],payments:r.payload.payments||[],completed_at:r.payload.createdAt||r.created_at,created_at:r.created_at,context:r.payload.context||{},fiscal:r.payload.fiscal||null}; } }
     if(!sale) throw new Error('receipt_not_found');
+    if(type!=='nfce'&&sale.fiscal?.status==='cancelled') throw new Error('pre_sale_unavailable_cancelled_nfce');
     if(type==='nfce'){
       if(!['authorized','cancelled'].includes(String(sale.fiscal?.status||''))) throw new Error('nfce_not_authorized');
       if(!sale.fiscal?.pdf_path) throw new Error('nfce_pdf_unavailable');

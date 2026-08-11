@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, ipcMain, safeStorage, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell } = require('electron');
 const { ThorAgent } = require('./agent');
 const { installThorAgentV3 } = require('./agent/v3');
 const { installReturnFix } = require('./agent/v3-return');
@@ -111,6 +111,43 @@ async function saveAsPdf(doc) {
   } finally { win.destroy(); }
 }
 
+function normalizeWhatsappPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  digits = digits.replace(/^0+/, '');
+  if (digits.length === 10 || digits.length === 11) digits = `55${digits}`;
+  if (digits.length < 12 || digits.length > 15) throw new Error('whatsapp_phone_invalid');
+  return digits;
+}
+
+function uniqueDownloadPath(filename) {
+  const safe = String(filename || `ThorPDV-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]+/g, '-');
+  const first = path.join(app.getPath('downloads'), safe);
+  if (!fs.existsSync(first)) return first;
+  const ext = path.extname(safe) || '.pdf';
+  const base = path.basename(safe, ext);
+  return path.join(app.getPath('downloads'), `${base}-${Date.now()}${ext}`);
+}
+
+async function shareSaleWhatsapp(saleKey, type = 'pre_sale', phone = '') {
+  if (!['pre_sale', 'nfce'].includes(type)) throw new Error('whatsapp_document_invalid');
+  const normalizedPhone = normalizeWhatsappPhone(phone);
+  const doc = agent.documentData(saleKey, type);
+  const win = await loadPrintable(doc);
+  try {
+    const buffer = await win.webContents.printToPDF({ printBackground: true, preferCSSPageSize: true });
+    const filePath = uniqueDownloadPath(doc.filename || `ThorPDV-${Date.now()}.pdf`);
+    fs.writeFileSync(filePath, buffer);
+    const sale = doc.sale || {};
+    const label = type === 'nfce' ? 'NFC-e' : 'pré-venda';
+    const number = sale.fiscal?.number || sale.number || '';
+    const text = `Olá! Segue ${label}${number ? ` da venda ${number}` : ''} emitida pelo ThorPDV. O PDF ${path.basename(filePath)} está pronto para anexar.`;
+    const url = `https://web.whatsapp.com/send?phone=${normalizedPhone}&text=${encodeURIComponent(text)}`;
+    await shell.openExternal(url);
+    setTimeout(() => { try { shell.showItemInFolder(filePath); } catch {} }, 700);
+    return { ok: true, phone: normalizedPhone, filePath, filename: path.basename(filePath), requiresManualAttach: true };
+  } finally { win.destroy(); }
+}
+
 async function printRemotePdf(doc, printerName) {
   const win = await loadPrintable(doc);
   try {
@@ -201,6 +238,7 @@ function registerIpc() {
   handle('thor:payment-integrations', () => agent.paymentIntegrations());
   handle('thor:begin-payment', (payload) => agent.beginIntegratedPayment(payload));
   handle('thor:print-sale', (saleKey, type, reprint) => printSale(saleKey, type, reprint));
+  handle('thor:share-sale-whatsapp', (saleKey, type, phone) => shareSaleWhatsapp(saleKey, type, phone));
   handle('thor:print-last', () => printSale(null, 'pre_sale', true));
 }
 

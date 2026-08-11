@@ -45,5 +45,6 @@ contextBridge.exposeInMainWorld('thor', {
   paymentIntegrations: () => ipcRenderer.invoke('thor:payment-integrations'),
   beginPayment: (payload) => ipcRenderer.invoke('thor:begin-payment', payload),
   printSale: (saleKey, type = 'pre_sale', reprint = false) => ipcRenderer.invoke('thor:print-sale', saleKey, type, reprint),
+  shareSaleWhatsapp: (saleKey, type = 'pre_sale', phone = '') => ipcRenderer.invoke('thor:share-sale-whatsapp', saleKey, type, phone),
   printLast: () => ipcRenderer.invoke('thor:print-last'),
 });
