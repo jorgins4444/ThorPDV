@@ -1,0 +1,126 @@
+name: One-off RTC tax selectors
+
+on:
+  push:
+    branches:
+      - feat/rtc-tax-selectors-20260811
+    paths:
+      - .github/workflows/oneoff-rtc-tax-selectors.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/rtc-tax-selectors-20260811
+          fetch-depth: 0
+
+      - name: Patch product fiscal editor
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/app/dashboard/[...slug]/product-fiscal-editor.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          old_import = "import { fiscalConfigGet } from './fiscal-config-actions';"
+          new_import = old_import + "\nimport { RTC_CLASS_TRIB_OPTIONS, RTC_CST_OPTIONS, RTC_TABLE_REFERENCE } from '../../../lib/fiscal/rtc-tax-table';"
+          if "RTC_CLASS_TRIB_OPTIONS" not in text:
+              if old_import not in text:
+                  raise SystemExit('fiscalConfigGet import not found')
+              text = text.replace(old_import, new_import, 1)
+
+          old_suggestions = """const reformSuggestions=[
+            ['000','Tributação integral'],['200','Alíquota reduzida'],['410','Imunidade e não incidência'],['510','Diferimento'],['515','Diferimento com redução de alíquota'],
+          ];
+          """
+          if old_suggestions in text:
+              text = text.replace(old_suggestions, '', 1)
+
+          old_memo_tail = """  const cfopOptions=useMemo(()=>{
+            const list=[...cfops];
+            if(value.cfop_default&&!list.some(c=>text(c.code)===value.cfop_default)) list.unshift({code:value.cfop_default,name:'CFOP atualmente informado',active:true});
+            return list;
+          },[cfops,value.cfop_default]);
+
+          return <section className=\"product-tax-card\">"""
+          new_memo_tail = """  const cfopOptions=useMemo(()=>{
+            const list=[...cfops];
+            if(value.cfop_default&&!list.some(c=>text(c.code)===value.cfop_default)) list.unshift({code:value.cfop_default,name:'CFOP atualmente informado',active:true});
+            return list;
+          },[cfops,value.cfop_default]);
+
+          const reformClassOptions=useMemo(()=>{
+            const list=value.reform_cst
+              ? RTC_CLASS_TRIB_OPTIONS.filter(option=>option.cst===value.reform_cst)
+              : [];
+            if(value.reform_classification&&!list.some(option=>option.code===value.reform_classification)){
+              return [{code:value.reform_classification,cst:value.reform_cst||value.reform_classification.slice(0,3),label:'Código atualmente salvo (fora do filtro vigente)'},...list];
+            }
+            return list;
+          },[value.reform_cst,value.reform_classification]);
+
+          const updateReformCst=(next:string)=>{
+            onChange('reform_cst',next);
+            if(value.reform_classification&&value.reform_classification.slice(0,3)!==next){
+              onChange('reform_classification','');
+            }
+          };
+
+          return <section className=\"product-tax-card\">"""
+          if 'const reformClassOptions=useMemo' not in text:
+              if old_memo_tail not in text:
+                  raise SystemExit('cfopOptions insertion point not found')
+              text = text.replace(old_memo_tail, new_memo_tail, 1)
+
+          old_reform = """    {active==='reform'&&<div className=\"product-tax-panel\">
+              <div className=\"product-tax-notice\">Em 2026, NF-e e NFC-e passaram a contemplar os campos da Reforma Tributária do Consumo. Preencha CST IBS/CBS e cClassTrib conforme o enquadramento efetivo da operação.</div>
+              <div className=\"product-form-grid cols3\">
+                <label><span>Situação Tributária (CST) do IBS e CBS</span><input list=\"rtc-cst-options\" value={value.reform_cst} onChange={e=>onChange('reform_cst',e.target.value.replace(/\\D/g,'').slice(0,3))} placeholder=\"Selecione ou informe\"/><datalist id=\"rtc-cst-options\">{reformSuggestions.map(([code,label])=><option value={code} key={code}>{label}</option>)}</datalist><small>Ex.: 000, 200, 410, 510, 515. Consulte a tabela vigente.</small></label>
+                <label className=\"span2\"><span>Classificação Tributária (cClassTrib)</span><input value={value.reform_classification} onChange={e=>onChange('reform_classification',e.target.value.replace(/[^0-9A-Za-z.\\-]/g,'').slice(0,20))} placeholder=\"Informe o código oficial cClassTrib\"/><small>A classificação deve ser compatível com o CST IBS/CBS escolhido.</small></label>
+              </div>
+            </div>}
+          """
+          new_reform = """    {active==='reform'&&<div className=\"product-tax-panel\">
+              <div className=\"product-tax-notice\">Selecione CST IBS/CBS e cClassTrib pela tabela oficial vigente. O cClassTrib é filtrado automaticamente pelo CST para reduzir combinações inválidas.</div>
+              <div className=\"product-form-grid cols3\">
+                <label><span>Situação Tributária (CST) do IBS e CBS</span><select value={value.reform_cst} onChange={e=>updateReformCst(e.target.value)}><option value=\"\">Selecione o CST...</option>{RTC_CST_OPTIONS.map(option=><option key={option.code} value={option.code}>{option.code} - {option.label}</option>)}</select><small>{RTC_TABLE_REFERENCE.totalCst} CSTs • {RTC_TABLE_REFERENCE.informe} • publicação {RTC_TABLE_REFERENCE.publishedAtLabel}.</small></label>
+                <label className=\"span2\"><span>Classificação Tributária (cClassTrib)</span><select value={value.reform_classification} disabled={!value.reform_cst} onChange={e=>onChange('reform_classification',e.target.value)}><option value=\"\">{value.reform_cst?'Selecione o cClassTrib...':'Selecione primeiro o CST'}</option>{reformClassOptions.map(option=><option key={option.code} value={option.code}>{option.code} - {option.label}</option>)}</select><small>{RTC_TABLE_REFERENCE.totalClassifications} classificações no catálogo vigente. Os 3 primeiros dígitos do cClassTrib devem coincidir com o CST.</small></label>
+              </div>
+            </div>}
+          """
+          if 'RTC_TABLE_REFERENCE.totalClassifications' not in text:
+              if old_reform not in text:
+                  raise SystemExit('reform panel not found')
+              text = text.replace(old_reform, new_reform, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit implementation
+        run: |
+          git config user.name "ThorPDV Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add 'src/app/dashboard/[...slug]/product-fiscal-editor.tsx'
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "feat: make IBS CBS tax codes selectable"
+            git push origin HEAD:feat/rtc-tax-selectors-20260811
+          fi
