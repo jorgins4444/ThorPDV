@@ -1,0 +1,30 @@
+name: Final Update Center validation
+
+on:
+  push:
+    branches:
+      - feat/update-center-v080
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Desktop checks
+        run: |
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/preload.js
+          node --check desktop-pdv/updater.js
+          node --check desktop-pdv/agent/index.js
+          node --check desktop-pdv/renderer/app.js
+          node --check desktop-pdv/renderer/update-center.js
+          node -e "const p=require('./desktop-pdv/package.json');if(p.version!=='0.8.0'||!p.build.files.includes('updater.js'))process.exit(1)"
+      - name: Web checks
+        run: |
+          npm install
+          npm run typecheck
+          npm run build
+          npm run lint
