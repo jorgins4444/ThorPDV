@@ -9,6 +9,7 @@ import {
   erpProductList,
   erpProductSave,
 } from './actions';
+import { ProductFiscalEditor } from './product-fiscal-editor';
 
 type Row = Record<string, unknown>;
 type PurchaseUnit = { unit:string; conversion_factor:number; barcode:string; is_default:boolean };
@@ -64,6 +65,9 @@ function blank(){
     minimum_stock:'0', stock_to_add:'', production_mode:'stock', production_yield:'1', production_printer:'', production_sector:'',
     auto_print_production:true, production_description:'', image_url:'', menu_image_url:'', self_service_image_url:'', menu_description:'',
     cst_icms:'', csosn:'', cst_pis:'', cst_cofins:'', cst_ipi:'', icms_rate:'', pis_rate:'', cofins_rate:'', ipi_rate:'',
+    reform_cst:'', reform_classification:'', fiscal_origin_uf:'', fiscal_destination_uf:'', fiscal_customer_type:'both',
+    icms_tax_benefit:'', icms_exemption_reason:'', icms_discount:false, icms_credit_benefit:'', icms_presumed_credit_rate:'',
+    ipi_legal_framework:'', petroleum_anp_code:'', petroleum_cide_rate:'', petroleum_mix_percent:'',
   };
 }
 
@@ -101,6 +105,11 @@ function draftFromDetail(detail:Row):Draft {
     image_url:text(p.image_url), menu_image_url:text(p.menu_image_url), self_service_image_url:text(p.self_service_image_url), menu_description:text(p.menu_description),
     cst_icms:text(fp.cst_icms), csosn:text(fp.csosn), cst_pis:text(fp.cst_pis), cst_cofins:text(fp.cst_cofins), cst_ipi:text(fp.cst_ipi),
     icms_rate:text(fp.icms_rate), pis_rate:text(fp.pis_rate), cofins_rate:text(fp.cofins_rate), ipi_rate:text(fp.ipi_rate),
+    reform_cst:text(fp.reform_cst), reform_classification:text(fp.reform_classification),
+    fiscal_origin_uf:text(fp.fiscal_origin_uf), fiscal_destination_uf:text(fp.fiscal_destination_uf), fiscal_customer_type:text(fp.fiscal_customer_type)||'both',
+    icms_tax_benefit:text(fp.icms_tax_benefit), icms_exemption_reason:text(fp.icms_exemption_reason), icms_discount:bool(fp.icms_discount),
+    icms_credit_benefit:text(fp.icms_credit_benefit), icms_presumed_credit_rate:text(fp.icms_presumed_credit_rate),
+    ipi_legal_framework:text(fp.ipi_legal_framework), petroleum_anp_code:text(fp.petroleum_anp_code), petroleum_cide_rate:text(fp.petroleum_cide_rate), petroleum_mix_percent:text(fp.petroleum_mix_percent),
   };
 }
 
@@ -208,6 +217,20 @@ function ProductEditor({row,products,groups,classes,suppliers,modifiers,branches
       pis_rate:num(draft.pis_rate),
       cofins_rate:num(draft.cofins_rate),
       ipi_rate:num(draft.ipi_rate),
+      reform_cst:draft.reform_cst || null,
+      reform_classification:draft.reform_classification || null,
+      fiscal_origin_uf:draft.fiscal_origin_uf || null,
+      fiscal_destination_uf:draft.fiscal_destination_uf || null,
+      fiscal_customer_type:draft.fiscal_customer_type || 'both',
+      icms_tax_benefit:draft.icms_tax_benefit || null,
+      icms_exemption_reason:draft.icms_exemption_reason || null,
+      icms_discount:Boolean(draft.icms_discount),
+      icms_credit_benefit:draft.icms_credit_benefit || null,
+      icms_presumed_credit_rate:num(draft.icms_presumed_credit_rate),
+      ipi_legal_framework:draft.ipi_legal_framework || null,
+      petroleum_anp_code:draft.petroleum_anp_code || null,
+      petroleum_cide_rate:num(draft.petroleum_cide_rate),
+      petroleum_mix_percent:num(draft.petroleum_mix_percent),
     };
 
     const result = await erpProductSave({
@@ -324,27 +347,12 @@ function ProductEditor({row,products,groups,classes,suppliers,modifiers,branches
     </div></div>}
 
     {activeTab==='prices' && <div className="product-tab-panel">
-      <div className="product-form-grid cols4">
+      <div className="product-form-grid cols4 product-price-grid">
         <label><span>Preço de custo</span><input type="number" min="0" step="0.01" value={draft.cost_price} onChange={e=>set('cost_price',e.target.value)}/></label>
         <label><span>Preço de venda</span><input type="number" min="0" step="0.01" value={draft.sale_price} onChange={e=>set('sale_price',e.target.value)}/></label>
-        <label><span>NCM</span><input value={draft.ncm} onChange={e=>set('ncm',e.target.value)}/></label>
-        <label><span>CEST</span><input value={draft.cest} onChange={e=>set('cest',e.target.value)}/></label>
-        <label><span>CFOP padrão</span><input value={draft.cfop_default} onChange={e=>set('cfop_default',e.target.value)}/></label>
-        <label><span>Origem</span><select value={draft.origin} onChange={e=>set('origin',e.target.value)}>{Array.from({length:9},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>
-        <div className="span4 product-fiscal-heading">
-          <strong>Tributação para NFC-e / NF-e</strong>
-          <small>Preencha conforme a tributação real do produto. Para emissão fiscal, PIS e COFINS precisam de CST informado.</small>
-        </div>
-        <label><span>CST ICMS</span><input value={draft.cst_icms} onChange={e=>set('cst_icms',e.target.value)} placeholder="Ex.: 00"/></label>
-        <label><span>CSOSN</span><input value={draft.csosn} onChange={e=>set('csosn',e.target.value)} placeholder="Usado no Simples Nacional"/></label>
-        <label className="product-fiscal-required"><span>CST PIS *</span><input value={draft.cst_pis} onChange={e=>set('cst_pis',e.target.value.replace(/\D/g,'').slice(0,2))} placeholder="Informe o CST PIS" maxLength={2}/><small>Obrigatório para gerar o XML fiscal.</small></label>
-        <label className="product-fiscal-required"><span>CST COFINS *</span><input value={draft.cst_cofins} onChange={e=>set('cst_cofins',e.target.value.replace(/\D/g,'').slice(0,2))} placeholder="Informe o CST COFINS" maxLength={2}/><small>Obrigatório para gerar o XML fiscal.</small></label>
-        <label><span>CST IPI</span><input value={draft.cst_ipi} onChange={e=>set('cst_ipi',e.target.value)}/></label>
-        <label><span>ICMS %</span><input type="number" step="0.01" value={draft.icms_rate} onChange={e=>set('icms_rate',e.target.value)}/></label>
-        <label><span>PIS %</span><input type="number" step="0.01" value={draft.pis_rate} onChange={e=>set('pis_rate',e.target.value)}/></label>
-        <label><span>COFINS %</span><input type="number" step="0.01" value={draft.cofins_rate} onChange={e=>set('cofins_rate',e.target.value)}/></label>
-        <label><span>IPI %</span><input type="number" step="0.01" value={draft.ipi_rate} onChange={e=>set('ipi_rate',e.target.value)}/></label>
+        <div className="span2 product-tax-help"><b>Preço e tributação separados</b><span>Os preços permanecem comerciais. A classificação fiscal abaixo é usada pelo ThorFiscal na emissão.</span></div>
       </div>
+      <ProductFiscalEditor value={draft} onChange={(key,value)=>setDraft(current=>({...current,[key]:value}))}/>
       <fieldset className="product-fieldset"><legend>Modificadores</legend><div className="modifier-grid">
         {modifiers.map(m=><label className="check" key={text(m.id)}><input type="checkbox" checked={modifierIds.includes(text(m.id))} onChange={e=>setModifierIds(current=>e.target.checked?[...current,text(m.id)]:current.filter(id=>id!==text(m.id)))}/>{text(m.name)} <small>{num(m.price_delta)?`(${money(m.price_delta)})`:''}</small></label>)}
       </div></fieldset>
