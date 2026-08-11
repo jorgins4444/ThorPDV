@@ -180,21 +180,72 @@ function installThorAgentV3(ThorAgent) {
   };
 
   ThorAgent.prototype.cancelSale = async function ({ saleKey, saleClientEventId = null, saleId = null, reason = '', supervisorAuthorization = null }) {
-    const operator = this.currentOperator();
-    if (!operator) throw new Error('operator_required');
-    const sale = saleKey ? this.fiscalSale(saleKey) : null;
-    const allowed = getPath(operator, 'permissions.sale.cancel', false);
-    if (!allowed && !supervisorAuthorization?.supervisor_user_id) throw new Error('supervisor_authorization_required');
-    if (sale) {
-      if (String(sale.status) === 'cancelled' || String(sale.status) === 'cancel_pending') throw new Error('sale_already_cancelled');
-      if (Number(sale.returned_total || 0) > 0) throw new Error('sale_has_returns');
-      if (sale.fiscal?.status === 'authorized') throw new Error('authorized_fiscal_document_requires_fiscal_cancellation');
-      for (const i of sale.items || []) if (i.product_id) this.store.adjustInventory(String(i.product_id), Number(i.quantity || 0));
-      this.store.patchLocalSale(sale, { status: 'cancel_pending', local_status: 'cancel_pending' });
+  const operator = this.currentOperator();
+  if (!operator) throw new Error('operator_required');
+  const sale = saleKey ? this.fiscalSale(saleKey) : null;
+  const allowed = getPath(operator, 'permissions.sale.cancel', false);
+  if (!allowed && !supervisorAuthorization?.supervisor_user_id) throw new Error('supervisor_authorization_required');
+  const normalizedReason = String(reason || '').trim().replace(/\s+/g, ' ');
+  let fiscalCancellation = null;
+  if (sale) {
+    if (String(sale.status) === 'cancelled' || String(sale.status) === 'cancel_pending') throw new Error('sale_already_cancelled');
+    if (Number(sale.returned_total || 0) > 0) throw new Error('sale_has_returns');
+    if (sale.fiscal?.status === 'authorized') {
+      if (normalizedReason.length < 15 || normalizedReason.length > 255) throw new Error('nfce_cancellation_reason_invalid');
+      const authorizationAt = Date.parse(String(sale.fiscal.authorization_at || ''));
+      const serverDeadline = Date.parse(String(sale.fiscal.cancel_deadline || ''));
+      const deadline = Number.isFinite(serverDeadline) ? serverDeadline : (Number.isFinite(authorizationAt) ? authorizationAt + 30 * 60 * 1000 : NaN);
+      if (!Number.isFinite(deadline)) throw new Error('nfce_cancellation_deadline_unavailable');
+      if (Date.now() >= deadline) throw new Error('nfce_cancellation_window_expired');
+      const token = this.deviceToken();
+      if (!token) throw new Error('device_not_enrolled');
+      const response = await fetch(`${this.apiBase}/api/pdv/fiscal/cancel`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          fiscal_document_id: sale.fiscal.id,
+          reason: normalizedReason,
+          operator_user_id: operator.id,
+          supervisor_user_id: supervisorAuthorization?.supervisor_user_id || null,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok || !data.cancelled) {
+        const error = new Error(data.error || data.message || 'nfce_cancellation_failed');
+        error.fiscal = data;
+        throw error;
+      }
+      fiscalCancellation = data;
+      const cancelledFiscal = {
+        ...(sale.fiscal || {}),
+        status: 'cancelled',
+        cancellation_protocol: data.cancellation_protocol || sale.fiscal.cancellation_protocol || null,
+        cancellation_at: data.cancellation_at || new Date().toISOString(),
+        cStat: data.cStat || sale.fiscal.cStat || null,
+        xMotivo: data.message || 'Cancelamento autorizado pela SEFAZ.',
+        can_cancel: false,
+      };
+      this.store.patchLocalSale(sale, { fiscal: cancelledFiscal });
+      sale.fiscal = cancelledFiscal;
     }
-    const e = this.event('sale_cancel', { sale_client_event_id: saleClientEventId || sale?.client_event_id || null, sale_id: saleId || sale?.id || null, reason, operator_user_id: operator.id, supervisor_authorization: supervisorAuthorization });
-    return { ok: true, eventId: e.id };
-  };
+    for (const i of sale.items || []) if (i.product_id) this.store.adjustInventory(String(i.product_id), Number(i.quantity || 0));
+    this.store.patchLocalSale(sale, { status: 'cancel_pending', local_status: 'cancel_pending' });
+  }
+  const e = this.event('sale_cancel', {
+    sale_client_event_id: saleClientEventId || sale?.client_event_id || null,
+    sale_id: saleId || sale?.id || null,
+    reason: normalizedReason,
+    operator_user_id: operator.id,
+    supervisor_authorization: supervisorAuthorization,
+    fiscal_cancellation: fiscalCancellation ? {
+      document_id: sale?.fiscal?.id || null,
+      cancellation_protocol: fiscalCancellation.cancellation_protocol || null,
+      cancellation_at: fiscalCancellation.cancellation_at || null,
+      cStat: fiscalCancellation.cStat || null,
+    } : null,
+  });
+  return { ok: true, eventId: e.id, fiscalCancellation };
+};
 
   ThorAgent.prototype.returnSale = async function (payload) {
     const operator = this.currentOperator();
