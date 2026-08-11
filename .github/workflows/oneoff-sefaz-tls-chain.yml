@@ -1,0 +1,43 @@
+name: One-off SVRS TLS Chain
+
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-sefaz-tls-chain.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture SVRS TLS chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tls-chain
+          echo | openssl s_client -showcerts -connect nfce.svrs.rs.gov.br:443 -servername nfce.svrs.rs.gov.br 2>&1 | tee tls-chain/openssl.txt
+          awk '/-----BEGIN CERTIFICATE-----/{n++; out=sprintf("tls-chain/cert-%02d.pem",n)} out{print > out} /-----END CERTIFICATE-----/{close(out); out=""}' tls-chain/openssl.txt
+          : > tls-chain/summary.txt
+          for f in tls-chain/cert-*.pem; do
+            echo "### $f" | tee -a tls-chain/summary.txt
+            openssl x509 -in "$f" -noout -subject -issuer -serial -dates -fingerprint -sha256 | tee -a tls-chain/summary.txt
+          done
+          cat tls-chain/summary.txt
+      - name: Download official ICP-Brasil current CA bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --connect-timeout 15 --max-time 90 \
+            https://acraiz.icpbrasil.gov.br/credenciadas/CertificadosAC-ICP-Brasil/ACcompactado.zip \
+            -o tls-chain/ACcompactado.zip || true
+          if [ -s tls-chain/ACcompactado.zip ]; then
+            unzip -l tls-chain/ACcompactado.zip > tls-chain/icp-bundle-files.txt || true
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: svrs-tls-chain
+          path: tls-chain
+          if-no-files-found: error
