@@ -15,4 +15,8 @@ export async function controlCreateCustomer(payload:Record<string,unknown>){cons
 export async function controlUpdateLicense(tenantId:string,payload:Record<string,unknown>){const t=await token();return rpc('platform_license_update',{p_token:t,p_tenant:tenantId,p_payload:payload});}
 export async function controlSavePricing(payload:Record<string,unknown>){const t=await token();return rpc('platform_pricing_save',{p_token:t,p_payload:payload});}
 export async function controlFiscalDetail(documentId:string){const t=await token();return rpc('platform_fiscal_detail',{p_token:t,p_document:documentId});}
+export async function controlUpdateDashboard(){const t=await token();return rpc('platform_update_dashboard',{p_token:t});}
+export async function controlReleaseSave(payload:Record<string,unknown>){const t=await token();return rpc('platform_release_save',{p_token:t,p_payload:payload});}
+export async function controlUpdatePolicySet(payload:Record<string,unknown>){const t=await token();return rpc('platform_update_policy_set',{p_token:t,p_payload:payload});}
+export async function controlUpdatePolicyClear(payload:Record<string,unknown>){const t=await token();return rpc('platform_update_policy_clear',{p_token:t,p_payload:payload});}
 export async function controlLogout(){const c=await cookies();const t=c.get(CONTROL_COOKIE)?.value;if(t)await rpc('platform_logout',{p_token:t});c.delete(CONTROL_COOKIE);redirect('/control/login');}
