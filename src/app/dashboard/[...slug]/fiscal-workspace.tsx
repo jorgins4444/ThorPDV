@@ -28,6 +28,7 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [cancelFlow,setCancelFlow]=useState<{id:string;number:string;phase:'validating'|'building'|'signing'|'sending'|'done'|'error';startedAt:number;error?:string;errorStage?:number;protocol?:string;cStat?:string}|null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
@@ -121,10 +122,19 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
     }
     if (!window.confirm(`Confirmar o envio do evento de cancelamento da NFC-e ${text(number)} para a SEFAZ?`)) return;
     setCancelling(id);
-    setMessage('Assinando e enviando o evento de cancelamento da NFC-e para a SEFAZ...');
+    setMessage('');
+    const startedAt=Date.now();
+    setCancelFlow({id,number:text(number),phase:'validating',startedAt});
+    const timers=[
+      window.setTimeout(()=>setCancelFlow(current=>current?.id===id&&current.phase!=='done'&&current.phase!=='error'?{...current,phase:'building'}:current),260),
+      window.setTimeout(()=>setCancelFlow(current=>current?.id===id&&current.phase!=='done'&&current.phase!=='error'?{...current,phase:'signing'}:current),680),
+      window.setTimeout(()=>setCancelFlow(current=>current?.id===id&&current.phase!=='done'&&current.phase!=='error'?{...current,phase:'sending'}:current),1120),
+    ];
     const r = await erpFiscalCancel(id, clean);
+    timers.forEach(t=>window.clearTimeout(t));
     setCancelling(null);
     if (r.ok && (r.cancelled || r.idempotent)) {
+      setCancelFlow({id,number:text(number),phase:'done',startedAt,protocol:text(r.cancellation_protocol),cStat:text(r.cStat)});
       setMessage(`NFC-e cancelada na SEFAZ${r.cancellation_protocol ? ` · protocolo ${String(r.cancellation_protocol)}` : ''}${r.cStat ? ` · cStat ${String(r.cStat)}` : ''}.`);
     } else {
       const labels: Record<string, string> = {
@@ -133,7 +143,10 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
         nfce_cancellation_rejected: `A SEFAZ rejeitou o cancelamento${r.cStat ? ` (${String(r.cStat)})` : ''}: ${String(r.message ?? r.detail ?? 'verifique o retorno fiscal')}`,
         nfce_cancellation_transmission_error: `Falha de comunicação durante o cancelamento: ${String(r.message ?? r.detail ?? 'tente novamente enquanto estiver no prazo')}`,
       };
-      setMessage(labels[String(r.error)] ?? `Cancelamento não realizado: ${String(r.message ?? r.detail ?? r.error ?? 'erro')}`);
+      const errorMessage=labels[String(r.error)] ?? `Cancelamento não realizado: ${String(r.message ?? r.detail ?? r.error ?? 'erro')}`;
+      const errorStage=String(r.error)==='nfce_cancellation_window_expired'?0:String(r.error)==='nfce_cancellation_reason_invalid'?1:String(r.error)==='nfce_cancellation_rejected'?4:3;
+      setCancelFlow({id,number:text(number),phase:'error',startedAt,error:errorMessage,errorStage,cStat:text(r.cStat)});
+      setMessage(errorMessage);
     }
     await refresh();
   }
@@ -183,6 +196,22 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
       {docType==='nfe'&&<p className="fiscal-security-note">A numeração e os parâmetros de DANFE da NF-e já ficam controlados no Gestão. A transmissão eletrônica modelo 55 ainda não está habilitada no transporte ThorFiscal atual; esta tela não marcará NF-e como autorizada sem esse suporte.</p>}
       {errors.length > 0 && <div className="erp-fiscal-errors"><strong>Pendências</strong>{errors.map((x, i) => <span key={i}>• {x}</span>)}</div>}
     </section>
+
+    {cancelFlow && (()=>{
+      const steps=['Validando prazo','Preparando evento','Assinando A1','Enviando à SEFAZ','Evento registrado'];
+      const phaseIndex=cancelFlow.phase==='validating'?0:cancelFlow.phase==='building'?1:cancelFlow.phase==='signing'?2:cancelFlow.phase==='sending'?3:cancelFlow.phase==='done'?5:(cancelFlow.errorStage??3);
+      const percent=cancelFlow.phase==='done'?100:cancelFlow.phase==='error'?Math.max(16,Math.min(88,(phaseIndex+1)*18)):[12,30,50,72,90][phaseIndex]??12;
+      const title=cancelFlow.phase==='validating'?'Validando cancelamento da NFC-e':cancelFlow.phase==='building'?'Preparando evento 110111':cancelFlow.phase==='signing'?'Assinando evento com certificado A1':cancelFlow.phase==='sending'?'Enviando cancelamento para a SEFAZ':cancelFlow.phase==='done'?'Cancelamento registrado na SEFAZ':'Cancelamento interrompido';
+      const subtitle=cancelFlow.phase==='validating'?'Conferindo prazo fiscal e dados da nota.':cancelFlow.phase==='building'?'Montando chave, protocolo e justificativa do evento.':cancelFlow.phase==='signing'?'Aplicando assinatura digital antes da transmissão.':cancelFlow.phase==='sending'?'Aguardando o retorno do autorizador.':cancelFlow.phase==='done'?'O evento foi registrado e vinculado à NFC-e.':cancelFlow.error||'Não foi possível concluir o cancelamento.';
+      return <section className={`erp-module-card fiscal-cancel-flow ${cancelFlow.phase==='done'?'success':''} ${cancelFlow.phase==='error'?'error':''}`}>
+        <div className="fiscal-cancel-flow-head"><div className={`fiscal-cancel-spinner ${cancelFlow.phase==='done'?'done':''} ${cancelFlow.phase==='error'?'failed':''}`}>{cancelFlow.phase==='done'?'✓':cancelFlow.phase==='error'?'!':''}</div><div><small>THORFISCAL / CANCELAMENTO</small><h3>{title}</h3><p>{subtitle}</p></div><span>{Math.max(0,(now-cancelFlow.startedAt)/1000).toFixed(1)}s</span></div>
+        <div className="fiscal-cancel-flight"><i style={{width:`${percent}%`}}/><b style={{left:`${Math.max(percent-2,0)}%`}}/></div>
+        <div className="fiscal-cancel-steps">{steps.map((label,index)=>{const done=cancelFlow.phase==='done'||index<phaseIndex;const active=cancelFlow.phase!=='done'&&cancelFlow.phase!=='error'&&index===phaseIndex;const failed=cancelFlow.phase==='error'&&index===phaseIndex;return <div key={label} className={`${done?'done':''} ${active?'active':''} ${failed?'failed':''}`}><i>{done?'✓':failed?'!':''}</i><span>{label}</span></div>})}</div>
+        <div className="fiscal-cancel-meta"><span>NFC-e <b>{cancelFlow.number||'—'}</b></span>{cancelFlow.protocol&&<span>Protocolo <b>{cancelFlow.protocol}</b></span>}{cancelFlow.cStat&&<span>cStat <b>{cancelFlow.cStat}</b></span>}</div>
+        {cancelFlow.phase==='error'&&<div className="fiscal-cancel-error"><b>Cancelamento não concluído</b><span>{cancelFlow.error}</span></div>}
+        {(cancelFlow.phase==='done'||cancelFlow.phase==='error')&&<div className="fiscal-cancel-actions"><button type="button" className="erp-ghost" onClick={()=>setCancelFlow(null)}>Fechar</button></div>}
+      </section>;
+    })()}
 
     {message && <div className="erp-message erp-fiscal-message">{message}</div>}
 

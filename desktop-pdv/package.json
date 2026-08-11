@@ -1,6 +1,6 @@
 {
   "name": "thorpdv-desktop",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "private": true,
   "description": "ThorPDV Desktop para Windows com agente offline-first",
   "main": "main.js",
