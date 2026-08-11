@@ -407,8 +407,15 @@ function accessKeyFromXml(xml: string) {
 
 function insertQrV3(signedXml: string, uf: string, homologation: boolean, tpAmb: number, accessKey: string) {
   const env = homologation ? "homologacao" : "producao";
-  const qrBase = getNFCeQRCodeUrl(uf, env as any);
-  const consulta = getNFCeConsultaUrl(uf, env as any);
+  // SEFAZ-PI validates the QR-Code base URL literally (RV 395).
+  // The published PI NFC-e endpoints use http:// in Grupo ZX.
+  const isPiaui = String(uf).trim().toUpperCase() === "PI";
+  const qrBase = isPiaui
+    ? "http://www.sefaz.pi.gov.br/nfce/qrcode"
+    : getNFCeQRCodeUrl(uf, env as any);
+  const consulta = isPiaui
+    ? "http://www.sefaz.pi.gov.br/nfce/consulta"
+    : getNFCeConsultaUrl(uf, env as any);
 
   // NT 2025.001 / MOC vigente: no QR-Code v3, tpAmb continua sendo o 3º parâmetro.
   // Emissão on-line (tpEmis=1): <chave_acesso>|3|<tpAmb>, sem CSC/hash.
