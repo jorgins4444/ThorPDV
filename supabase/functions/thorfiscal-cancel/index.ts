@@ -198,8 +198,14 @@ Deno.serve(async (request: Request) => {
 
     const transport = {
       send: async (sefazRequest: any) => {
-        endpoint = str(sefazRequest.url);
+        const libraryEndpoint = str(sefazRequest.url);
+        endpoint = environment === "production"
+          ? "https://nfce.svrs.rs.gov.br/ws/recepcaoevento/recepcaoevento4.asmx"
+          : "https://nfce-homologacao.svrs.rs.gov.br/ws/recepcaoevento/recepcaoevento4.asmx";
         requestEnvelope = str(sefazRequest.xml);
+        if (libraryEndpoint !== endpoint) {
+          console.log("ThorFiscal NFC-e cancellation endpoint override", { libraryEndpoint, endpoint });
+        }
         const client = Deno.createHttpClient({
           cert: cert.certPem,
           key: cert.privateKeyPem,
