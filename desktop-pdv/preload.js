@@ -46,5 +46,10 @@ contextBridge.exposeInMainWorld('thor', {
   beginPayment: (payload) => ipcRenderer.invoke('thor:begin-payment', payload),
   printSale: (saleKey, type = 'pre_sale', reprint = false) => ipcRenderer.invoke('thor:print-sale', saleKey, type, reprint),
   shareSaleWhatsapp: (saleKey, type = 'pre_sale', phone = '') => ipcRenderer.invoke('thor:share-sale-whatsapp', saleKey, type, phone),
+  updateInfo: () => ipcRenderer.invoke('thor:update-info'),
+  checkForUpdates: () => ipcRenderer.invoke('thor:check-update'),
+  installUpdate: () => ipcRenderer.invoke('thor:install-update'),
+  onUpdateProgress: (callback) => { const handler=(_event,payload)=>callback(payload); ipcRenderer.on('thor:update-progress',handler); return ()=>ipcRenderer.removeListener('thor:update-progress',handler); },
+  onUpdateStatus: (callback) => { const handler=(_event,payload)=>callback(payload); ipcRenderer.on('thor:update-status',handler); return ()=>ipcRenderer.removeListener('thor:update-status',handler); },
   printLast: () => ipcRenderer.invoke('thor:print-last'),
 });

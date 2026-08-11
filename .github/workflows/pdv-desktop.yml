@@ -8,7 +8,10 @@ on:
       - 'desktop-pdv/**'
       - '.github/workflows/pdv-desktop.yml'
 
-# v0.7.4: fiscal transmission diagnostics, SEFAZ progress and event log
+permissions:
+  contents: write
+
+# ThorPDV Desktop build + durable release assets for ThorControl rollouts.
 jobs:
   windows-installer:
     runs-on: windows-latest
@@ -33,6 +36,7 @@ jobs:
           $files = @(
             'main.js',
             'preload.js',
+            'updater.js',
             'agent/store.js',
             'agent/hardware.js',
             'agent/sync.js',
@@ -55,6 +59,7 @@ jobs:
             'agent/sales-options-v071.js',
             'agent/sales-settlement-v073.js',
             'renderer/app.js',
+            'renderer/update-center.js',
             'renderer/checkout-v3.js',
             'renderer/hotfix-v042.js',
             'renderer/validation-v3.js',
@@ -95,10 +100,36 @@ jobs:
       - name: Build Windows installer
         run: npm run dist:win
 
+      - name: Generate SHA-256
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist\ThorPDV-Desktop-*-x64.exe | Select-Object -First 1
+          if (-not $exe) { throw 'Installer not found' }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path ($exe.FullName + '.sha256') -Value ($hash + '  ' + $exe.Name) -Encoding ascii
+          Write-Host ('SHA256 ' + $hash)
+
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
           name: ThorPDV-Desktop-Windows
-          path: desktop-pdv/dist/*.exe
+          path: |
+            desktop-pdv/dist/*.exe
+            desktop-pdv/dist/*.sha256
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish durable GitHub Release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $pkg = Get-Content package.json | ConvertFrom-Json
+          $tag = 'pdv-v' + $pkg.version
+          $exe = Get-ChildItem dist\ThorPDV-Desktop-*-x64.exe | Select-Object -First 1
+          $sha = $exe.FullName + '.sha256'
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title ('ThorPDV Desktop ' + $pkg.version) --notes ('ThorPDV Desktop ' + $pkg.version + '. A distribuição aos clientes é controlada pelo ThorControl.')
+          }
+          gh release upload $tag $exe.FullName $sha --clobber

@@ -273,8 +273,44 @@ function renderFiscalTable(){
   const chips=document.getElementById('fiscalFilterChips');if(chips)chips.innerHTML=`<button class="fiscal-chip ${state.fiscalFilter.status==='completed'?'active':''}" data-fiscal-chip="completed"><b>${summary.completed}</b> Concluídas</button><button class="fiscal-chip ${state.fiscalFilter.status==='cancelled'?'active':''}" data-fiscal-chip="cancelled"><b>${summary.cancelled}</b> Canceladas</button><button class="fiscal-chip pending ${state.fiscalFilter.status==='pending'?'active':''}" data-fiscal-chip="pending"><b>${summary.pending}</b> Pendências fiscais</button>`;
   if(chips)chips.querySelectorAll('[data-fiscal-chip]').forEach(button=>button.onclick=()=>{const selected=button.dataset.fiscalChip;state.fiscalFilter.status=state.fiscalFilter.status===selected?'all':selected;const select=document.getElementById('fiscalStatusFilter');if(select)select.value=state.fiscalFilter.status;renderFiscalTable();});
   if(!rows.length){box.innerHTML='<div class="empty">Nenhuma operação encontrada para os filtros selecionados.</div>';return;}
-  box.innerHTML=`<table class="fiscal-table"><thead><tr><th>Venda</th><th>Data</th><th>Cliente</th><th>Total</th><th>Devolvido</th><th>Venda</th><th>NFC-e</th><th>Ações</th></tr></thead><tbody>${rows.map((s,i)=>`<tr class="fiscal-row-${fiscalOperationBucket(s)}"><td><strong>${s.number?`#${esc(s.number)}`:'Pendente'}</strong><small>${esc(String(s.client_event_id||'').slice(0,8))}</small></td><td>${dt(s.completed_at||s.created_at)}</td><td>${esc(s.customer_name||'Consumidor')}</td><td><strong>${money(s.total)}</strong></td><td>${money(s.returned_total||0)}</td><td><span class="sale-status status-${esc(s.status||'pending')}">${saleStatusLabel(s.status)}</span></td><td>${fiscalBadge(s.fiscal)}</td><td><button class="table-action" data-view-sale="${i}">Abrir</button></td></tr>`).join('')}</tbody></table>`;
-  box.querySelectorAll('[data-view-sale]').forEach(b=>b.onclick=()=>openSaleDetail(rows[Number(b.dataset.viewSale)]));
+  box.innerHTML=`<table class="fiscal-table"><thead><tr><th>Venda</th><th>Data</th><th>Cliente</th><th>Total</th><th>Devolvido</th><th>Venda</th><th>NFC-e</th><th>Ações</th></tr></thead><tbody>${rows.map((s,i)=>`<tr class="fiscal-row-${fiscalOperationBucket(s)}"><td><strong>${s.number?`#${esc(s.number)}`:'Pendente'}</strong><small>${esc(String(s.client_event_id||'').slice(0,8))}</small></td><td>${dt(s.completed_at||s.created_at)}</td><td>${esc(s.customer_name||'Consumidor')}</td><td><strong>${money(s.total)}</strong></td><td>${money(s.returned_total||0)}</td><td><span class="sale-status status-${esc(s.status||'pending')}">${saleStatusLabel(s.status)}</span></td><td>${fiscalBadge(s.fiscal)}</td><td><button class="table-action" data-view-sale="${i}">Visualizar</button></td></tr>`).join('')}</tbody></table>`;
+  box.querySelectorAll('[data-view-sale]').forEach(b=>b.onclick=async()=>{const index=Number(b.dataset.viewSale);const target=rows[index];if(!target){infoModal('Visualizar venda','Não foi possível localizar esta venda na lista atual. Atualize o Fiscal e tente novamente.');return;}try{await openSaleDetail(target);}catch(e){console.error('sale_detail_open_failed',e);infoModal('Visualizar venda',`Não foi possível carregar os detalhes desta venda. ${friendlyError(String(e?.message||e||''))}`);}});
+}
+
+function saleItemCode(i){
+  return String(i?.sku||i?.code||i?.internal_code||i?.product_code||i?.product_id||'—');
+}
+
+function saleDiscountTotals(detail,items){
+  const safeItems=Array.isArray(items)?items:[];
+  const gross=safeItems.reduce((sum,i)=>sum+(Number(i?.quantity||0)*Number(i?.unit_price||i?.unitPrice||0)),0);
+  const itemDiscount=safeItems.reduce((sum,i)=>sum+Number(i?.discount||0),0);
+  const saleDiscount=Number(detail?.discount||detail?.sale_discount||0);
+  return {gross,itemDiscount,saleDiscount,totalDiscount:itemDiscount+saleDiscount};
+}
+
+function whatsappSaleModal(sale,type){
+  const key=saleKey(sale),fiscalCancelled=String(sale?.fiscal?.status||'')==='cancelled';
+  if(type==='pre_sale'&&fiscalCancelled){infoModal('Pré-venda indisponível',friendlyError('pre_sale_unavailable_cancelled_nfce'));return;}
+  if(type==='nfce'&&!['authorized','cancelled'].includes(String(sale?.fiscal?.status||''))){infoModal('NFC-e',friendlyError('nfce_not_authorized'));return;}
+  const label=type==='nfce'?'NFC-e':'pré-venda';
+  const preset=String(sale?.customer_phone||sale?.phone||sale?.customer?.phone||'').replace(/\D/g,'');
+  const m=modal(`<h3>Enviar ${esc(label)} pelo WhatsApp</h3><p class="muted">O THOR gera o PDF, abre a conversa no WhatsApp Web e deixa o arquivo selecionado no Explorador para anexação.</p><div class="field"><label>WhatsApp do cliente</label><input id="waPhone" inputmode="tel" autocomplete="tel" value="${esc(preset)}" placeholder="86999999999"></div><div class="whatsapp-share-note"><b>Documento</b><span>${esc(label)} ${sale?.number?`da venda #${esc(sale.number)}`:''}</span></div><div class="actions"><button class="secondary" id="waBack">Voltar</button><button class="primary whatsapp-button" id="waSend">Abrir WhatsApp</button></div>`);
+  m.querySelector('#waBack').onclick=()=>m.remove();
+  m.querySelector('#waSend').onclick=async()=>{
+    const button=m.querySelector('#waSend');
+    try{
+      const phone=m.querySelector('#waPhone').value.trim();
+      button.disabled=true;button.textContent='Gerando PDF...';
+      const r=await window.thor.shareSaleWhatsapp(key,type,phone);
+      m.remove();
+      showToast(`WhatsApp aberto • ${r.filename} pronto em Downloads.`);
+      setTimeout(()=>infoModal('Arquivo pronto',`O PDF ${r.filename} foi gerado e selecionado no Explorador. Arraste-o para a conversa do WhatsApp Web ou use o clipe para anexar.`),450);
+    }catch(e){
+      button.disabled=false;button.textContent='Abrir WhatsApp';
+      infoModal('WhatsApp',friendlyError(String(e?.message||e)));
+    }
+  };
 }
 
 async function openSaleDetail(sale){
