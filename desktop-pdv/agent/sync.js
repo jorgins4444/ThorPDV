@@ -19,7 +19,8 @@ class SyncEngine {
 
   async request(path,body){
     const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),15000);
+    const timeoutMs=path==='/api/pdv/push'?45000:15000;
+    const timeout=setTimeout(()=>controller.abort(),timeoutMs);
     try{
       const response=await fetch(`${this.apiBase}${path}`,{
         method:'POST',headers:this.headers(),body:JSON.stringify(body||{}),signal:controller.signal,

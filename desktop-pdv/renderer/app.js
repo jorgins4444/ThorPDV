@@ -8,11 +8,81 @@ const esc=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const dt=(v)=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleString('pt-BR')};
 const saleKey=(sale)=>String(sale.id||sale.local_key||sale.client_event_id||sale.number||'');
 
+const fiscalTerminalStatuses=new Set(['authorized','rejected','transmission_error','cancelled','contingency']);
+const sefazQuickCodes={
+  '106':'Lote não localizado','108':'Serviço paralisado momentaneamente','110':'Uso denegado',
+  '202':'Falha no reconhecimento da autoria ou integridade do arquivo digital','203':'Emissor não habilitado para emissão',
+  '204':'Duplicidade de NF-e/NFC-e','207':'CNPJ do emitente inválido','209':'IE do emitente inválida',
+  '225':'Falha no Schema XML do lote','230':'IE do emitente não cadastrada','231':'IE do emitente não vinculada ao CNPJ',
+  '243':'XML mal formado','245':'CNPJ emitente não cadastrado','280':'Certificado transmissor inválido',
+  '281':'Certificado transmissor fora da validade','283':'Erro na cadeia do certificado transmissor',
+  '290':'Certificado da assinatura inválido','291':'Certificado da assinatura fora da validade','293':'Erro na cadeia do certificado da assinatura',
+  '301':'Irregularidade fiscal do emitente','302':'Irregularidade fiscal do destinatário',
+  '387':'Código de enquadramento legal do IPI inválido','388':'CST do IPI incompatível com o enquadramento legal'
+};
+const wait=(ms)=>new Promise(resolve=>setTimeout(resolve,ms));
+function fiscalCode(fiscal){return String(fiscal?.cStat||fiscal?.rejection_code||'').trim();}
+function fiscalReason(fiscal){
+  if(!fiscal)return '';
+  const code=fiscalCode(fiscal);
+  if(fiscal.status==='transmission_error'){
+    const e=String(fiscal.last_error_code||'');
+    if(e==='tls_unknown_issuer')return 'Falha TLS: a cadeia do certificado do servidor da SEFAZ não foi reconhecida pelo ambiente de transmissão.';
+    if(e==='sefaz_timeout')return 'Tempo limite excedido aguardando comunicação com a SEFAZ.';
+    return fiscal.last_error_message||'Falha de comunicação com a SEFAZ.';
+  }
+  return fiscal.xMotivo||fiscal.rejection_message||(code?sefazQuickCodes[code]:'')||'';
+}
+function fiscalTimelineHtml(fiscal){
+  const events=Array.isArray(fiscal?.events)?fiscal.events:[];
+  if(!events.length)return '<div class="fiscal-log-empty">Ainda não há eventos sincronizados para esta tentativa.</div>';
+  return `<div class="fiscal-event-list">${events.map(e=>`<div class="fiscal-event fiscal-event-${esc(e.level||'info')}"><i></i><div><b>${esc(e.message||e.type||'Evento fiscal')}</b><small>${dt(e.created_at)}${e.code?` • ${esc(e.code)}`:''}</small></div></div>`).join('')}</div>`;
+}
+function fiscalDiagnosticHtml(fiscal){
+  if(!fiscal)return '<div class="fiscal-diagnostic neutral">NFC-e ainda não solicitada.</div>';
+  const code=fiscalCode(fiscal),reason=fiscalReason(fiscal);
+  if(fiscal.status==='authorized')return `<div class="fiscal-diagnostic success"><b>Autorizada pela SEFAZ</b><span>${code?`cStat ${esc(code)} • `:''}${esc(reason||'Autorização concluída.')}</span></div>`;
+  if(fiscal.status==='rejected')return `<div class="fiscal-diagnostic error"><b>Rejeitada pela SEFAZ${code?` — código ${esc(code)}`:''}</b><span>${esc(reason||'A SEFAZ rejeitou o documento.')}</span></div>`;
+  if(fiscal.status==='transmission_error')return `<div class="fiscal-diagnostic error"><b>Falha de transmissão${fiscal.last_error_code?` — ${esc(fiscal.last_error_code)}`:''}</b><span>${esc(reason)}</span>${fiscal.last_error_message&&fiscal.last_error_message!==reason?`<code>${esc(fiscal.last_error_message)}</code>`:''}</div>`;
+  return `<div class="fiscal-diagnostic processing"><b><i class="fiscal-live-dot"></i> Comunicação fiscal em andamento</b><span>${esc(reason||'Aguardando conclusão da transmissão.')}</span></div>`;
+}
+function fiscalProgressSteps(fiscal,phase){
+  const status=String(fiscal?.status||'requested');
+  const hasKey=Boolean(fiscal?.access_key);
+  const hasResponse=Boolean(fiscalCode(fiscal))||['authorized','rejected'].includes(status);
+  const failed=status==='transmission_error';
+  const steps=[
+    ['Preparando solicitação',true,phase==='queueing'],
+    ['Gerando e assinando XML',hasKey,phase==='building'],
+    ['Enviando à SEFAZ',hasResponse||failed||status==='processing',phase==='sending'||status==='processing'],
+    ['Recebendo retorno',hasResponse,phase==='waiting'&&!failed],
+    ['Resultado fiscal',fiscalTerminalStatuses.has(status),false],
+  ];
+  return `<div class="fiscal-progress-steps">${steps.map(([label,done,active])=>`<div class="fiscal-progress-step ${done?'done':''} ${active&&!done?'active':''}"><i>${done?'✓':''}</i><span>${label}</span></div>`).join('')}</div>`;
+}
+function paintFiscalProgress(m,sale,phase='waiting'){
+  if(!m?.isConnected)return;
+  const fiscal=sale?.fiscal||{status:'requested'};
+  const status=String(fiscal.status||'requested');
+  const title=status==='authorized'?'NFC-e autorizada':status==='rejected'?'NFC-e rejeitada':status==='transmission_error'?'Falha no envio da NFC-e':'Transmitindo NFC-e';
+  const body=m.querySelector('#fiscalProgressBody');if(!body)return;
+  body.innerHTML=`<div class="fiscal-progress-head"><div class="fiscal-spinner ${fiscalTerminalStatuses.has(status)?'stopped':''}"></div><div><small>THORFISCAL / SEFAZ</small><h3>${esc(title)}</h3><p>${status==='processing'?'Aguarde o retorno do autorizador. Não feche o PDV.':esc(fiscalReason(fiscal)||'Acompanhando a solicitação fiscal em tempo real.')}</p></div></div>${fiscalProgressSteps(fiscal,phase)}${fiscalDiagnosticHtml(fiscal)}<div class="fiscal-progress-meta"><span>Chave: <b>${esc(fiscal.access_key||'aguardando geração')}</b></span><span>Tentativas: <b>${Number(fiscal.attempt_count||0)}</b></span>${fiscalCode(fiscal)?`<span>cStat: <b>${esc(fiscalCode(fiscal))}</b></span>`:''}</div><h4>Eventos da transmissão</h4>${fiscalTimelineHtml(fiscal)}<div class="actions" id="fiscalProgressActions"></div>`;
+  const actions=body.querySelector('#fiscalProgressActions');
+  if(status==='transmission_error'||status==='rejected'){
+    actions.innerHTML='<button class="secondary" id="fiscalClose">Fechar</button><button class="primary" id="fiscalRetry">Tentar novamente</button>';
+    actions.querySelector('#fiscalClose').onclick=()=>m.remove();
+    actions.querySelector('#fiscalRetry').onclick=()=>{m.remove();requestNfceAndMaybePrint(saleKey(sale));};
+  }else if(status==='authorized'){
+    actions.innerHTML='<button class="primary" id="fiscalClose">Fechar</button>';
+    actions.querySelector('#fiscalClose').onclick=()=>m.remove();
+  }
+}
+
 async function boot(){
   state.status=await window.thor.status();
   state.settings=state.status.settings||await window.thor.settings();
   render();
-  if(state.status.enrolled){await refreshProducts('');await refreshFiscalSales('');setInterval(refreshStatus,3000);}
+  if(state.status.enrolled){await refreshProducts('');await refreshFiscalSales('');setInterval(async()=>{await refreshStatus();if(state.view==='fiscal'||state.fiscalSales.some(x=>['requested','draft','processing'].includes(String(x.fiscal?.status||''))))await refreshFiscalSales();},3000);}
 }
 
 async function refreshStatus(){state.status=await window.thor.status();state.settings=state.status.settings||state.settings;updateTop();}
@@ -114,13 +184,43 @@ function postSaleModal(key){
 }
 
 async function requestNfceAndMaybePrint(key){
+  const m=modal('<div id="fiscalProgressBody"></div>','wide');
+  paintFiscalProgress(m,{fiscal:{status:'requested',events:[]}},'queueing');
   try{
     const requested=await window.thor.requestNfce({saleKey:key});
-    if(!requested.alreadyAuthorized){await window.thor.sync();await refreshFiscalSales();}
-    const sale=await window.thor.fiscalSale(key);
-    if(sale.fiscal?.status==='authorized')return safePrint(key,'nfce');
-    infoModal('NFC-e solicitada',`A solicitação fiscal foi registrada. Status atual: ${sale.fiscal?.status||'aguardando sincronização'}. A impressão da NFC-e só será liberada quando houver autorização fiscal real.${state.status?.context?.fiscal_provider?'':' Configure um provedor fiscal no Gestão para transmitir à SEFAZ.'}`);
-  }catch(e){infoModal('NFC-e',friendlyError(e.message));}
+    if(requested.alreadyAuthorized){
+      const done=await window.thor.fiscalSale(key);paintFiscalProgress(m,done,'done');await safePrint(key,'nfce');return;
+    }
+
+    paintFiscalProgress(m,{fiscal:{status:'processing',events:[]}},'sending');
+    await window.thor.sync().catch(()=>{});
+    const deadline=Date.now()+45000;
+    let sale=null;
+    while(Date.now()<deadline){
+      await refreshFiscalSales();
+      sale=await window.thor.fiscalSale(key);
+      paintFiscalProgress(m,sale,'waiting');
+      const status=String(sale?.fiscal?.status||'');
+      if(fiscalTerminalStatuses.has(status))break;
+      await wait(1500);
+      await window.thor.sync().catch(()=>{});
+    }
+
+    if(!sale){sale=await window.thor.fiscalSale(key);paintFiscalProgress(m,sale,'waiting');}
+    const status=String(sale?.fiscal?.status||'');
+    if(status==='authorized'){
+      await safePrint(key,'nfce');
+      return;
+    }
+    if(status==='rejected'||status==='transmission_error')return;
+
+    const actions=m.querySelector('#fiscalProgressActions');
+    if(actions){actions.innerHTML='<button class="secondary" id="fiscalClose">Fechar</button><button class="primary" id="fiscalRefreshNow">Atualizar agora</button>';actions.querySelector('#fiscalClose').onclick=()=>m.remove();actions.querySelector('#fiscalRefreshNow').onclick=async()=>{await window.thor.sync().catch(()=>{});await refreshFiscalSales();const current=await window.thor.fiscalSale(key);paintFiscalProgress(m,current,'waiting');};}
+    const diag=m.querySelector('.fiscal-diagnostic');if(diag)diag.outerHTML='<div class="fiscal-diagnostic warning"><b>Tempo de acompanhamento excedido</b><span>A solicitação não ficará escondida: use “Atualizar agora” para consultar o estado sincronizado.</span></div>';
+  }catch(e){
+    const body=m.querySelector('#fiscalProgressBody');if(body)body.innerHTML=`<h3>Falha ao iniciar NFC-e</h3><div class="fiscal-diagnostic error"><b>Não foi possível iniciar a transmissão</b><span>${esc(friendlyError(e.message))}</span></div><div class="actions"><button class="primary" id="fiscalClose">Fechar</button></div>`;
+    m.querySelector('#fiscalClose')?.addEventListener('click',()=>m.remove());
+  }
 }
 
 async function safePrint(key,type){
@@ -145,10 +245,10 @@ function renderFiscalTable(){
 
 async function openSaleDetail(sale){
   const key=saleKey(sale);let detail=sale;try{detail=await window.thor.fiscalSale(key);}catch{}
-  const items=detail.items||[],payments=detail.payments||[];
-  const m=modal(`<div class="sale-detail-head"><div><small>VENDA ${detail.number?`#${esc(detail.number)}`:'LOCAL'}</small><h3>${money(detail.total)}</h3><p>${dt(detail.completed_at||detail.created_at)} • ${esc(detail.customer_name||'Consumidor')}</p></div>${fiscalBadge(detail.fiscal)}</div><div class="sale-detail-grid"><section><h4>Itens</h4><div class="detail-items">${items.map(i=>`<div><span><b>${Number(i.quantity||0)}×</b> ${esc(i.name||i.description||i.sku||'Item')}</span><strong>${money(i.total??(Number(i.quantity||0)*Number(i.unit_price||0)-Number(i.discount||0)))}</strong></div>`).join('')||'<p>Nenhum item disponível.</p>'}</div></section><section><h4>Pagamento</h4><div class="detail-items">${payments.map(p=>`<div><span>${esc(paymentLabels[p.method]||p.method||'Forma')}</span><strong>${money(p.amount)}</strong></div>`).join('')||'<p>Sem pagamento sincronizado.</p>'}</div><h4>Fiscal</h4><div class="fiscal-meta"><span>Status: <b>${esc(detail.fiscal?.status||'Não solicitado')}</b></span><span>Chave: <b>${esc(detail.fiscal?.access_key||'—')}</b></span><span>Protocolo: <b>${esc(detail.fiscal?.protocol||'—')}</b></span></div></section></div><div class="sale-actions"><button class="secondary" id="reprintSale">Pré-venda</button><button class="secondary" id="nfceSale">${detail.fiscal?.status==='authorized'?'Imprimir NFC-e':'Solicitar NFC-e'}</button><button class="secondary warning-button" id="returnSale">Devolver</button><button class="danger primary" id="cancelSale">Cancelar venda</button></div>`,'wide');
+  const items=detail.items||[],payments=detail.payments||[],fiscal=detail.fiscal||null;
+  const m=modal(`<div class="sale-detail-head"><div><small>VENDA ${detail.number?`#${esc(detail.number)}`:'LOCAL'}</small><h3>${money(detail.total)}</h3><p>${dt(detail.completed_at||detail.created_at)} • ${esc(detail.customer_name||'Consumidor')}</p></div>${fiscalBadge(fiscal)}</div><div class="sale-detail-grid"><section><h4>Itens</h4><div class="detail-items">${items.map(i=>`<div><span><b>${Number(i.quantity||0)}×</b> ${esc(i.name||i.description||i.sku||'Item')}</span><strong>${money(i.total??(Number(i.quantity||0)*Number(i.unit_price||0)-Number(i.discount||0)))}</strong></div>`).join('')||'<p>Nenhum item disponível.</p>'}</div></section><section><h4>Pagamento</h4><div class="detail-items">${payments.map(p=>`<div><span>${esc(paymentLabels[p.method]||p.method||'Forma')}</span><strong>${money(p.amount)}</strong></div>`).join('')||'<p>Sem pagamento sincronizado.</p>'}</div><h4>Fiscal</h4><div class="fiscal-meta"><span>Status: <b>${esc(fiscal?.status||'Não solicitado')}</b></span><span>Chave: <b>${esc(fiscal?.access_key||'—')}</b></span><span>Protocolo: <b>${esc(fiscal?.protocol||'—')}</b></span>${fiscalCode(fiscal)?`<span>cStat SEFAZ: <b>${esc(fiscalCode(fiscal))}</b></span>`:''}<span>Tentativas: <b>${Number(fiscal?.attempt_count||0)}</b></span></div>${fiscalDiagnosticHtml(fiscal)}<h4>Log da transmissão</h4>${fiscalTimelineHtml(fiscal)}</section></div><div class="sale-actions"><button class="secondary" id="reprintSale">Pré-venda</button><button class="secondary" id="nfceSale">${fiscal?.status==='authorized'?'Imprimir NFC-e':fiscal?.status==='transmission_error'?'Tentar envio novamente':'Solicitar NFC-e'}</button><button class="secondary warning-button" id="returnSale">Devolver</button><button class="danger primary" id="cancelSale">Cancelar venda</button></div>`,'wide');
   m.querySelector('#reprintSale').onclick=()=>safePrint(key,'pre_sale');
-  m.querySelector('#nfceSale').onclick=()=>requestNfceAndMaybePrint(key);
+  m.querySelector('#nfceSale').onclick=()=>{m.remove();requestNfceAndMaybePrint(key);};
   m.querySelector('#returnSale').onclick=()=>{m.remove();returnSaleModal(detail);};
   m.querySelector('#cancelSale').onclick=()=>{m.remove();cancelSaleModal(detail);};
 }
@@ -185,7 +285,14 @@ function modal(html,size=''){const wrap=document.createElement('div');wrap.class
 function infoModal(title,text){const m=modal(`<h3>${esc(title)}</h3><p class="muted">${esc(text)}</p><div class="actions"><button class="primary" id="ok">OK</button></div>`);m.querySelector('#ok').onclick=()=>m.remove();}
 function showToast(text){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';document.body.appendChild(t);}t.textContent=text;t.classList.add('show');clearTimeout(t._timer);t._timer=setTimeout(()=>t.classList.remove('show'),2500);}
 
-function fiscalBadge(fiscal){if(!fiscal)return '<span class="fiscal-status none">Não solicitada</span>';const status=String(fiscal.status||'');return `<span class="fiscal-status fiscal-${esc(status)}">${esc({requested:'Solicitada',draft:'Rascunho',processing:'Processando',authorized:'Autorizada',rejected:'Rejeitada',cancelled:'Cancelada',contingency:'Contingência'}[status]||status)}</span>`;}
+function fiscalBadge(fiscal){
+  if(!fiscal)return '<span class="fiscal-status none">Não solicitada</span>';
+  const status=String(fiscal.status||''),code=fiscalCode(fiscal);
+  const labels={requested:'Solicitada',draft:'Rascunho',processing:'Processando',authorized:'Autorizada',rejected:'Rejeitada',transmission_error:'Falha no envio',cancelled:'Cancelada',contingency:'Contingência'};
+  const live=status==='processing'?'<i class="fiscal-live-dot"></i> ':'';
+  const suffix=(status==='rejected'&&code)?` ${esc(code)}`:'';
+  return `<span class="fiscal-status fiscal-${esc(status)}">${live}${esc(labels[status]||status)}${suffix}</span>`;
+}
 function saleStatusLabel(status){return ({completed:'Concluída',cancelled:'Cancelada',pending_sync:'Pendente sync',cancel_pending:'Cancelando',return_pending:'Devolução pendente'}[status]||String(status||'Pendente'));}
 function friendlyError(code){return ({printer_not_configured:'Nenhuma impressora foi configurada.',nfce_not_authorized:'A NFC-e ainda não foi autorizada.',nfce_pdf_unavailable:'A NFC-e está autorizada, mas o PDF/DANFE ainda não está disponível.',nfce_pdf_url_unavailable:'O caminho do PDF da NFC-e ainda não pode ser aberto pelo terminal.',authorized_fiscal_document_requires_fiscal_cancellation:'Esta venda possui documento fiscal autorizado. É necessário cancelar primeiro a NFC-e junto à SEFAZ/provedor fiscal.',sale_has_returns:'A venda possui devolução registrada e não pode ser cancelada integralmente.',sale_already_cancelled:'A venda já está cancelada.',sale_cancelled:'A venda está cancelada.',cash_required_for_cash_refund:'Para devolver em dinheiro é necessário haver um caixa aberto.',return_quantity_exceeds_remaining:'A quantidade informada supera o saldo disponível para devolução.',sale_not_found:'Venda não encontrada.',sale_item_not_found:'Item da venda não encontrado.'}[code]||code||'Erro inesperado');}
 

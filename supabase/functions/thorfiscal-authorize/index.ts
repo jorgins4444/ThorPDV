@@ -394,6 +394,39 @@ function parseAuthorization(xml: string) {
   };
 }
 
+function classifyTransmissionError(message: string) {
+  if (/UnknownIssuer/i.test(message)) return { code: "tls_unknown_issuer", userMessage: "A cadeia do certificado TLS do servidor da SEFAZ não foi reconhecida pelo ambiente de transmissão." };
+  if (/timeout|timed out|AbortError/i.test(message)) return { code: "sefaz_timeout", userMessage: "A SEFAZ não respondeu dentro do tempo limite da transmissão." };
+  const http = /sefaz_http_(\d{3})/i.exec(message);
+  if (http) return { code: `sefaz_http_${http[1]}`, userMessage: `O Web Service da SEFAZ respondeu HTTP ${http[1]}.` };
+  if (/certificate|certificado|tls|ssl/i.test(message)) return { code: "tls_error", userMessage: "Falha na negociação TLS/certificado durante a conexão com a SEFAZ." };
+  if (/connect|connection|dns|network|sending request/i.test(message)) return { code: "sefaz_connection_error", userMessage: "Não foi possível estabelecer comunicação com o Web Service da SEFAZ." };
+  return { code: "transport_or_processing_error", userMessage: "Falha durante a preparação ou transmissão da NFC-e." };
+}
+
+async function fiscalEvent(
+  supabase: any,
+  tenantId: string,
+  documentId: string,
+  eventType: string,
+  level: "info" | "success" | "warning" | "error",
+  message: string,
+  code?: string,
+  payload: Json = {},
+) {
+  if (!tenantId || !documentId) return;
+  const { error } = await supabase.from("fiscal_document_events").insert({
+    tenant_id: tenantId,
+    fiscal_document_id: documentId,
+    event_type: eventType,
+    level,
+    code: code || null,
+    message,
+    payload,
+  });
+  if (error) console.error("fiscal_event_insert_failed", eventType, error.message);
+}
+
 function buildNfeProc(signedXml: string, protNFe: string) {
   const nfe = signedXml.replace(/<\?xml[^?]*\?>\s*/g, "");
   return `<?xml version="1.0" encoding="UTF-8"?><nfeProc versao="4.00" xmlns="${NFE_NS}">${nfe}${protNFe}</nfeProc>`;
@@ -404,21 +437,34 @@ async function transmit(signedXml: string, uf: string, homologation: boolean, ce
   const url = getSefazUrl(uf, environment as any, "NFCeAutorizacao" as any);
   if (!url) throw new Error("sefaz_nfce_endpoint_not_configured");
 
-  const client = Deno.createHttpClient({ cert: certPem, key: privateKeyPem });
+  const caBundle = str(Deno.env.get("SEFAZ_CA_BUNDLE_PEM"));
+  const clientOptions: any = { cert: certPem, key: privateKeyPem };
+  if (caBundle) clientOptions.caCerts = [caBundle];
+  const client = Deno.createHttpClient(clientOptions);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": `application/soap+xml; charset=UTF-8; action="${SOAP_ACTION}"`,
-        "soapaction": SOAP_ACTION,
-      },
-      body: buildEnvelope(signedXml),
-      client,
-    } as any);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "content-type": `application/soap+xml; charset=UTF-8; action="${SOAP_ACTION}"`,
+          "soapaction": SOAP_ACTION,
+        },
+        body: buildEnvelope(signedXml),
+        client,
+        signal: controller.signal,
+      } as any);
+    } catch (error) {
+      if ((error as Error)?.name === "AbortError") throw new Error("sefaz_timeout_30000ms");
+      throw error;
+    }
     const body = await response.text();
     if (!response.ok) throw new Error(`sefaz_http_${response.status}:${body.slice(0, 500)}`);
-    return { body, url };
+    return { body, url, httpStatus: response.status };
   } finally {
+    clearTimeout(timer);
     (client as any).close?.();
   }
 }
@@ -457,15 +503,20 @@ Deno.serve(async (req: Request) => {
   if (claim.already_authorized) return json(claim);
 
   const doc = claim.document ?? {};
+  const tenantId = str(doc.tenant_id);
   let signedXml = str(doc.request_payload?.signed_xml || claim.document?.request_payload?.signed_xml);
   let accessKey = str(doc.access_key);
   let qrCodeUrl = str(doc.request_payload?.qr_code_url);
-  const wasProcessing = str(doc.status) === "processing";
+  const previousStatus = str(doc.status);
+  const canReuseStagedXml = ["processing", "transmission_error"].includes(previousStatus) && Boolean(signedXml && accessKey);
 
   try {
+    await fiscalEvent(supabase, tenantId, documentId, "authorization_started", "info", "ThorFiscal iniciou a autorização da NFC-e.", undefined, { previous_status: previousStatus, reuse_signed_xml: canReuseStagedXml });
     const cert = parsePfx(claim.certificate.pfx_base64, claim.certificate.password);
+    await fiscalEvent(supabase, tenantId, documentId, "certificate_ready", "info", "Certificado A1 carregado para assinatura e mTLS.");
 
-    if (!(wasProcessing && signedXml && accessKey)) {
+    if (!canReuseStagedXml) {
+      await fiscalEvent(supabase, tenantId, documentId, "building_xml", "info", "Montando e validando os dados do XML da NFC-e.");
       const built = buildNfe(claim);
       const builder = new DefaultXmlBuilder();
       const signer = new DefaultXmlSigner();
@@ -501,12 +552,27 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", documentId);
       if (stageError) throw new Error(`stage_failed:${stageError.message}`);
+      await fiscalEvent(supabase, tenantId, documentId, "xml_signed", "success", "XML gerado e assinado digitalmente.", undefined, { access_key: accessKey });
+    } else {
+      await fiscalEvent(supabase, tenantId, documentId, "xml_reused", "info", "Reutilizando o mesmo XML assinado e a mesma chave após falha de comunicação.", undefined, { access_key: accessKey });
     }
 
     const uf = str(claim.branch.state).toUpperCase();
     const homologation = str(doc.environment || claim.settings?.environment) !== "production";
+    const attemptCount = num(doc.attempt_count) + 1;
+    await supabase.from("fiscal_documents").update({
+      status: "processing",
+      last_attempt_at: new Date().toISOString(),
+      attempt_count: attemptCount,
+      last_error_code: null,
+      last_error_message: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", documentId);
+    await fiscalEvent(supabase, tenantId, documentId, "sending_to_sefaz", "info", "Enviando NFC-e ao Web Service autorizador da SEFAZ.", undefined, { attempt: attemptCount, environment: homologation ? "homologation" : "production", uf });
+
     const transmitted = await transmit(signedXml, uf, homologation, cert.certPem, cert.privateKeyPem);
     const result = parseAuthorization(transmitted.body);
+    await fiscalEvent(supabase, tenantId, documentId, "sefaz_response", result.cStat === "100" || result.cStat === "150" ? "success" : "warning", result.xMotivo || "A SEFAZ retornou uma resposta sem xMotivo.", result.cStat || undefined, { http_status: transmitted.httpStatus, endpoint: transmitted.url });
     const authorized = result.cStat === "100" || result.cStat === "150";
 
     if (authorized) {
@@ -522,6 +588,8 @@ Deno.serve(async (req: Request) => {
           authorization_at: authorizedAt,
           rejection_code: null,
           rejection_message: null,
+          last_error_code: null,
+          last_error_message: null,
           provider: "svrs_direct",
           provider_reference: result.nProt || "thorfiscal_edge_v1",
           xml_path: `/api/pdv/fiscal/${documentId}/xml`,
@@ -542,6 +610,7 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", documentId);
       if (updateError) throw new Error(`authorization_persist_failed:${updateError.message}`);
+      await fiscalEvent(supabase, tenantId, documentId, "authorized", "success", result.xMotivo || "NFC-e autorizada pela SEFAZ.", result.cStat || "100", { protocol: result.nProt || null, access_key: result.chNFe || accessKey });
 
       return json({
         ok: true,
@@ -563,6 +632,8 @@ Deno.serve(async (req: Request) => {
         status: "rejected",
         rejection_code: result.cStat || "unknown",
         rejection_message: result.xMotivo || "Rejeição sem motivo informado",
+        last_error_code: null,
+        last_error_message: null,
         response_payload: {
           authorized: false,
           cStat: result.cStat,
@@ -576,6 +647,7 @@ Deno.serve(async (req: Request) => {
         updated_at: new Date().toISOString(),
       })
       .eq("id", documentId);
+    await fiscalEvent(supabase, tenantId, documentId, "rejected", "error", result.xMotivo || "NFC-e rejeitada pela SEFAZ.", result.cStat || "unknown", { access_key: accessKey, endpoint: transmitted.url });
 
     return json({
       ok: false,
@@ -592,16 +664,22 @@ Deno.serve(async (req: Request) => {
     const validationErrors = (error as any)?.validationErrors;
     const isValidation = message.startsWith("tax_profile_incomplete:") ||
       /(_invalid|_required|_incomplete|sale_without_payment|tax_regime)/.test(message);
+    const transmission = classifyTransmissionError(message);
+    const status = isValidation ? "rejected" : "transmission_error";
 
     await supabase
       .from("fiscal_documents")
       .update({
-        status: isValidation ? "rejected" : "processing",
+        status,
         rejection_code: isValidation ? "local_validation" : null,
-        rejection_message: message,
+        rejection_message: isValidation ? message : null,
+        last_error_code: isValidation ? null : transmission.code,
+        last_error_message: isValidation ? null : message,
         response_payload: {
           authorized: false,
           error: isValidation ? "local_validation" : "transport_or_processing_error",
+          transport_code: isValidation ? null : transmission.code,
+          user_message: isValidation ? null : transmission.userMessage,
           detail: message,
           validation_errors: validationErrors ?? null,
           access_key: accessKey || null,
@@ -613,13 +691,26 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", documentId);
 
+    await fiscalEvent(
+      supabase,
+      tenantId,
+      documentId,
+      isValidation ? "local_validation_error" : "transport_error",
+      "error",
+      isValidation ? message : `${transmission.userMessage} Detalhe técnico: ${message}`,
+      isValidation ? "local_validation" : transmission.code,
+      { retryable: !isValidation, access_key: accessKey || null },
+    );
+
     return json({
       ok: false,
       authorized: false,
-      status: isValidation ? "rejected" : "processing",
+      status,
       document_id: documentId,
       access_key: accessKey || null,
       error: isValidation ? "local_validation" : "transmission_failed",
+      error_code: isValidation ? "local_validation" : transmission.code,
+      message: isValidation ? message : transmission.userMessage,
       detail: message,
       validation_errors: validationErrors ?? undefined,
       retryable: !isValidation,

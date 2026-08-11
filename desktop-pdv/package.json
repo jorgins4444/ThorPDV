@@ -1,6 +1,6 @@
 {
   "name": "thorpdv-desktop",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "description": "ThorPDV Desktop para Windows com agente offline-first",
   "main": "main.js",
@@ -31,7 +31,11 @@
     ],
     "npmRebuild": true,
     "asar": true,
-    "win": {"target": ["nsis"]},
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
