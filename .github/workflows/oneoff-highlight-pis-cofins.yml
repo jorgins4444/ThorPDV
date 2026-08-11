@@ -1,0 +1,41 @@
+name: One-off Highlight PIS COFINS
+on:
+  push:
+    paths:
+      - '.github/workflows/oneoff-highlight-pis-cofins.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Highlight fiscal fields
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/app/dashboard/[...slug]/product-master-workspace.tsx')
+          s=p.read_text()
+          old='''        <label><span>CST ICMS</span><input value={draft.cst_icms} onChange={e=>set('cst_icms',e.target.value)}/></label>\n        <label><span>CSOSN</span><input value={draft.csosn} onChange={e=>set('csosn',e.target.value)}/></label>\n        <label><span>CST PIS</span><input value={draft.cst_pis} onChange={e=>set('cst_pis',e.target.value)}/></label>\n        <label><span>CST COFINS</span><input value={draft.cst_cofins} onChange={e=>set('cst_cofins',e.target.value)}/></label>\n        <label><span>CST IPI</span><input value={draft.cst_ipi} onChange={e=>set('cst_ipi',e.target.value)}/></label>'''
+          new='''        <div className="span4 product-fiscal-heading">\n          <strong>Tributação para NFC-e / NF-e</strong>\n          <small>Preencha conforme a tributação real do produto. Para emissão fiscal, PIS e COFINS precisam de CST informado.</small>\n        </div>\n        <label><span>CST ICMS</span><input value={draft.cst_icms} onChange={e=>set('cst_icms',e.target.value)} placeholder="Ex.: 00"/></label>\n        <label><span>CSOSN</span><input value={draft.csosn} onChange={e=>set('csosn',e.target.value)} placeholder="Usado no Simples Nacional"/></label>\n        <label className="product-fiscal-required"><span>CST PIS *</span><input value={draft.cst_pis} onChange={e=>set('cst_pis',e.target.value.replace(/\\D/g,'').slice(0,2))} placeholder="Informe o CST PIS" maxLength={2}/><small>Obrigatório para gerar o XML fiscal.</small></label>\n        <label className="product-fiscal-required"><span>CST COFINS *</span><input value={draft.cst_cofins} onChange={e=>set('cst_cofins',e.target.value.replace(/\\D/g,'').slice(0,2))} placeholder="Informe o CST COFINS" maxLength={2}/><small>Obrigatório para gerar o XML fiscal.</small></label>\n        <label><span>CST IPI</span><input value={draft.cst_ipi} onChange={e=>set('cst_ipi',e.target.value)}/></label>'''
+          if old not in s:
+              raise SystemExit('target fiscal fields snippet not found')
+          p.write_text(s.replace(old,new))
+          css=Path('src/app/dashboard/[...slug]/product-master.css')
+          c=css.read_text()
+          marker='''\n.product-fiscal-heading{margin-top:8px;padding:12px 14px;border:1px solid var(--erp-border,#dfe3e8);border-radius:10px;background:rgba(0,0,0,.025);display:flex;flex-direction:column;gap:4px}.product-fiscal-heading strong{font-size:14px}.product-fiscal-heading small{opacity:.72}.product-fiscal-required{padding:10px;border:1px solid rgba(180,90,0,.28);border-radius:10px;background:rgba(255,165,0,.055)}.product-fiscal-required>span{font-weight:700}\n'''
+          if '.product-fiscal-heading{' not in c:
+              css.write_text(c+marker)
+          PY
+      - name: Validate TypeScript build
+        run: |
+          npm install
+          npm run typecheck
+          npm run build
+      - name: Commit patch
+        run: |
+          git config user.name 'ThorPDV Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add 'src/app/dashboard/[...slug]/product-master-workspace.tsx' 'src/app/dashboard/[...slug]/product-master.css'
+          git commit -m 'feat: highlight PIS and COFINS CST fields in products'
+          git push
