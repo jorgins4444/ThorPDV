@@ -22,7 +22,16 @@ jobs:
         with:
           node-version: 22
       - name: Apply patch
-        run: python scripts/apply_cancel_animation_v078.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/apply_cancel_animation_v078.py')
+          s=p.read_text()
+          s=s.replace('pattern.subn(replacement, s, count=1)','pattern.subn(lambda _m: replacement, s, count=1)')
+          s=s.replace('cancel_pattern.subn(cancel_replacement, s, count=1)','cancel_pattern.subn(lambda _m: cancel_replacement, s, count=1)')
+          p.write_text(s)
+          PY
+          python scripts/apply_cancel_animation_v078.py
       - name: Validate Desktop
         run: |
           node --check desktop-pdv/renderer/app.js
