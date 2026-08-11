@@ -7,7 +7,7 @@ import {
   getSefazUrl,
   getNFCeQRCodeUrl,
   getNFCeConsultaUrl,
-} from "npm:@brasil-fiscal/nfe@2.0.6";
+} from "npm:@brasil-fiscal/nfe@2.0.7";
 
 const NFE_NS = "http://www.portalfiscal.inf.br/nfe";
 const SOAP_ACTION = `${NFE_NS}/wsdl/NFeAutorizacao4/nfeAutorizacaoLote`;
