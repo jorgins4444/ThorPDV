@@ -4,6 +4,22 @@ type FiscalAuthorizationContext =
   | { sessionToken: string; deviceToken?: never }
   | { deviceToken: string; sessionToken?: never };
 
+type FiscalCancellationContext =
+  | {
+      sessionToken: string;
+      deviceToken?: never;
+      reason: string;
+      operatorUserId?: never;
+      supervisorUserId?: never;
+    }
+  | {
+      deviceToken: string;
+      sessionToken?: never;
+      reason: string;
+      operatorUserId: string;
+      supervisorUserId?: string | null;
+    };
+
 export type ThorFiscalAuthorizationResult = {
   ok?: boolean;
   authorized?: boolean;
@@ -74,13 +90,22 @@ export async function authorizeNfceDocument(
 
 export async function cancelNfceDocument(
   documentId: string,
-  context: {
-    deviceToken: string;
-    reason: string;
-    operatorUserId: string;
-    supervisorUserId?: string | null;
-  },
+  context: FiscalCancellationContext,
 ): Promise<ThorFiscalCancellationResult> {
+  const payload = context.deviceToken
+    ? {
+        document_id: documentId,
+        device_token: context.deviceToken,
+        reason: context.reason,
+        operator_user_id: context.operatorUserId,
+        supervisor_user_id: context.supervisorUserId ?? null,
+      }
+    : {
+        document_id: documentId,
+        session_token: context.sessionToken,
+        reason: context.reason,
+      };
+
   try {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/thorfiscal-cancel`, {
       method: 'POST',
@@ -89,13 +114,7 @@ export async function cancelNfceDocument(
         apikey: SUPABASE_PUBLISHABLE_KEY,
         authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({
-        document_id: documentId,
-        device_token: context.deviceToken,
-        reason: context.reason,
-        operator_user_id: context.operatorUserId,
-        supervisor_user_id: context.supervisorUserId ?? null,
-      }),
+      body: JSON.stringify(payload),
       cache: 'no-store',
     });
 
