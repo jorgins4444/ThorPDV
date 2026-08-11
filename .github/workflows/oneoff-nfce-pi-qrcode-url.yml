@@ -1,4 +1,0 @@
-name: One-off NFC-e PI QRCode URL Fix
-
-on:
-  workflow_dispatch:
