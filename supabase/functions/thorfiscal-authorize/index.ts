@@ -99,14 +99,22 @@ function num(value: unknown, fallback = 0) {
 function deepFiscal(productProfile: Json, snapshot: Json): Json {
   const base = productProfile && typeof productProfile === "object" ? productProfile : {};
   const snap = snapshot && typeof snapshot === "object" ? snapshot : {};
+  const snapProfile = snap.fiscal_profile && typeof snap.fiscal_profile === "object"
+    ? snap.fiscal_profile
+    : {};
   return {
     ...base,
+    ...snapProfile,
     ...snap,
-    icms: { ...(base.icms ?? {}), ...(snap.icms ?? {}) },
-    pis: { ...(base.pis ?? {}), ...(snap.pis ?? {}) },
-    cofins: { ...(base.cofins ?? {}), ...(snap.cofins ?? {}) },
-    ipi: { ...(base.ipi ?? {}), ...(snap.ipi ?? {}) },
-    ibsCbs: { ...(base.ibsCbs ?? base.ibscbs ?? {}), ...(snap.ibsCbs ?? snap.ibscbs ?? {}) },
+    icms: { ...(base.icms ?? {}), ...(snapProfile.icms ?? {}), ...(snap.icms ?? {}) },
+    pis: { ...(base.pis ?? {}), ...(snapProfile.pis ?? {}), ...(snap.pis ?? {}) },
+    cofins: { ...(base.cofins ?? {}), ...(snapProfile.cofins ?? {}), ...(snap.cofins ?? {}) },
+    ipi: { ...(base.ipi ?? {}), ...(snapProfile.ipi ?? {}), ...(snap.ipi ?? {}) },
+    ibsCbs: {
+      ...(base.ibsCbs ?? base.ibscbs ?? {}),
+      ...(snapProfile.ibsCbs ?? snapProfile.ibscbs ?? {}),
+      ...(snap.ibsCbs ?? snap.ibscbs ?? {}),
+    },
   };
 }
 
@@ -205,20 +213,43 @@ function buildProduct(item: Json, index: number, regime: number, homologation: b
   if (cofBase !== undefined) cofins.baseCalculo = num(cofBase);
   if (cofValor !== undefined) cofins.valor = num(cofValor);
 
-  const ibsSource = fiscal.ibsCbs ?? {};
+  const explicitIbsSource = fiscal.ibsCbs ?? {};
+  const reformCst = str(taxValue(fiscal, "reform_cst", "rtc_cst"));
+  const reformClass = digits(taxValue(fiscal, "reform_classification", "cClassTrib", "cclass_trib"));
+  const ibsSource = Object.keys(explicitIbsSource).length
+    ? explicitIbsSource
+    : (reformCst || reformClass ? { cst: reformCst, cClassTrib: reformClass } : {});
   let ibsCbs: Json | undefined;
-  if (Object.keys(ibsSource).length) {
-    const ibsCst = str(taxValue(ibsSource, "cst"));
-    const cClassTrib = digits(taxValue(ibsSource, "cClassTrib", "classificacao"));
-    if (!ibsCst || !cClassTrib) errors.push(`item_${index}_ibscbs_incomplete`);
-    else {
-      ibsCbs = {
-        cst: ibsCst,
-        cClassTrib,
-        pIBSUF: num(taxValue(ibsSource, "pIBSUF", "ibs_uf")),
-        pIBSMun: num(taxValue(ibsSource, "pIBSMun", "ibs_mun")),
-        pCBS: num(taxValue(ibsSource, "pCBS", "cbs")),
-      };
+  const rtcRequired = regime === 3 && Date.now() >= Date.parse("2026-08-03T00:00:00-03:00");
+
+  if (!Object.keys(ibsSource).length) {
+    if (rtcRequired) errors.push(`item_${index}_ibscbs_required`);
+  } else {
+    const ibsCst = str(taxValue(ibsSource, "cst") ?? reformCst);
+    const cClassTrib = digits(taxValue(ibsSource, "cClassTrib", "classificacao") ?? reformClass);
+    if (!/^\d{3}$/.test(ibsCst) || !/^\d{6}$/.test(cClassTrib)) {
+      errors.push(`item_${index}_ibscbs_incomplete`);
+    } else if (cClassTrib.slice(0, 3) !== ibsCst) {
+      errors.push(`item_${index}_ibscbs_classification_mismatch`);
+    } else {
+      const pIBSUFRaw = taxValue(ibsSource, "pIBSUF", "ibs_uf");
+      const pIBSMunRaw = taxValue(ibsSource, "pIBSMun", "ibs_mun");
+      const pCBSRaw = taxValue(ibsSource, "pCBS", "cbs");
+      const standardIntegral2026 = new Date().getFullYear() === 2026 && ibsCst === "000";
+
+      if (!standardIntegral2026 && (pIBSUFRaw === undefined || pIBSMunRaw === undefined || pCBSRaw === undefined)) {
+        errors.push(`item_${index}_ibscbs_rates_required`);
+      } else {
+        ibsCbs = {
+          cst: ibsCst,
+          cClassTrib,
+          // LC 214/2025 / SVRS: alíquotas de transição de 2026 para tributação integral.
+          // Campos explícitos sempre prevalecem; o fallback só vale para CST 000 em 2026.
+          pIBSUF: pIBSUFRaw !== undefined ? num(pIBSUFRaw) : 0.1,
+          pIBSMun: pIBSMunRaw !== undefined ? num(pIBSMunRaw) : 0,
+          pCBS: pCBSRaw !== undefined ? num(pCBSRaw) : 0.9,
+        };
+      }
     }
   }
 
