@@ -13,6 +13,7 @@ async function rpc(name:string,args:Record<string,unknown>){const supabase=await
 export async function controlDashboard(){const t=await token();return rpc('platform_dashboard',{p_token:t});}
 export async function controlCreateCustomer(payload:Record<string,unknown>){const t=await token();return rpc('platform_customer_create',{p_token:t,p_payload:payload});}
 export async function controlUpdateLicense(tenantId:string,payload:Record<string,unknown>){const t=await token();return rpc('platform_license_update',{p_token:t,p_tenant:tenantId,p_payload:payload});}
+export async function controlSetLicenseBlocked(tenantId:string,blocked:boolean,reason=''){const t=await token();return rpc('platform_license_block',{p_token:t,p_tenant:tenantId,p_blocked:blocked,p_reason:reason});}
 export async function controlSavePricing(payload:Record<string,unknown>){const t=await token();return rpc('platform_pricing_save',{p_token:t,p_payload:payload});}
 export async function controlFiscalDetail(documentId:string){const t=await token();return rpc('platform_fiscal_detail',{p_token:t,p_document:documentId});}
 export async function controlUpdateDashboard(){const t=await token();return rpc('platform_update_dashboard',{p_token:t});}
