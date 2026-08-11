@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   branchConfigurationGet,branchConfigurationSave,branchDeliveryRateSave,
@@ -39,21 +40,21 @@ export function BranchConfigWorkspace({branches}:{branches:Row[]}){
   async function load(){if(!branchId)return;setLoading(true);const r=await branchConfigurationGet(branchId) as ConfigResult;setLoading(false);setData(r);if(!r.ok)setMessage(text(r.error||'Falha ao carregar filial.'));}
   useEffect(()=>{void load();},[branchId]);
   const branch=obj(data.branch),settings=obj(data.settings),branding=obj(settings.branding),params=obj(settings.pdv_parameters);
-  const integrations=rows(data.integrations),smart=rows(data.smartpos_terminals),windows=rows(data.windows_terminals),groups=rows(data.tax_groups),rates=rows(data.delivery_rates),history=rows(data.history),fiscalSecrets=obj(data.fiscal_secrets);
+  const integrations=rows(data.integrations),smart=rows(data.smartpos_terminals),windows=rows(data.windows_terminals),groups=rows(data.tax_groups),rates=rows(data.delivery_rates),history=rows(data.history);
   const integrationMap=useMemo(()=>new Map(integrations.map(i=>[text(i.provider),i])),[integrations]);
 
   async function saveSection(section:string,payload:Row){const r=await branchConfigurationSave(branchId,section,payload);setMessage(r.ok?'Configuração salva.':`Não foi possível salvar: ${text(r.error)}`);if(r.ok)await load();}
   function formPayload(e:FormEvent<HTMLFormElement>){const fd=new FormData(e.currentTarget);const p:Row={};for(const [k,v] of fd.entries())p[k]=v;return p;}
 
   return <section className="branch-config-shell erp-module-card">
-    <div className="branch-config-top"><div><span>CONFIGURAÇÃO DA FILIAL</span><h2>{text(branch.name)||'Filial'}</h2><p>Fiscal, terminais, parâmetros do PDV e adquirentes SmartPOS por estabelecimento.</p></div><label>Filial<select value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={text(b.id)} value={text(b.id)}>{text(b.name)}</option>)}</select></label></div>
+    <div className="branch-config-top"><div><span>CONFIGURAÇÃO DA FILIAL</span><h2>{text(branch.name)||'Filial'}</h2><p>Dados do estabelecimento, terminais, parâmetros do PDV e integrações. Certificado, CSC, ambiente, séries e transmissão ficam centralizados no módulo Fiscal.</p></div><label>Filial<select value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={text(b.id)} value={text(b.id)}>{text(b.name)}</option>)}</select></label></div>
     <div className="branch-tabs">{tabs.map(([id,label])=><button key={id} className={active===id?'active':''} onClick={()=>setActive(id)}>{label}</button>)}</div>
     {message&&<div className="branch-message">{message}</div>}{loading?<div className="branch-loading">Carregando configuração...</div>:null}
 
     {active==='general'&&<form className="branch-panel" onSubmit={e=>{e.preventDefault();const p=formPayload(e);void saveSection('general',p);}}>
-      <div className="branch-section-head"><h3>Dados gerais</h3><button className="erp-primary">Gravar</button></div>
+      <div className="branch-section-head"><div><h3>Dados gerais e fiscais do estabelecimento</h3><p>CNPJ, IE, CRT e endereço identificam a filial emitente e são usados pelo ThorFiscal no XML.</p></div><button className="erp-primary">Gravar</button></div>
       <div className="branch-grid cols3">
-        <label>CPF/CNPJ<input name="cnpj" defaultValue={text(branch.cnpj)}/></label><label>Nome da filial / Fantasia<input name="name" defaultValue={text(branch.name)}/></label><label>Contato<input name="contact" defaultValue={text(settings.contact)}/></label>
+        <label>CNPJ<input name="cnpj" defaultValue={text(branch.cnpj)}/></label><label>Nome da filial / Fantasia<input name="name" defaultValue={text(branch.name)}/></label><label>Contato<input name="contact" defaultValue={text(settings.contact)}/></label>
         <label>Responsável<input name="responsible" defaultValue={text(settings.responsible)}/></label><label>E-mail<input type="email" name="email" defaultValue={text(settings.email)}/></label><label>CRT<select name="crt" defaultValue={text(settings.crt)}><option value="">Selecione...</option><option value="1">1 - Simples Nacional</option><option value="2">2 - Simples excesso sublimite</option><option value="3">3 - Regime Normal</option><option value="4">4 - MEI</option></select></label>
         <label>Inscrição estadual<input name="state_registration" defaultValue={text(settings.state_registration)}/></label><label>Inscrição municipal<input name="municipal_registration" defaultValue={text(settings.municipal_registration)}/></label><label>Tipo de negócio<input name="business_type" defaultValue={text(settings.business_type)} placeholder="Ex.: Varejo, Food, Serviços"/></label>
         <label>Detalhes<input name="business_detail" defaultValue={text(settings.business_detail)} placeholder="Ex.: Mercado, Restaurante"/></label><label>Telefone<input name="phone" defaultValue={text(settings.phone)}/></label><label>Celular<input name="mobile" defaultValue={text(settings.mobile)}/></label>
@@ -73,21 +74,18 @@ export function BranchConfigWorkspace({branches}:{branches:Row[]}){
       </form>
     </div>}
 
-    {active==='fiscal'&&<form className="branch-panel" onSubmit={e=>{e.preventDefault();const p=formPayload(e);p.tax_reform_enabled=p.tax_reform_enabled==='true';void saveSection('fiscal',p);}}>
-      <div className="branch-section-head"><h3>Fiscal da filial</h3><button className="erp-primary">Gravar</button></div>
-      <div className="branch-info-strip"><span><b>CNPJ</b>{text(branch.cnpj)||'—'}</span><span><b>Inscrição Estadual</b>{text(settings.state_registration)||'—'}</span><span><b>CRT</b>{text(settings.crt)||'Não definido'}</span><span><b>Certificado</b>{text(settings.certificate_status)||'Não configurado'}</span></div>
-      <div className="branch-grid cols2">
-        <label>Ambiente<select name="fiscal_environment" defaultValue={text(settings.fiscal_environment)||'homologation'}><option value="homologation">Homologação</option><option value="production">Produção</option></select></label><label>Responsável emissão NFC-e<select name="nfce_issuer_provider" defaultValue={text(settings.nfce_issuer_provider)}><option value="">ThorFiscal / provedor configurado</option><option value="focusnfe">Focus NFe</option><option value="nuvemfiscal">Nuvem Fiscal</option><option value="plugnotas">TecnoSpeed PlugNotas</option><option value="custom">Outro</option></select></label>
-        <label>Provedor fiscal<input name="fiscal_provider" defaultValue={text(settings.fiscal_provider)} placeholder="Ex.: Focus NFe"/></label><label>Certificado A1 / referência<input name="certificate_reference" defaultValue={text(settings.certificate_reference)} placeholder="Identificação segura do certificado"/></label>
-        <label>ID CSC Homologação<input name="csc_homologation_id" defaultValue={text(settings.csc_homologation_id)}/></label><label>Token CSC Homologação<input type="password" name="csc_homologation_token" placeholder={fiscalSecrets.csc_homologation_token?'Token já configurado':'Informe o token'}/></label>
-        <label>ID CSC Produção<input name="csc_production_id" defaultValue={text(settings.csc_production_id)}/></label><label>Token CSC Produção<input type="password" name="csc_production_token" placeholder={fiscalSecrets.csc_production_token?'Token já configurado':'Informe o token'}/></label>
-        <label>Senha certificado<input type="password" name="certificate_password" placeholder={fiscalSecrets.certificate_password?'Senha já configurada':'Informe se necessário'}/></label><label>Status certificado<select name="certificate_status" defaultValue={text(settings.certificate_status)||'not_configured'}><option value="not_configured">Não configurado</option><option value="configured">Configurado</option><option value="valid">Válido</option><option value="expired">Expirado</option></select></label>
-        <label>Reforma tributária<select name="tax_reform_enabled" defaultValue={settings.tax_reform_enabled?'true':'false'}><option value="false">Não</option><option value="true">Sim / habilitar tags IBS/CBS</option></select></label>
+    {active==='fiscal'&&<div className="branch-panel">
+      <div className="branch-section-head"><div><h3>Fiscal da filial</h3><p>A configuração fiscal operacional foi centralizada para evitar certificado, CSC ou ambiente divergentes entre telas.</p></div></div>
+      <div className="branch-info-strip"><span><b>CNPJ</b>{text(branch.cnpj)||'Não informado'}</span><span><b>Inscrição Estadual</b>{text(settings.state_registration)||'Não informada'}</span><span><b>CRT</b>{text(settings.crt)||'Não definido'}</span><span><b>Endereço fiscal</b>{text(branch.street)&&text(branch.number)&&text(branch.district)&&text(branch.postal_code)&&text(branch.ibge_city_code)?'Completo':'Incompleto'}</span></div>
+      <div className="branch-fiscal-central-card">
+        <div><strong>Configuração fiscal centralizada</strong><p>Certificado digital A1, ambiente Homologação/Produção, CSC, séries, numeração, vínculo Caixa → Série, CFOP e DANFE são administrados somente no módulo Fiscal.</p></div>
+        <Link className="erp-primary" href="/dashboard/fiscal">Abrir módulo Fiscal</Link>
       </div>
-      <div className="branch-checks"><div className={text(settings.state_registration)&&text(settings.state_registration).toUpperCase()!=='ISENTO'?'ok':'warn'}>Inscrição Estadual válida quando exigida pela UF</div><div className={text(settings.crt)?'ok':'warn'}>CRT definido</div><div className={(fiscalSecrets.csc_homologation_token||fiscalSecrets.csc_production_token)?'ok':'warn'}>CSC configurado para NFC-e quando aplicável</div></div>
-    </form>}
+      <div className="branch-checks"><div className={text(settings.state_registration)?'ok':'warn'}>Inscrição Estadual do estabelecimento</div><div className={text(settings.crt)?'ok':'warn'}>CRT definido</div><div className={text(branch.street)&&text(branch.number)&&text(branch.district)&&text(branch.postal_code)&&text(branch.ibge_city_code)?'ok':'warn'}>Endereço fiscal completo</div></div>
+      <p className="branch-fiscal-central-note">Para alterar certificado, CSC, ambiente, série, numeração ou DANFE, use Fiscal. Esta tela mostra apenas a prontidão cadastral da filial.</p>
+    </div>}
 
-    {active==='parameters'&&<div className="branch-panel">
+    {active==='parameters' &&<div className="branch-panel">
       <div className="branch-section-head"><div><h3>Parâmetros do PDV</h3><p>Identidade visual, impressão, caixa e comportamento operacional.</p></div></div>
       <Branding current={branding} onSave={async p=>saveSection('branding',p)}/>
       <form onSubmit={e=>{e.preventDefault();const p=formPayload(e);void saveSection('parameters',p);}}>
