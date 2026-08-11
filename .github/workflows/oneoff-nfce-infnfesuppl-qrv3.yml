@@ -1,0 +1,54 @@
+name: One-off NFC-e infNFeSupl QRv3 Fix
+
+on:
+  push:
+    branches:
+      - fix/nfce-infnfesuppl-qrv3-20260811
+    paths:
+      - '.github/workflows/oneoff-nfce-infnfesuppl-qrv3.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply NFC-e schema fix
+        run: python3 scripts/patch_nfce_infnfesuppl_qrv3.py
+
+      - name: Validate generated ordering contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('supabase/functions/thorfiscal-authorize/index.ts').read_text()
+          assert 'p=${accessKey}|3|' in s
+          assert '|3|${tpAmb}' not in s
+          assert 'baseXml.slice(0, signature.index)' in s
+          assert 'nfce_signature_not_found_for_supplement' in s
+          print('QR v3 online format and infNFeSupl-before-Signature contract present')
+          PY
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check ThorFiscal
+        run: deno check --node-modules-dir=auto supabase/functions/thorfiscal-authorize/index.ts
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "ThorPDV Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add supabase/functions/thorfiscal-authorize/index.ts
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "fix: generate valid NFC-e infNFeSupl and QR-Code v3"
+          git push
