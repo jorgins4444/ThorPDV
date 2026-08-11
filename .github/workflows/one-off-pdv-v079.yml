@@ -1,0 +1,49 @@
+name: PDV v079 adjustments
+
+on:
+  push:
+    branches:
+      - feat/pdv-sale-details-whatsapp-v079
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/pdv-sale-details-whatsapp-v079
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply patches
+        run: |
+          python scripts/apply_pdv_details_whatsapp_v079.py
+          python scripts/apply_sale_enrichment_v079.py
+          python scripts/apply_fiscal_filters_v079.py
+      - name: Validate Desktop JavaScript
+        run: |
+          node --check desktop-pdv/renderer/app.js
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/preload.js
+          node --check desktop-pdv/agent/index.js
+          node -e "const p=require('./desktop-pdv/package.json');if(p.version!=='0.7.9')process.exit(1)"
+      - name: Validate web project
+        run: |
+          npm install
+          npm run typecheck
+          npm run build
+          npm run lint
+      - name: Commit validated changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/one-off-pdv-v079.yml scripts/apply_pdv_details_whatsapp_v079.py scripts/apply_sale_enrichment_v079.py scripts/apply_fiscal_filters_v079.py
+          git add desktop-pdv/renderer/app.js desktop-pdv/renderer/styles.css desktop-pdv/main.js desktop-pdv/preload.js desktop-pdv/agent/index.js desktop-pdv/package.json
+          git commit -m "feat: refine fiscal sale actions, details and WhatsApp sharing"
+          git push origin HEAD:feat/pdv-sale-details-whatsapp-v079
