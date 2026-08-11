@@ -3,6 +3,7 @@ name: One-off Product Fiscal Editor v077
 on:
   push:
     paths:
+      - '.github/scripts/patch-product-fiscal-editor-v077.py'
       - '.github/workflows/oneoff-product-fiscal-editor-v077.yml'
 
 permissions:
@@ -14,98 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Integrate guided fiscal editor
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          p=Path('src/app/dashboard/[...slug]/product-master-workspace.tsx')
-          s=p.read_text()
-
-          import_line="import { ProductFiscalEditor } from './product-fiscal-editor';\n"
-          if import_line not in s:
-              anchor="} from './actions';\n"
-              s=s.replace(anchor,anchor+import_line,1)
-
-          old="""    cst_icms:'', csosn:'', cst_pis:'', cst_cofins:'', cst_ipi:'', icms_rate:'', pis_rate:'', cofins_rate:'', ipi_rate:'',
-"""
-          new="""    cst_icms:'', csosn:'', cst_pis:'', cst_cofins:'', cst_ipi:'', icms_rate:'', pis_rate:'', cofins_rate:'', ipi_rate:'',
-    reform_cst:'', reform_classification:'', fiscal_origin_uf:'', fiscal_destination_uf:'', fiscal_customer_type:'both',
-    icms_tax_benefit:'', icms_exemption_reason:'', icms_discount:false, icms_credit_benefit:'', icms_presumed_credit_rate:'',
-    ipi_legal_framework:'', petroleum_anp_code:'', petroleum_cide_rate:'', petroleum_mix_percent:'',
-"""
-          if old not in s:
-              raise SystemExit('blank fiscal fields anchor not found')
-          s=s.replace(old,new,1)
-
-          old="""    cst_icms:text(fp.cst_icms), csosn:text(fp.csosn), cst_pis:text(fp.cst_pis), cst_cofins:text(fp.cst_cofins), cst_ipi:text(fp.cst_ipi),
-    icms_rate:text(fp.icms_rate), pis_rate:text(fp.pis_rate), cofins_rate:text(fp.cofins_rate), ipi_rate:text(fp.ipi_rate),
-"""
-          new="""    cst_icms:text(fp.cst_icms), csosn:text(fp.csosn), cst_pis:text(fp.cst_pis), cst_cofins:text(fp.cst_cofins), cst_ipi:text(fp.cst_ipi),
-    icms_rate:text(fp.icms_rate), pis_rate:text(fp.pis_rate), cofins_rate:text(fp.cofins_rate), ipi_rate:text(fp.ipi_rate),
-    reform_cst:text(fp.reform_cst), reform_classification:text(fp.reform_classification),
-    fiscal_origin_uf:text(fp.fiscal_origin_uf), fiscal_destination_uf:text(fp.fiscal_destination_uf), fiscal_customer_type:text(fp.fiscal_customer_type)||'both',
-    icms_tax_benefit:text(fp.icms_tax_benefit), icms_exemption_reason:text(fp.icms_exemption_reason), icms_discount:bool(fp.icms_discount),
-    icms_credit_benefit:text(fp.icms_credit_benefit), icms_presumed_credit_rate:text(fp.icms_presumed_credit_rate),
-    ipi_legal_framework:text(fp.ipi_legal_framework), petroleum_anp_code:text(fp.petroleum_anp_code), petroleum_cide_rate:text(fp.petroleum_cide_rate), petroleum_mix_percent:text(fp.petroleum_mix_percent),
-"""
-          if old not in s:
-              raise SystemExit('draft fiscal fields anchor not found')
-          s=s.replace(old,new,1)
-
-          old="""      ipi_rate:num(draft.ipi_rate),
-    };
-"""
-          new="""      ipi_rate:num(draft.ipi_rate),
-      reform_cst:draft.reform_cst || null,
-      reform_classification:draft.reform_classification || null,
-      fiscal_origin_uf:draft.fiscal_origin_uf || null,
-      fiscal_destination_uf:draft.fiscal_destination_uf || null,
-      fiscal_customer_type:draft.fiscal_customer_type || 'both',
-      icms_tax_benefit:draft.icms_tax_benefit || null,
-      icms_exemption_reason:draft.icms_exemption_reason || null,
-      icms_discount:Boolean(draft.icms_discount),
-      icms_credit_benefit:draft.icms_credit_benefit || null,
-      icms_presumed_credit_rate:num(draft.icms_presumed_credit_rate),
-      ipi_legal_framework:draft.ipi_legal_framework || null,
-      petroleum_anp_code:draft.petroleum_anp_code || null,
-      petroleum_cide_rate:num(draft.petroleum_cide_rate),
-      petroleum_mix_percent:num(draft.petroleum_mix_percent),
-    };
-"""
-          if old not in s:
-              raise SystemExit('save fiscal profile anchor not found')
-          s=s.replace(old,new,1)
-
-          start=s.find("    {activeTab==='prices' && <div className=\"product-tab-panel\">")
-          end=s.find("    {activeTab==='stock' && <div className=\"product-tab-panel\>",start)
-          if start<0 or end<0:
-              raise SystemExit(f'prices block boundaries not found {start} {end}')
-          new_block="""    {activeTab==='prices' && <div className=\"product-tab-panel\">
-      <div className=\"product-form-grid cols4 product-price-grid\">
-        <label><span>Preço de custo</span><input type=\"number\" min=\"0\" step=\"0.01\" value={draft.cost_price} onChange={e=>set('cost_price',e.target.value)}/></label>
-        <label><span>Preço de venda</span><input type=\"number\" min=\"0\" step=\"0.01\" value={draft.sale_price} onChange={e=>set('sale_price',e.target.value)}/></label>
-        <div className=\"span2 product-tax-help\"><b>Preço e tributação separados</b><span>Os preços permanecem comerciais. A classificação fiscal abaixo é usada pelo ThorFiscal na emissão.</span></div>
-      </div>
-      <ProductFiscalEditor value={draft} onChange={(key,value)=>setDraft(current=>({...current,[key]:value}))}/>
-      <fieldset className=\"product-fieldset\"><legend>Modificadores</legend><div className=\"modifier-grid\">
-        {modifiers.map(m=><label className=\"check\" key={text(m.id)}><input type=\"checkbox\" checked={modifierIds.includes(text(m.id))} onChange={e=>setModifierIds(current=>e.target.checked?[...current,text(m.id)]:current.filter(id=>id!==text(m.id)))}/>{text(m.name)} <small>{num(m.price_delta)?`(${money(m.price_delta)})`:''}</small></label>)}
-      </div></fieldset>
-    </div>}
-
-"""
-          s=s[:start]+new_block+s[end:]
-          p.write_text(s)
-
-          css=Path('src/app/dashboard/[...slug]/product-master.css')
-          c=css.read_text()
-          marker='/* product fiscal editor v077 */'
-          if marker not in c:
-              c += '''\n\n/* product fiscal editor v077 */
-.product-tax-card{margin-top:18px;border:1px solid #dfe5e2;border-radius:14px;background:#fff;overflow:hidden}.product-tax-title{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:16px 18px 12px}.product-tax-title>div{display:grid;gap:4px}.product-tax-title strong{font-size:16px;color:#172b22}.product-tax-title small{color:#667085;line-height:1.45}.product-tax-title>span{border:1px solid #d0d5dd;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800;color:#475467;background:#f9fafb}.product-tax-tabs{display:grid;grid-template-columns:repeat(6,minmax(115px,1fr));gap:8px;padding:0 12px 8px;border-bottom:2px solid #98b8ff;overflow:auto}.product-tax-tabs button{min-height:42px;border:0;border-radius:7px;background:#e9eef5;color:#344054;font-weight:700;padding:8px 10px;cursor:pointer;white-space:nowrap}.product-tax-tabs button.active{background:#a9c9ff;color:#173c78}.product-tax-panel{padding:18px}.product-tax-panel .product-form-grid{margin:0}.product-tax-notice{margin-bottom:16px;border-radius:8px;padding:9px 11px;background:#eaf2ff;color:#285a9f;font-size:12px;font-weight:650}.product-tax-rule-head{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;border-radius:7px;padding:10px 12px;background:#eceaf8;color:#344054}.product-tax-rule-head small{color:#667085}.product-tax-help{align-self:stretch;border:1px solid #e1e5e9;border-radius:9px;padding:10px 12px;background:#f8fafb;display:flex;flex-direction:column;gap:3px;color:#475467}.product-tax-help b{color:#344054}.product-tax-help span{font-size:12px;line-height:1.4}.product-tax-toggle{min-height:41px;border:1px solid #d8dfdb;border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px;background:#fff}.product-tax-toggle input{width:auto!important}.product-price-grid{margin-bottom:0!important}.product-tax-card select,.product-tax-card input{min-height:41px}.product-tax-card label small{line-height:1.35}.product-tax-card .product-fiscal-required{border-color:#f5c276;background:#fffaf0}.product-tax-card .span4{grid-column:span 4}@media(max-width:1150px){.product-tax-tabs{grid-template-columns:repeat(3,minmax(150px,1fr))}}@media(max-width:720px){.product-tax-tabs{display:flex}.product-tax-tabs button{min-width:150px}.product-tax-card .span2,.product-tax-card .span3,.product-tax-card .span4{grid-column:auto}.product-tax-title{flex-direction:column}}
-'''
-          css.write_text(c)
-          PY
+        run: python3 .github/scripts/patch-product-fiscal-editor-v077.py
       - name: Validate TypeScript build
         run: |
           npm install
