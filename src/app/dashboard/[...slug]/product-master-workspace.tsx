@@ -331,10 +331,14 @@ function ProductEditor({row,products,groups,classes,suppliers,modifiers,branches
         <label><span>CEST</span><input value={draft.cest} onChange={e=>set('cest',e.target.value)}/></label>
         <label><span>CFOP padrão</span><input value={draft.cfop_default} onChange={e=>set('cfop_default',e.target.value)}/></label>
         <label><span>Origem</span><select value={draft.origin} onChange={e=>set('origin',e.target.value)}>{Array.from({length:9},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>
-        <label><span>CST ICMS</span><input value={draft.cst_icms} onChange={e=>set('cst_icms',e.target.value)}/></label>
-        <label><span>CSOSN</span><input value={draft.csosn} onChange={e=>set('csosn',e.target.value)}/></label>
-        <label><span>CST PIS</span><input value={draft.cst_pis} onChange={e=>set('cst_pis',e.target.value)}/></label>
-        <label><span>CST COFINS</span><input value={draft.cst_cofins} onChange={e=>set('cst_cofins',e.target.value)}/></label>
+        <div className="span4 product-fiscal-heading">
+          <strong>Tributação para NFC-e / NF-e</strong>
+          <small>Preencha conforme a tributação real do produto. Para emissão fiscal, PIS e COFINS precisam de CST informado.</small>
+        </div>
+        <label><span>CST ICMS</span><input value={draft.cst_icms} onChange={e=>set('cst_icms',e.target.value)} placeholder="Ex.: 00"/></label>
+        <label><span>CSOSN</span><input value={draft.csosn} onChange={e=>set('csosn',e.target.value)} placeholder="Usado no Simples Nacional"/></label>
+        <label className="product-fiscal-required"><span>CST PIS *</span><input value={draft.cst_pis} onChange={e=>set('cst_pis',e.target.value.replace(/\D/g,'').slice(0,2))} placeholder="Informe o CST PIS" maxLength={2}/><small>Obrigatório para gerar o XML fiscal.</small></label>
+        <label className="product-fiscal-required"><span>CST COFINS *</span><input value={draft.cst_cofins} onChange={e=>set('cst_cofins',e.target.value.replace(/\D/g,'').slice(0,2))} placeholder="Informe o CST COFINS" maxLength={2}/><small>Obrigatório para gerar o XML fiscal.</small></label>
         <label><span>CST IPI</span><input value={draft.cst_ipi} onChange={e=>set('cst_ipi',e.target.value)}/></label>
         <label><span>ICMS %</span><input type="number" step="0.01" value={draft.icms_rate} onChange={e=>set('icms_rate',e.target.value)}/></label>
         <label><span>PIS %</span><input type="number" step="0.01" value={draft.pis_rate} onChange={e=>set('pis_rate',e.target.value)}/></label>
