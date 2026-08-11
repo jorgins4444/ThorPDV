@@ -1,10 +1,9 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
-import { erpLoad } from './actions';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { fiscalPrepareV2 } from './fiscal-config-actions';
 import { FiscalConfigurationWorkspace } from './fiscal-configuration-workspace';
-import { erpFiscalSend } from './fiscal-transmit-actions';
+import { erpFiscalCancel, erpFiscalDocuments, erpFiscalSend, erpFiscalXml } from './fiscal-transmit-actions';
 import { erpFiscalCertificateDelete, erpFiscalCertificateUpload } from './fiscal-certificate-actions';
 
 type Row = Record<string, unknown>;
@@ -12,6 +11,10 @@ const money = (v: unknown) => new Intl.NumberFormat('pt-BR', { style: 'currency'
 const dt = (v: unknown) => v ? new Date(String(v)).toLocaleString('pt-BR') : '—';
 const dateOnly = (v: unknown) => v ? new Date(String(v)).toLocaleDateString('pt-BR') : '—';
 const text = (v: unknown) => v == null ? '' : String(v);
+const remainingLabel = (milliseconds: number) => {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+};
 
 export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe' }: { initialDocs: Row[]; sales: Row[]; settings: Row; preselect?: 'nfe' | 'nfce' }) {
   const [docs, setDocs] = useState(initialDocs);
@@ -24,11 +27,20 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
   const [certificate, setCertificate] = useState<Row | null>((settings.certificate && typeof settings.certificate === 'object' ? settings.certificate : null) as Row | null);
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    void refresh();
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const availableSeries=useMemo(()=>((Array.isArray(liveSettings.series)?liveSettings.series:[]) as Row[]).filter(s=>s.document_type===docType&&s.active!==false),[liveSettings,docType]);
 
   async function refresh() {
-    const r = await erpLoad('fiscal_documents');
+    const r = await erpFiscalDocuments();
     if (r.ok) setDocs(r.data);
   }
 
@@ -99,6 +111,57 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
     await refresh();
   }
 
+  async function cancelNfce(id: string, number: unknown) {
+    const reason = window.prompt(`Justificativa para cancelar a NFC-e ${text(number)} (15 a 255 caracteres):`, '');
+    if (!reason) return;
+    const clean = reason.trim().replace(/\s+/g, ' ');
+    if (clean.length < 15 || clean.length > 255) {
+      setMessage('A justificativa deve ter entre 15 e 255 caracteres.');
+      return;
+    }
+    if (!window.confirm(`Confirmar o envio do evento de cancelamento da NFC-e ${text(number)} para a SEFAZ?`)) return;
+    setCancelling(id);
+    setMessage('Assinando e enviando o evento de cancelamento da NFC-e para a SEFAZ...');
+    const r = await erpFiscalCancel(id, clean);
+    setCancelling(null);
+    if (r.ok && (r.cancelled || r.idempotent)) {
+      setMessage(`NFC-e cancelada na SEFAZ${r.cancellation_protocol ? ` · protocolo ${String(r.cancellation_protocol)}` : ''}${r.cStat ? ` · cStat ${String(r.cStat)}` : ''}.`);
+    } else {
+      const labels: Record<string, string> = {
+        nfce_cancellation_window_expired: 'O prazo fiscal de 30 minutos para cancelamento desta NFC-e já encerrou.',
+        nfce_cancellation_reason_invalid: 'A justificativa deve ter entre 15 e 255 caracteres.',
+        nfce_cancellation_rejected: `A SEFAZ rejeitou o cancelamento${r.cStat ? ` (${String(r.cStat)})` : ''}: ${String(r.message ?? r.detail ?? 'verifique o retorno fiscal')}`,
+        nfce_cancellation_transmission_error: `Falha de comunicação durante o cancelamento: ${String(r.message ?? r.detail ?? 'tente novamente enquanto estiver no prazo')}`,
+      };
+      setMessage(labels[String(r.error)] ?? `Cancelamento não realizado: ${String(r.message ?? r.detail ?? r.error ?? 'erro')}`);
+    }
+    await refresh();
+  }
+
+  async function downloadXml(id: string, number: unknown) {
+    setDownloading(id);
+    const r = await erpFiscalXml(id);
+    setDownloading(null);
+    if (!r.ok || !text(r.xml)) {
+      setMessage(text(r.error === 'xml_not_available' ? 'XML autorizado ainda não está disponível.' : r.error ?? 'Não foi possível obter o XML.'));
+      return;
+    }
+    const blob = new Blob([text(r.xml)], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = text(r.filename) || `NFCe-${text(number) || id}.xml`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function openDanfe(id: string) {
+    const win = window.open(`/api/pdv/fiscal/${encodeURIComponent(id)}/danfe`, '_blank', 'noopener,noreferrer');
+    if (!win) setMessage('O navegador bloqueou a abertura do DANFE. Libere pop-ups para o Thor Gestão.');
+  }
+
   const expired = Boolean(certificate?.expired);
 
   return <div className="erp-fiscal-grid">
@@ -123,11 +186,15 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
 
     {message && <div className="erp-message erp-fiscal-message">{message}</div>}
 
-    <section className="erp-module-card erp-fiscal-docs"><div className="erp-table-scroll"><table className="erp-data-table"><thead><tr><th>Data</th><th>Tipo</th><th>Número</th><th>Série</th><th>Ambiente</th><th>Status</th><th>Chave</th><th>Transmissão</th><th>Ação</th></tr></thead><tbody>{docs.length === 0 ? <tr><td colSpan={9} className="erp-empty">Nenhum documento fiscal preparado.</td></tr> : docs.map((d, i) => {
+    <section className="erp-module-card erp-fiscal-docs"><div className="erp-table-scroll"><table className="erp-data-table"><thead><tr><th>Data</th><th>Tipo</th><th>Número</th><th>Série</th><th>Ambiente</th><th>Status</th><th>Chave</th><th>Arquivos</th><th>Ação fiscal</th></tr></thead><tbody>{docs.length === 0 ? <tr><td colSpan={9} className="erp-empty">Nenhum documento fiscal preparado.</td></tr> : docs.map((d, i) => {
       const status = String(d.status ?? '');
       const isNfce=String(d.document_type)==='nfce';
       const retryable = isNfce&&['draft', 'rejected', 'processing', 'transmission_error'].includes(status);
-      return <tr key={String(d.id ?? i)}><td>{dt(d.created_at)}</td><td>{String(d.document_type).toUpperCase()}</td><td>{String(d.number ?? '—')}</td><td>{String(d.series ?? '—')}</td><td>{String(d.environment)}</td><td><span className={`erp-pill ${['rejected', 'transmission_error'].includes(status) ? 'danger' : ''}`}>{status}</span></td><td>{String(d.access_key ?? '—')}</td><td>{isNfce?(d.provider === 'svrs_direct' ? 'SVRS direta' : String(d.provider ?? 'SVRS direta')):'Modelo 55 pendente'}</td><td>{retryable ? <button className="erp-row-action" disabled={sending === String(d.id)} onClick={() => send(String(d.id))}>{sending === String(d.id) ? 'Transmitindo...' : status === 'draft' ? 'Transmitir' : 'Tentar novamente'}</button> : isNfce?'—':'Configuração / numeração'}</td></tr>;
+      const assetReady = isNfce && ['authorized','cancelled'].includes(status);
+      const deadlineMs = d.cancel_deadline ? new Date(String(d.cancel_deadline)).getTime() : 0;
+      const remaining = deadlineMs ? deadlineMs - now : 0;
+      const canCancel = isNfce && status === 'authorized' && remaining > 0;
+      return <tr key={String(d.id ?? i)}><td>{dt(d.created_at)}</td><td>{String(d.document_type).toUpperCase()}</td><td>{String(d.number ?? '—')}</td><td>{String(d.series ?? '—')}</td><td>{String(d.environment)}</td><td><span className={`erp-pill ${['rejected', 'transmission_error'].includes(status) ? 'danger' : ''}`}>{status}</span></td><td>{String(d.access_key ?? '—')}</td><td>{assetReady ? <div className="fiscal-action-stack"><button type="button" className="erp-row-action" onClick={()=>openDanfe(String(d.id))}>DANFE</button><button type="button" className="erp-row-action" disabled={downloading===String(d.id)} onClick={()=>void downloadXml(String(d.id),d.number)}>{downloading===String(d.id)?'Baixando...':'XML'}</button></div> : '—'}</td><td>{retryable ? <button className="erp-row-action" disabled={sending === String(d.id)} onClick={() => send(String(d.id))}>{sending === String(d.id) ? 'Transmitindo...' : status === 'draft' ? 'Transmitir' : 'Tentar novamente'}</button> : canCancel ? <button className="erp-row-action fiscal-cancel-action" disabled={cancelling===String(d.id)} onClick={()=>void cancelNfce(String(d.id),d.number)}>{cancelling===String(d.id)?'Cancelando...':`Cancelar NFC-e · ${remainingLabel(remaining)}`}</button> : isNfce && status==='authorized' ? <span className="fiscal-window-ended">Prazo encerrado</span> : status==='cancelled' ? <span className="fiscal-cancelled-label">Cancelada{d.cancellation_protocol?` · ${String(d.cancellation_protocol)}`:''}</span> : isNfce?'—':'Configuração / numeração'}</td></tr>;
     })}</tbody></table></div></section>
   </div>;
 }
