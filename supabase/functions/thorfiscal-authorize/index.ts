@@ -13,6 +13,49 @@ const NFE_NS = "http://www.portalfiscal.inf.br/nfe";
 const SOAP_ACTION = `${NFE_NS}/wsdl/NFeAutorizacao4/nfeAutorizacaoLote`;
 const HOMOLOG_PRODUCT = "NOTA FISCAL EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
 
+// Public trust anchor published by ITI/ICP-Brasil and independently verified against the
+// live SVRS chain on 2026-08-11. This augments (never disables) Deno's default TLS roots.
+const ICP_BRASIL_ROOT_V10_PEM = `-----BEGIN CERTIFICATE-----
+MIIGrDCCBJSgAwIBAgIJANLVi0S/gZNCMA0GCSqGSIb3DQEBDQUAMIGYMQswCQYD
+VQQGEwJCUjETMBEGA1UECgwKSUNQLUJyYXNpbDE9MDsGA1UECww0SW5zdGl0dXRv
+IE5hY2lvbmFsIGRlIFRlY25vbG9naWEgZGEgSW5mb3JtYWNhbyAtIElUSTE1MDMG
+A1UEAwwsQXV0b3JpZGFkZSBDZXJ0aWZpY2Fkb3JhIFJhaXogQnJhc2lsZWlyYSB2
+MTAwHhcNMTkwNzAxMTkxNTU5WhcNMzIwNzAxMTIwMDU5WjCBmDELMAkGA1UEBhMC
+QlIxEzARBgNVBAoMCklDUC1CcmFzaWwxPTA7BgNVBAsMNEluc3RpdHV0byBOYWNp
+b25hbCBkZSBUZWNub2xvZ2lhIGRhIEluZm9ybWFjYW8gLSBJVEkxNTAzBgNVBAMM
+LEF1dG9yaWRhZGUgQ2VydGlmaWNhZG9yYSBSYWl6IEJyYXNpbGVpcmEgdjEwMIIC
+IjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAk3AxKl1ZtP0pNyjChqO7qNkn
++/sClZeqiV/Kd7KnnbkDbI2y3VWcUG7feCE/deIxot6GH6JXncRG794UZl+4doD0
+D0/cEwBd4DvrDSZm0RT40xhmYYOTxZDJxv+coTHdmsT5aNmSkktfjzYX4HQHh/7M
+em+kTOpT/3E4K6B7KVs9HkOT7nXx5yU1qYbVWqI0qpJM9mOTSFx8C9HiKcHvLCvt
+1ioXKPAmFuHPkayOcXP2MXeb+VRNjWKU4E+L2t5uZPKVx1M/9i1DztlLb4K8OfYg
+GaPDUSF1sxnoGk5qZHLleO6KjCpmuQepmgsBvxi2YNO7X2YUwQQx1AXNSolgtkAR
+5gt+1WzxhbFUhItQqlhqxgWHefLmiT5T/Ctz/P2v+zSO4efkkIzsi1iwD+ypZvM2
+lnIvB24RcSN6jzmCahLPX4CwjwIK6JsSoMVxIhpZHCguUP4LXqP8IWUZ6WgS/4zB
+7B9E0EICl2rM1PRy+6ulv+ZOW256e8a0pijUB+hXM1msUq9L92476FAAX8va3sP7
++Uut94+bGHmubcTLImWUPrxNT7QyrvE3FyHicfiHioeFL2oV4cXTLZrEq2wS8R4P
+KPdSzNn5Z9e2uMEGYQaSNO+OwvVycpIhOBOqrm12wJ9ZhWKtM5UOo34/o37r5ZBI
+TYXAGbhqQDB9mWXwH+0CAwEAAaOB9jCB8zBOBgNVHSAERzBFMEMGBWBMAQEAMDow
+OAYIKwYBBQUHAgEWLGh0dHA6Ly9hY3JhaXouaWNwYnJhc2lsLmdvdi5ici9EUENh
+Y3JhaXoucGRmMEAGA1UdHwQ5MDcwNaAzoDGGL2h0dHA6Ly9hY3JhaXouaWNwYnJh
+c2lsLmdvdi5ici9MQ1JhY3JhaXp2MTAuY3JsMB8GA1UdIwQYMBaAFHTzfv/8n1N6
+8Xzrqz6kptoYukVjMB0GA1UdDgQWBBR0837//J9TevF866s+pKbaGLpFYzAPBgNV
+HRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBBjANBgkqhkiG9w0BAQ0FAAOCAgEA
+eCNhBSuy/Ih/T+1VOtAJju85SrtoE3vET1qXASpmjQllDHG/ph7VFNRAkC+gha+B
+CbjoA5oJ/8wwl+Qdp1KGz6nXXFTLx3osU+kjm0srmBf9nyXHPqvFyvBeB0A7sYb7
+TmII9GKD20oCxsdkccR/oE/JuTaNnGq0GYZ2aDb5v62uLi21Y6P9UBiTxZqQ4ojW
+ET6kXNjlK238jpXv17FR8Sg3VusCvX7Q8eJkavvHHZDeWck2fSA+ycAc2JeL2Z0B
+MSxGWpH32WM9J8+6XqCJUXHiWEV0zCE8wDYiYC+047pTxQI/gB/FcU7jvylh98DJ
+kQPHd/Tp6Og3ynlDA9n9uBbxYHVRZs9vsZ/7xTFaxRe+zk8dhgKgZ/3RrcMFB570
+2t8LFbyuUE/kQVY6rZ0QJ9qMWQ7VPLRwRhiMeU3k8WDJb/tBbOXHBqldTbWyQ+mp
+MEDWhbrzE/IED82wAuO23Tb05cYk2xC7+Izef8fSc3XdJDuPSbcDpWukzyCDtSEH
+isLiGEtIbYRiPsF3czlQPsnIEVoTTCWxHCH1zYR6zScSv18Qh69qVe2J40K5jZoP
+GEOhq/oKhVJQAdvAFW5Odp7mF3Tk9nivjjsctJSxY26LFiV5GRV+07SSse4ti0aO
+jO5PLg5SWjfcOtBG2rz02EIvQAmLcb0kGBtfdj0lW/w=
+-----END CERTIFICATE-----`;
+const ICP_BRASIL_ROOT_V10_SHA256 = "6E:0B:FF:06:9A:26:99:4C:15:DE:2C:48:88:CC:54:AF:84:88:2E:54:95:B7:FB:F6:6B:E9:CC:FF:EC:74:89:F6";
+const ICP_BRASIL_ROOT_V10_VALID_TO = "2032-07-01T12:00:59Z";
+
 type Json = Record<string, any>;
 
 function json(body: unknown, status = 200) {
@@ -27,6 +70,27 @@ function digits(value: unknown) {
 }
 function str(value: unknown) {
   return String(value ?? "").trim();
+}
+
+function pemCertificates(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return [] as string[];
+  return (raw.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) ?? [])
+    .map((certificate) => `${certificate.trim()}\n`);
+}
+
+function sefazTlsTrust() {
+  const custom = pemCertificates(Deno.env.get("SEFAZ_CA_BUNDLE_PEM"));
+  return {
+    caCerts: [`${ICP_BRASIL_ROOT_V10_PEM.trim()}\n`, ...custom],
+    diagnostic: {
+      default_runtime_roots: true,
+      builtin_root: "ICP-Brasil v10",
+      builtin_root_sha256: ICP_BRASIL_ROOT_V10_SHA256,
+      builtin_root_valid_to: ICP_BRASIL_ROOT_V10_VALID_TO,
+      custom_ca_count: custom.length,
+    },
+  };
 }
 function num(value: unknown, fallback = 0) {
   const n = Number(value);
@@ -437,9 +501,13 @@ async function transmit(signedXml: string, uf: string, homologation: boolean, ce
   const url = getSefazUrl(uf, environment as any, "NFCeAutorizacao" as any);
   if (!url) throw new Error("sefaz_nfce_endpoint_not_configured");
 
-  const caBundle = str(Deno.env.get("SEFAZ_CA_BUNDLE_PEM"));
-  const clientOptions: any = { cert: certPem, key: privateKeyPem };
-  if (caBundle) clientOptions.caCerts = [caBundle];
+  const tlsTrust = sefazTlsTrust();
+  const clientOptions: any = {
+    cert: certPem,
+    key: privateKeyPem,
+    // caCerts are additional trust anchors; certificate/hostname validation remains enabled.
+    caCerts: tlsTrust.caCerts,
+  };
   const client = Deno.createHttpClient(clientOptions);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
@@ -462,7 +530,7 @@ async function transmit(signedXml: string, uf: string, homologation: boolean, ce
     }
     const body = await response.text();
     if (!response.ok) throw new Error(`sefaz_http_${response.status}:${body.slice(0, 500)}`);
-    return { body, url, httpStatus: response.status };
+    return { body, url, httpStatus: response.status, tlsTrust: tlsTrust.diagnostic };
   } finally {
     clearTimeout(timer);
     (client as any).close?.();
@@ -604,6 +672,7 @@ Deno.serve(async (req: Request) => {
             signed_xml: signedXml,
             qr_code_url: qrCodeUrl,
             sefaz_endpoint: transmitted.url,
+            tls_trust: transmitted.tlsTrust,
             raw_response: transmitted.body,
           },
           updated_at: new Date().toISOString(),
@@ -642,6 +711,7 @@ Deno.serve(async (req: Request) => {
           signed_xml: signedXml,
           qr_code_url: qrCodeUrl,
           sefaz_endpoint: transmitted.url,
+          tls_trust: transmitted.tlsTrust,
           raw_response: transmitted.body,
         },
         updated_at: new Date().toISOString(),
@@ -686,6 +756,7 @@ Deno.serve(async (req: Request) => {
           signed_xml: signedXml || null,
           qr_code_url: qrCodeUrl || null,
           retry_same_xml: !isValidation && Boolean(signedXml && accessKey),
+          tls_trust: sefazTlsTrust().diagnostic,
         },
         updated_at: new Date().toISOString(),
       })
@@ -699,7 +770,7 @@ Deno.serve(async (req: Request) => {
       "error",
       isValidation ? message : `${transmission.userMessage} Detalhe técnico: ${message}`,
       isValidation ? "local_validation" : transmission.code,
-      { retryable: !isValidation, access_key: accessKey || null },
+      { retryable: !isValidation, access_key: accessKey || null, tls_trust: sefazTlsTrust().diagnostic },
     );
 
     return json({
