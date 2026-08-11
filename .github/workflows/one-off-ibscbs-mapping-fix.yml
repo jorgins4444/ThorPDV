@@ -1,0 +1,155 @@
+name: One-off IBS CBS Mapping Fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-ibscbs-map-fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Map ERP reform fields into ThorFiscal IBS/CBS
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('supabase/functions/thorfiscal-authorize/index.ts')
+          text = path.read_text(encoding='utf-8')
+
+          old_deep = '''function deepFiscal(productProfile: Json, snapshot: Json): Json {
+            const base = productProfile && typeof productProfile === "object" ? productProfile : {};
+            const snap = snapshot && typeof snapshot === "object" ? snapshot : {};
+            return {
+              ...base,
+              ...snap,
+              icms: { ...(base.icms ?? {}), ...(snap.icms ?? {}) },
+              pis: { ...(base.pis ?? {}), ...(snap.pis ?? {}) },
+              cofins: { ...(base.cofins ?? {}), ...(snap.cofins ?? {}) },
+              ipi: { ...(base.ipi ?? {}), ...(snap.ipi ?? {}) },
+              ibsCbs: { ...(base.ibsCbs ?? base.ibscbs ?? {}), ...(snap.ibsCbs ?? snap.ibscbs ?? {}) },
+            };
+          }'''
+          new_deep = '''function deepFiscal(productProfile: Json, snapshot: Json): Json {
+            const base = productProfile && typeof productProfile === "object" ? productProfile : {};
+            const snap = snapshot && typeof snapshot === "object" ? snapshot : {};
+            const snapProfile = snap.fiscal_profile && typeof snap.fiscal_profile === "object"
+              ? snap.fiscal_profile
+              : {};
+            return {
+              ...base,
+              ...snapProfile,
+              ...snap,
+              icms: { ...(base.icms ?? {}), ...(snapProfile.icms ?? {}), ...(snap.icms ?? {}) },
+              pis: { ...(base.pis ?? {}), ...(snapProfile.pis ?? {}), ...(snap.pis ?? {}) },
+              cofins: { ...(base.cofins ?? {}), ...(snapProfile.cofins ?? {}), ...(snap.cofins ?? {}) },
+              ipi: { ...(base.ipi ?? {}), ...(snapProfile.ipi ?? {}), ...(snap.ipi ?? {}) },
+              ibsCbs: {
+                ...(base.ibsCbs ?? base.ibscbs ?? {}),
+                ...(snapProfile.ibsCbs ?? snapProfile.ibscbs ?? {}),
+                ...(snap.ibsCbs ?? snap.ibscbs ?? {}),
+              },
+            };
+          }'''
+          if old_deep not in text:
+            raise SystemExit('deepFiscal block not found')
+          text = text.replace(old_deep, new_deep, 1)
+
+          old_ibs = '''  const ibsSource = fiscal.ibsCbs ?? {};
+            let ibsCbs: Json | undefined;
+            if (Object.keys(ibsSource).length) {
+              const ibsCst = str(taxValue(ibsSource, "cst"));
+              const cClassTrib = digits(taxValue(ibsSource, "cClassTrib", "classificacao"));
+              if (!ibsCst || !cClassTrib) errors.push(`item_${index}_ibscbs_incomplete`);
+              else {
+                ibsCbs = {
+                  cst: ibsCst,
+                  cClassTrib,
+                  pIBSUF: num(taxValue(ibsSource, "pIBSUF", "ibs_uf")),
+                  pIBSMun: num(taxValue(ibsSource, "pIBSMun", "ibs_mun")),
+                  pCBS: num(taxValue(ibsSource, "pCBS", "cbs")),
+                };
+              }
+            }'''
+          new_ibs = '''  const explicitIbsSource = fiscal.ibsCbs ?? {};
+            const reformCst = str(taxValue(fiscal, "reform_cst", "rtc_cst"));
+            const reformClass = digits(taxValue(fiscal, "reform_classification", "cClassTrib", "cclass_trib"));
+            const ibsSource = Object.keys(explicitIbsSource).length
+              ? explicitIbsSource
+              : (reformCst || reformClass ? { cst: reformCst, cClassTrib: reformClass } : {});
+            let ibsCbs: Json | undefined;
+            const rtcRequired = regime === 3 && Date.now() >= Date.parse("2026-08-03T00:00:00-03:00");
+
+            if (!Object.keys(ibsSource).length) {
+              if (rtcRequired) errors.push(`item_${index}_ibscbs_required`);
+            } else {
+              const ibsCst = str(taxValue(ibsSource, "cst") ?? reformCst);
+              const cClassTrib = digits(taxValue(ibsSource, "cClassTrib", "classificacao") ?? reformClass);
+              if (!/^\\d{3}$/.test(ibsCst) || !/^\\d{6}$/.test(cClassTrib)) {
+                errors.push(`item_${index}_ibscbs_incomplete`);
+              } else if (cClassTrib.slice(0, 3) !== ibsCst) {
+                errors.push(`item_${index}_ibscbs_classification_mismatch`);
+              } else {
+                const pIBSUFRaw = taxValue(ibsSource, "pIBSUF", "ibs_uf");
+                const pIBSMunRaw = taxValue(ibsSource, "pIBSMun", "ibs_mun");
+                const pCBSRaw = taxValue(ibsSource, "pCBS", "cbs");
+                const standardIntegral2026 = new Date().getFullYear() === 2026 && ibsCst === "000";
+
+                if (!standardIntegral2026 && (pIBSUFRaw === undefined || pIBSMunRaw === undefined || pCBSRaw === undefined)) {
+                  errors.push(`item_${index}_ibscbs_rates_required`);
+                } else {
+                  ibsCbs = {
+                    cst: ibsCst,
+                    cClassTrib,
+                    // LC 214/2025 / SVRS: alíquotas de transição de 2026 para tributação integral.
+                    // Campos explícitos sempre prevalecem; o fallback só vale para CST 000 em 2026.
+                    pIBSUF: pIBSUFRaw !== undefined ? num(pIBSUFRaw) : 0.1,
+                    pIBSMun: pIBSMunRaw !== undefined ? num(pIBSMunRaw) : 0,
+                    pCBS: pCBSRaw !== undefined ? num(pCBSRaw) : 0.9,
+                  };
+                }
+              }
+            }'''
+          if old_ibs not in text:
+            raise SystemExit('IBS/CBS block not found')
+          text = text.replace(old_ibs, new_ibs, 1)
+          path.write_text(text, encoding='utf-8')
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check ThorFiscal
+        run: deno check --node-modules-dir=auto supabase/functions/thorfiscal-authorize/index.ts
+
+      - name: Validate mapping contract
+        shell: python
+        run: |
+          from pathlib import Path
+          text = Path('supabase/functions/thorfiscal-authorize/index.ts').read_text(encoding='utf-8')
+          required = [
+            'reform_cst', 'reform_classification',
+            'pIBSUF: pIBSUFRaw !== undefined ? num(pIBSUFRaw) : 0.1',
+            'pIBSMun: pIBSMunRaw !== undefined ? num(pIBSMunRaw) : 0',
+            'pCBS: pCBSRaw !== undefined ? num(pCBSRaw) : 0.9',
+            'item_${index}_ibscbs_required',
+          ]
+          missing = [x for x in required if x not in text]
+          if missing:
+            raise SystemExit(f'Missing mapping contract: {missing}')
+
+      - name: Remove one-off workflow and commit
+        run: |
+          rm .github/workflows/one-off-ibscbs-mapping-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/thorfiscal-authorize/index.ts .github/workflows/one-off-ibscbs-mapping-fix.yml
+          git commit -m "fix: map product reform fields to NFC-e IBS/CBS [skip-ibscbs-map-fix]"
+          git push origin HEAD:main
