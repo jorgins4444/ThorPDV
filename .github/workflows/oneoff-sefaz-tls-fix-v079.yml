@@ -28,7 +28,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check ThorFiscal edge function
-        run: deno check supabase/functions/thorfiscal-authorize/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/thorfiscal-authorize/index.ts
       - name: Validate ERP application
         run: |
           npm install
