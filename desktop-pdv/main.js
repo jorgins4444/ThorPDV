@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell } = require('electron');
 const { ThorAgent } = require('./agent');
+const { ThorUpdater } = require('./updater');
 const { installThorAgentV3 } = require('./agent/v3');
 const { installReturnFix } = require('./agent/v3-return');
 const { installEnrollV3 } = require('./agent/v3-enroll');
@@ -35,6 +36,7 @@ installSyncPolicy(ThorAgent);
 
 let mainWindow;
 let agent;
+let updater;
 
 function codec() {
   return {
@@ -61,6 +63,15 @@ async function createWindow() {
   agent.sync.appVersion = DESKTOP_VERSION;
   if (typeof agent.logoutOperator === 'function') agent.logoutOperator();
   await agent.start();
+  updater = new ThorUpdater({
+    agent,
+    appVersion: DESKTOP_VERSION,
+    apiBase: agent.apiBase,
+    userDataDir: app.getPath('userData'),
+    tempDir: app.getPath('temp'),
+    onProgress: (payload) => { try { mainWindow?.webContents.send('thor:update-progress', payload); } catch {} },
+    quit: () => app.quit(),
+  });
 
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -78,6 +89,8 @@ async function createWindow() {
     },
   });
   await mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  void updater.finalizePending().catch(() => {});
+  void updater.check({ silent: true }).then(() => { try { mainWindow?.webContents.send('thor:update-status', updater.updateInfo()); } catch {} }).catch(() => {});
 }
 
 async function loadPrintable(doc) {
@@ -194,7 +207,7 @@ async function printCashMovement(receipt) {
 
 function registerIpc() {
   const handle = (name, fn) => ipcMain.handle(name, async (_event, ...args) => fn(...args));
-  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: DESKTOP_VERSION, operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null }));
+  handle('thor:status', async () => ({ ...(await agent.status()), appVersion: DESKTOP_VERSION, operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null, update: updater?.updateInfo?.() || null }));
   handle('thor:enroll', (payload) => agent.enroll(payload));
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
@@ -239,6 +252,9 @@ function registerIpc() {
   handle('thor:begin-payment', (payload) => agent.beginIntegratedPayment(payload));
   handle('thor:print-sale', (saleKey, type, reprint) => printSale(saleKey, type, reprint));
   handle('thor:share-sale-whatsapp', (saleKey, type, phone) => shareSaleWhatsapp(saleKey, type, phone));
+  handle('thor:update-info', () => updater?.updateInfo?.() || { currentVersion: DESKTOP_VERSION });
+  handle('thor:check-update', () => updater.check());
+  handle('thor:install-update', () => updater.install());
   handle('thor:print-last', () => printSale(null, 'pre_sale', true));
 }
 

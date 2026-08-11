@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   controlReleaseSave,
   controlUpdateDashboard,
@@ -32,9 +32,14 @@ export default function UpdateCenter() {
   async function load() {
     const result = await controlUpdateDashboard();
     if (!result?.ok) { setMessage(result?.error || 'Não foi possível carregar o Update Center.'); return; }
+    const raw=result as Record<string,unknown>;
     setData({
-      summary: result.summary || {}, releases: result.releases || [], tenants: result.tenants || [],
-      policies: result.policies || [], devices: result.devices || [], events: result.events || [],
+      summary:(raw.summary&&typeof raw.summary==='object'?raw.summary:{}) as Row,
+      releases:Array.isArray(raw.releases)?raw.releases as Row[]:[],
+      tenants:Array.isArray(raw.tenants)?raw.tenants as Row[]:[],
+      policies:Array.isArray(raw.policies)?raw.policies as Row[]:[],
+      devices:Array.isArray(raw.devices)?raw.devices as Row[]:[],
+      events:Array.isArray(raw.events)?raw.events as Row[]:[],
     });
   }
 
@@ -44,7 +49,7 @@ export default function UpdateCenter() {
   const selectedRelease = published.find(r => text(r.id) === policy.release_id);
   const globalTarget = text(data.summary.global_target_version) || 'Nenhuma';
 
-  async function saveRelease(e: React.FormEvent) {
+  async function saveRelease(e: FormEvent) {
     e.preventDefault(); setBusy(true); setMessage('');
     try {
       const result = await controlReleaseSave(releaseForm);

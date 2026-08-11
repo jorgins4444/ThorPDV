@@ -4,7 +4,7 @@ const { Store } = require('./store');
 const { SyncEngine } = require('./sync');
 const hardware = require('./hardware');
 
-const APP_VERSION='0.2.0';
+const { version: APP_VERSION } = require('../package.json');
 
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
