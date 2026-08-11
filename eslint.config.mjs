@@ -19,5 +19,7 @@ export default defineConfig([
       '@typescript-eslint/no-wrapper-object-types': 'off',
     },
   },
-  globalIgnores(['.next/**', 'out/**', 'build/**', 'desktop-pdv/**', 'next-env.d.ts']),
+  // Supabase Edge Functions run on Deno and are validated with `deno check` in their
+  // fiscal workflows. Keep the Next.js ESLint rules scoped to the web/Node application.
+  globalIgnores(['.next/**', 'out/**', 'build/**', 'desktop-pdv/**', 'supabase/functions/**', 'next-env.d.ts']),
 ]);
