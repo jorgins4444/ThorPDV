@@ -1,0 +1,52 @@
+name: Validate Update Center v080
+
+on:
+  push:
+    branches:
+      - feat/update-center-v080
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/update-center-v080
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply integration patch
+        run: python scripts/apply_update_center_v080.py
+
+      - name: Validate Desktop JavaScript
+        run: |
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/preload.js
+          node --check desktop-pdv/updater.js
+          node --check desktop-pdv/agent/index.js
+          node --check desktop-pdv/renderer/app.js
+          node --check desktop-pdv/renderer/update-center.js
+          node -e "const p=require('./desktop-pdv/package.json');if(p.version!=='0.8.0'||!p.build.files.includes('updater.js'))process.exit(1)"
+
+      - name: Validate web project
+        run: |
+          npm install
+          npm run typecheck
+          npm run build
+          npm run lint
+
+      - name: Commit validated integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/one-off-update-center-v080.yml scripts/apply_update_center_v080.py
+          git add desktop-pdv src/app/control src/app/api/pdv/update .github/workflows/pdv-desktop.yml supabase/migrations/20260811221000_pdv_update_center_v080.sql
+          git commit -m "feat: add controlled ThorPDV updates and rollback center"
+          git push origin HEAD:feat/update-center-v080
