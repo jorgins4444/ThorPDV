@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { fiscalConfigGet } from './fiscal-config-actions';
+import { RTC_CLASS_TRIB_OPTIONS, RTC_CST_OPTIONS, RTC_TABLE_REFERENCE } from '../../../lib/fiscal/rtc-tax-table';
 
 type Row = Record<string, unknown>;
 
@@ -70,9 +71,6 @@ const ipiCst=[
   ['00','Entrada com recuperação de crédito'],['01','Entrada tributada com alíquota zero'],['02','Entrada isenta'],['03','Entrada não tributada'],['04','Entrada imune'],['05','Entrada com suspensão'],['49','Outras entradas'],
   ['50','Saída tributada'],['51','Saída tributada com alíquota zero'],['52','Saída isenta'],['53','Saída não tributada'],['54','Saída imune'],['55','Saída com suspensão'],['99','Outras saídas'],
 ];
-const reformSuggestions=[
-  ['000','Tributação integral'],['200','Alíquota reduzida'],['410','Imunidade e não incidência'],['510','Diferimento'],['515','Diferimento com redução de alíquota'],
-];
 const customerTypes=[['both','Ambos'],['consumer','Consumidor / Não contribuinte'],['contributor','Empresa / Contribuinte']];
 const exemptionReasons=[
   ['','Selecione'],['3','Uso na agropecuária'],['4','Frotista / locadora'],['5','Diplomático / consular'],['6','Utilitários e motocicletas de transporte'],
@@ -106,6 +104,23 @@ export function ProductFiscalEditor({value,onChange}:{value:FiscalDraft;onChange
     return list;
   },[cfops,value.cfop_default]);
 
+  const reformClassOptions=useMemo(()=>{
+  const list=value.reform_cst
+    ? RTC_CLASS_TRIB_OPTIONS.filter(option=>option.cst===value.reform_cst)
+    : [];
+  if(value.reform_classification&&!list.some(option=>option.code===value.reform_classification)){
+    return [{code:value.reform_classification,cst:value.reform_cst||value.reform_classification.slice(0,3),label:'Código atualmente salvo (fora do filtro vigente)'},...list];
+  }
+  return list;
+},[value.reform_cst,value.reform_classification]);
+
+const updateReformCst=(next:string)=>{
+  onChange('reform_cst',next);
+  if(value.reform_classification&&value.reform_classification.slice(0,3)!==next){
+    onChange('reform_classification','');
+  }
+};
+
   return <section className="product-tax-card">
     <div className="product-tax-title"><div><strong>Tributos e dados fiscais</strong><small>Configuração usada na emissão de NF-e/NFC-e. Selecione os códigos pela descrição para reduzir erros de digitação.</small></div><span>{text(issuer.state)||'UF não definida'}</span></div>
     <div className="product-tax-tabs">{tabs.map(([id,label])=><button type="button" key={id} className={active===id?'active':''} onClick={()=>setActive(id)}>{label}</button>)}</div>
@@ -122,12 +137,12 @@ export function ProductFiscalEditor({value,onChange}:{value:FiscalDraft;onChange
     </div>}
 
     {active==='reform'&&<div className="product-tax-panel">
-      <div className="product-tax-notice">Em 2026, NF-e e NFC-e passaram a contemplar os campos da Reforma Tributária do Consumo. Preencha CST IBS/CBS e cClassTrib conforme o enquadramento efetivo da operação.</div>
-      <div className="product-form-grid cols3">
-        <label><span>Situação Tributária (CST) do IBS e CBS</span><input list="rtc-cst-options" value={value.reform_cst} onChange={e=>onChange('reform_cst',e.target.value.replace(/\D/g,'').slice(0,3))} placeholder="Selecione ou informe"/><datalist id="rtc-cst-options">{reformSuggestions.map(([code,label])=><option value={code} key={code}>{label}</option>)}</datalist><small>Ex.: 000, 200, 410, 510, 515. Consulte a tabela vigente.</small></label>
-        <label className="span2"><span>Classificação Tributária (cClassTrib)</span><input value={value.reform_classification} onChange={e=>onChange('reform_classification',e.target.value.replace(/[^0-9A-Za-z.\-]/g,'').slice(0,20))} placeholder="Informe o código oficial cClassTrib"/><small>A classificação deve ser compatível com o CST IBS/CBS escolhido.</small></label>
-      </div>
-    </div>}
+    <div className="product-tax-notice">Selecione CST IBS/CBS e cClassTrib pela tabela oficial vigente. O cClassTrib é filtrado automaticamente pelo CST para reduzir combinações inválidas.</div>
+    <div className="product-form-grid cols3">
+      <label><span>Situação Tributária (CST) do IBS e CBS</span><select value={value.reform_cst} onChange={e=>updateReformCst(e.target.value)}><option value="">Selecione o CST...</option>{RTC_CST_OPTIONS.map(option=><option key={option.code} value={option.code}>{option.code} - {option.label}</option>)}</select><small>{RTC_TABLE_REFERENCE.totalCst} CSTs • {RTC_TABLE_REFERENCE.informe} • publicação {RTC_TABLE_REFERENCE.publishedAtLabel}.</small></label>
+      <label className="span2"><span>Classificação Tributária (cClassTrib)</span><select value={value.reform_classification} disabled={!value.reform_cst} onChange={e=>onChange('reform_classification',e.target.value)}><option value="">{value.reform_cst?'Selecione o cClassTrib...':'Selecione primeiro o CST'}</option>{reformClassOptions.map(option=><option key={option.code} value={option.code}>{option.code} - {option.label}</option>)}</select><small>{RTC_TABLE_REFERENCE.totalClassifications} classificações no catálogo vigente. Os 3 primeiros dígitos do cClassTrib devem coincidir com o CST.</small></label>
+    </div>
+  </div>}
 
     {active==='icms'&&<div className="product-tax-panel">
       <div className="product-tax-rule-head"><strong>Regra de ICMS do produto</strong><small>Defina o cenário padrão. A combinação UF + tipo de cliente ajuda a documentar o enquadramento utilizado.</small></div>
