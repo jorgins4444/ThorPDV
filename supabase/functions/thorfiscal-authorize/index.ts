@@ -260,7 +260,6 @@ function paymentCode(method: unknown) {
     boleto: "15",
     bank_slip: "15",
     bank_deposit: "16", deposito: "16",
-    pix: "17",
     transfer: "18", transferencia: "18",
     loyalty: "19", fidelidade: "19",
     cashback: "19",
@@ -275,16 +274,36 @@ function buildPayments(payments: Json[], saleTotal: number) {
   if (!valid.length) throw new Error("sale_without_payment");
 
   const formas = valid.map((p) => {
-    const code = paymentCode(p.method);
     const metadata = p.metadata ?? {};
+    const method = str(p.method).toLowerCase();
+    const pixMode = str(metadata.pix_type ?? metadata.pixType ?? metadata.mode).toLowerCase();
+    const pixAuthorization = str(
+      metadata.end_to_end_id ?? metadata.endToEndId ?? metadata.e2eid ??
+      metadata.autorizacao ?? metadata.cAut ?? p.txid,
+    );
+    const pixDynamic = method === "pix" && (
+      pixMode === "dynamic" || pixMode === "dinamico" ||
+      metadata.integrated === true || Boolean(pixAuthorization)
+    );
+
+    // IT 2024.002: 17 = PIX dinâmico; 20 = PIX estático.
+    // PIX manual/não integrado do ThorPDV deve sair como 20, evitando RV 391.
+    const code = method === "pix" ? (pixDynamic ? "17" : "20") : paymentCode(method);
     const out: Json = { formaPagamento: code, valor: num(p.amount) };
-    if (code === "03" || code === "04") {
-      out.tipoIntegracao = num(metadata.tipo_integracao ?? metadata.tpIntegra, 1) === 2 ? 2 : 1;
+
+    if (code === "03" || code === "04" || code === "17") {
+      const explicitIntegration = metadata.tipo_integracao ?? metadata.tpIntegra;
+      out.tipoIntegracao = explicitIntegration !== undefined
+        ? (num(explicitIntegration, 1) === 2 ? 2 : 1)
+        : (metadata.integrated === false ? 2 : 1);
+
       const cred = digits(metadata.cnpj_credenciadora ?? metadata.cnpjCredenciadora);
       if (cred.length === 14) out.cnpjCredenciadora = cred;
       const bandeira = str(metadata.bandeira ?? metadata.tBand);
       if (bandeira) out.bandeira = bandeira;
-      const auth = str(metadata.autorizacao ?? metadata.cAut);
+      const auth = code === "17"
+        ? pixAuthorization
+        : str(metadata.autorizacao ?? metadata.cAut ?? p.external_id);
       if (auth) out.autorizacao = auth;
     }
     return out;
