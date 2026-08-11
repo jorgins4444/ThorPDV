@@ -1,0 +1,57 @@
+name: One-off v077 alignment fix
+on:
+  push:
+    branches: [feat/matriz-fiscal-fast-v077]
+    paths: ['.github/workflows/one-off-v077-align-fix.yml']
+permissions:
+  contents: write
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/matriz-fiscal-fast-v077
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply original alignment patch
+        shell: python
+        run: |
+          from pathlib import Path
+          import textwrap
+          workflow=Path('.github/workflows/one-off-v077-align.yml').read_text()
+          anchor='      - name: Align UI and optimize NFC-e flow\n'
+          start=workflow.index(anchor)
+          run=workflow.index('        run: |\n',start)+len('        run: |\n')
+          end=workflow.index('\n      - name: Validate Desktop',run)
+          script=textwrap.dedent(workflow[run:end])
+          exec(compile(script,'v077-alignment.py','exec'))
+
+          p=Path('src/app/dashboard/[...slug]/branch-config-workspace.tsx')
+          s=p.read_text()
+          narrow="const [active,setActive]=useState<(typeof tabs)[number][0]>('terminals');"
+          wide="const [active,setActive]=useState<'general'|'fiscal'|(typeof tabs)[number][0]>('terminals');"
+          if narrow not in s: raise SystemExit('active tab marker not found')
+          p.write_text(s.replace(narrow,wide,1))
+      - name: Validate Desktop
+        run: |
+          node --check desktop-pdv/renderer/app.js
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/agent/index.js
+          node -e "const p=require('./desktop-pdv/package.json');if(p.version!=='0.7.7')process.exit(1)"
+      - name: Validate Thor Gestão
+        run: |
+          npm install
+          npm run typecheck
+          npm run build
+          npm run lint
+      - name: Commit aligned application
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop-pdv src/app/dashboard/'[...slug]'
+          git commit -m "feat: align Matriz navigation and speed NFC-e UX"
+          git push origin HEAD:feat/matriz-fiscal-fast-v077
