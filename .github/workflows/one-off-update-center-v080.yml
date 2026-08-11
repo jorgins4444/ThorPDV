@@ -46,7 +46,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -- .github/workflows/pdv-desktop.yml
           git rm -f .github/workflows/one-off-update-center-v080.yml scripts/apply_update_center_v080.py
-          git add desktop-pdv src/app/control src/app/api/pdv/update .github/workflows/pdv-desktop.yml supabase/migrations/20260811221000_pdv_update_center_v080.sql
+          git add desktop-pdv src/app/control src/app/api/pdv/update supabase/migrations/20260811221000_pdv_update_center_v080.sql
           git commit -m "feat: add controlled ThorPDV updates and rollback center"
           git push origin HEAD:feat/update-center-v080
