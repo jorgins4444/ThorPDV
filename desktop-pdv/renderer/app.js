@@ -63,34 +63,29 @@ function fiscalDiagnosticHtml(fiscal){
 }
 function fiscalProgressSteps(fiscal,phase){
   const status=String(fiscal?.status||'requested');
-  const hasKey=Boolean(fiscal?.access_key);
-  const hasResponse=Boolean(fiscalCode(fiscal))||['authorized','rejected'].includes(status);
-  const failed=status==='transmission_error';
-  const steps=[
-    ['Preparando solicitação',true,phase==='queueing'],
-    ['Gerando e assinando XML',hasKey,phase==='building'],
-    ['Enviando à SEFAZ',hasResponse||failed||status==='processing',phase==='sending'||status==='processing'],
-    ['Recebendo retorno',hasResponse,phase==='waiting'&&!failed],
-    ['Resultado fiscal',fiscalTerminalStatuses.has(status),false],
-  ];
-  return `<div class="fiscal-progress-steps">${steps.map(([label,done,active])=>`<div class="fiscal-progress-step ${done?'done':''} ${active&&!done?'active':''}"><i>${done?'✓':''}</i><span>${label}</span></div>`).join('')}</div>`;
+  const phaseIndex={queueing:0,building:1,sending:2,waiting:3,done:3,printing:4,printed:5}[phase]??0;
+  const authorized=status==='authorized',rejected=status==='rejected',failed=status==='transmission_error';
+  const steps=[['Preparando NFC-e',0],['Assinando XML',1],['Enviando à SEFAZ',2],['Autorização',3],['Impressão',4]];
+  return `<div class="fiscal-progress-steps smooth">${steps.map(([label,index])=>{const done=phase==='printed'||index<phaseIndex||(index===3&&authorized)||(index===2&&(authorized||rejected||failed));const active=!done&&index===Math.min(phaseIndex,4)&&!(rejected||failed);const error=(rejected||failed)&&index===3;return `<div class="fiscal-progress-step ${done?'done':''} ${active?'active':''} ${error?'error':''}"><i>${done?'✓':error?'!':''}</i><span>${label}</span></div>`}).join('')}</div>`;
 }
 function paintFiscalProgress(m,sale,phase='waiting'){
   if(!m?.isConnected)return;
-  const fiscal=sale?.fiscal||{status:'requested'};
-  const status=String(fiscal.status||'requested');
-  const title=status==='authorized'?'NFC-e autorizada':status==='rejected'?'NFC-e rejeitada':status==='transmission_error'?'Falha no envio da NFC-e':'Transmitindo NFC-e';
+  if(!m.dataset.fiscalStartedAt)m.dataset.fiscalStartedAt=String(Date.now());
+  const elapsed=Math.max(0,Date.now()-Number(m.dataset.fiscalStartedAt||Date.now()));
+  const fiscal=sale?.fiscal||{status:'requested'},status=String(fiscal.status||'requested');
+  const isError=status==='rejected'||status==='transmission_error';
+  const pctMap={queueing:9,building:28,sending:55,waiting:78,done:88,printing:95,printed:100};const pct=isError?82:(pctMap[phase]??15);
+  let title='Preparando NFC-e',subtitle='Organizando os dados fiscais da venda.';
+  if(phase==='building'){title='Gerando e assinando XML';subtitle='Aplicando certificado A1 e chave de acesso.';}
+  if(phase==='sending'){title='Enviando para a SEFAZ';subtitle='Conexão segura com o autorizador fiscal.';}
+  if(phase==='waiting'){title='Aguardando autorização';subtitle='A SEFAZ está validando a NFC-e.';}
+  if(status==='authorized'){title=phase==='printing'?'NFC-e autorizada — imprimindo':phase==='printed'?'NFC-e autorizada e impressa':'NFC-e autorizada';subtitle=phase==='printing'?'Gerando o DANFE e enviando para a impressora.':phase==='printed'?'Documento fiscal concluído com sucesso.':'Autorização concluída.';}
+  if(status==='rejected'){title='NFC-e rejeitada';subtitle=fiscalReason(fiscal)||'A SEFAZ rejeitou o documento.';}
+  if(status==='transmission_error'){title='Falha no envio da NFC-e';subtitle=fiscalReason(fiscal)||'Não foi possível concluir a comunicação fiscal.';}
+  const stopped=isError||phase==='printed';const details=isError?`<details class="fiscal-progress-details"><summary>Ver detalhes da transmissão</summary>${fiscalTimelineHtml(fiscal)}</details>`:'';
   const body=m.querySelector('#fiscalProgressBody');if(!body)return;
-  body.innerHTML=`<div class="fiscal-progress-head"><div class="fiscal-spinner ${fiscalTerminalStatuses.has(status)?'stopped':''}"></div><div><small>THORFISCAL / SEFAZ</small><h3>${esc(title)}</h3><p>${status==='processing'?'Aguarde o retorno do autorizador. Não feche o PDV.':esc(fiscalReason(fiscal)||'Acompanhando a solicitação fiscal em tempo real.')}</p></div></div>${fiscalProgressSteps(fiscal,phase)}${fiscalDiagnosticHtml(fiscal)}<div class="fiscal-progress-meta"><span>Chave: <b>${esc(fiscal.access_key||'aguardando geração')}</b></span><span>Tentativas: <b>${Number(fiscal.attempt_count||0)}</b></span>${fiscalCode(fiscal)?`<span>cStat: <b>${esc(fiscalCode(fiscal))}</b></span>`:''}</div><h4>Eventos da transmissão</h4>${fiscalTimelineHtml(fiscal)}<div class="actions" id="fiscalProgressActions"></div>`;
-  const actions=body.querySelector('#fiscalProgressActions');
-  if(status==='transmission_error'||status==='rejected'){
-    actions.innerHTML='<button class="secondary" id="fiscalClose">Fechar</button><button class="primary" id="fiscalRetry">Tentar novamente</button>';
-    actions.querySelector('#fiscalClose').onclick=()=>m.remove();
-    actions.querySelector('#fiscalRetry').onclick=()=>{m.remove();requestNfceAndMaybePrint(saleKey(sale));};
-  }else if(status==='authorized'){
-    actions.innerHTML='<button class="primary" id="fiscalClose">Fechar</button>';
-    actions.querySelector('#fiscalClose').onclick=()=>m.remove();
-  }
+  body.innerHTML=`<div class="fiscal-progress-head smooth"><div class="fiscal-spinner ${stopped?'stopped':''} ${phase==='printed'?'success':''}">${phase==='printed'?'✓':''}</div><div><small>THORFISCAL / SEFAZ</small><h3>${esc(title)}</h3><p>${esc(subtitle)}</p></div><span class="fiscal-elapsed">${(elapsed/1000).toFixed(1)}s</span></div><div class="fiscal-flight"><div class="fiscal-flight-fill" style="width:${pct}%"></div><div class="fiscal-flight-glow" style="left:${Math.max(pct-2,0)}%"></div></div>${fiscalProgressSteps(fiscal,phase)}${isError?fiscalDiagnosticHtml(fiscal):''}<div class="fiscal-progress-meta"><span>Chave: <b>${esc(fiscal.access_key||'gerando...')}</b></span>${fiscal.protocol?`<span>Protocolo: <b>${esc(fiscal.protocol)}</b></span>`:''}${fiscalCode(fiscal)?`<span>cStat: <b>${esc(fiscalCode(fiscal))}</b></span>`:''}</div>${details}<div class="actions" id="fiscalProgressActions"></div>`;
+  const actions=body.querySelector('#fiscalProgressActions');if(isError){actions.innerHTML='<button class="secondary" id="fiscalClose">Fechar</button><button class="primary" id="fiscalRetry">Tentar novamente</button>';actions.querySelector('#fiscalClose').onclick=()=>m.remove();actions.querySelector('#fiscalRetry').onclick=()=>{m.remove();requestNfceAndMaybePrint(saleKey(sale));};}else if(phase==='printed'){actions.innerHTML='<button class="primary" id="fiscalClose">Concluir</button>';actions.querySelector('#fiscalClose').onclick=()=>m.remove();}
 }
 
 async function boot(){
@@ -199,48 +194,32 @@ function postSaleModal(key){
 }
 
 async function requestNfceAndMaybePrint(key){
-  const m=modal('<div id="fiscalProgressBody"></div>','wide');
-  paintFiscalProgress(m,{fiscal:{status:'requested',events:[]}},'queueing');
+  const m=modal('<div id="fiscalProgressBody"></div>','wide');m.dataset.fiscalStartedAt=String(Date.now());paintFiscalProgress(m,{fiscal:{status:'requested',events:[]}},'queueing');
   try{
     const requested=await window.thor.requestNfce({saleKey:key});
-    if(requested.alreadyAuthorized){
-      const done=await window.thor.fiscalSale(key);paintFiscalProgress(m,done,'done');await safePrint(key,'nfce');return;
-    }
-
-    paintFiscalProgress(m,{fiscal:{status:'processing',events:[]}},'sending');
-    await window.thor.sync().catch(()=>{});
-    const deadline=Date.now()+45000;
-    let sale=null;
+    if(requested.alreadyAuthorized){const done=await window.thor.fiscalSale(key);paintFiscalProgress(m,done,'printing');const printed=await safePrint(key,'nfce');paintFiscalProgress(m,done,printed?'printed':'done');if(printed)setTimeout(()=>{if(m.isConnected)m.remove()},1100);return;}
+    const started=Date.now(),deadline=started+45000;let sale=null,recoveryTriggered=false;
     while(Date.now()<deadline){
-      await refreshFiscalSales();
-      sale=await window.thor.fiscalSale(key);
-      paintFiscalProgress(m,sale,'waiting');
-      const status=String(sale?.fiscal?.status||'');
-      if(fiscalTerminalStatuses.has(status))break;
-      await wait(1500);
-      await window.thor.sync().catch(()=>{});
+      const elapsed=Date.now()-started;const visualPhase=elapsed<420?'building':elapsed<1200?'sending':'waiting';
+      try{sale=await window.thor.fiscalSale(key)}catch{}
+      paintFiscalProgress(m,sale||{fiscal:{status:'processing',events:[]}},visualPhase);
+      const status=String(sale?.fiscal?.status||'');if(fiscalTerminalStatuses.has(status))break;
+      // requestNfce já dispara o sync em segundo plano. Um segundo sync aqui duplicava push/pull/heartbeat.
+      if(!recoveryTriggered&&elapsed>6000){recoveryTriggered=true;window.thor.sync().catch(()=>{});}
+      await wait(140);
     }
-
-    if(!sale){sale=await window.thor.fiscalSale(key);paintFiscalProgress(m,sale,'waiting');}
+    if(!sale){try{sale=await window.thor.fiscalSale(key)}catch{}}
     const status=String(sale?.fiscal?.status||'');
-    if(status==='authorized'){
-      await safePrint(key,'nfce');
-      return;
-    }
-    if(status==='rejected'||status==='transmission_error')return;
-
-    const actions=m.querySelector('#fiscalProgressActions');
-    if(actions){actions.innerHTML='<button class="secondary" id="fiscalClose">Fechar</button><button class="primary" id="fiscalRefreshNow">Atualizar agora</button>';actions.querySelector('#fiscalClose').onclick=()=>m.remove();actions.querySelector('#fiscalRefreshNow').onclick=async()=>{await window.thor.sync().catch(()=>{});await refreshFiscalSales();const current=await window.thor.fiscalSale(key);paintFiscalProgress(m,current,'waiting');};}
-    const diag=m.querySelector('.fiscal-diagnostic');if(diag)diag.outerHTML='<div class="fiscal-diagnostic warning"><b>Tempo de acompanhamento excedido</b><span>A solicitação não ficará escondida: use “Atualizar agora” para consultar o estado sincronizado.</span></div>';
-  }catch(e){
-    const body=m.querySelector('#fiscalProgressBody');if(body)body.innerHTML=`<h3>Falha ao iniciar NFC-e</h3><div class="fiscal-diagnostic error"><b>Não foi possível iniciar a transmissão</b><span>${esc(friendlyError(e.message))}</span></div><div class="actions"><button class="primary" id="fiscalClose">Fechar</button></div>`;
-    m.querySelector('#fiscalClose')?.addEventListener('click',()=>m.remove());
-  }
+    if(status==='authorized'){paintFiscalProgress(m,sale,'printing');void refreshFiscalSales();const printed=await safePrint(key,'nfce');paintFiscalProgress(m,sale,printed?'printed':'done');if(printed)setTimeout(()=>{if(m.isConnected)m.remove()},1100);return;}
+    if(status==='rejected'||status==='transmission_error'){void refreshFiscalSales();paintFiscalProgress(m,sale,'waiting');return;}
+    const actions=m.querySelector('#fiscalProgressActions');if(actions){actions.innerHTML='<button class="secondary" id="fiscalClose">Fechar</button><button class="primary" id="fiscalRefreshNow">Atualizar agora</button>';actions.querySelector('#fiscalClose').onclick=()=>m.remove();actions.querySelector('#fiscalRefreshNow').onclick=async()=>{window.thor.sync().catch(()=>{});await wait(250);const current=await window.thor.fiscalSale(key);paintFiscalProgress(m,current,'waiting');};}
+    const body=m.querySelector('#fiscalProgressBody');if(body&&!body.querySelector('.fiscal-timeout-note'))body.insertAdjacentHTML('beforeend','<div class="fiscal-diagnostic warning fiscal-timeout-note"><b>A autorização continua sendo acompanhada</b><span>Use “Atualizar agora” para consultar o retorno sem gerar outra numeração.</span></div>');
+  }catch(e){const body=m.querySelector('#fiscalProgressBody');if(body)body.innerHTML=`<h3>Falha ao iniciar NFC-e</h3><div class="fiscal-diagnostic error"><b>Não foi possível iniciar a transmissão</b><span>${esc(friendlyError(e.message))}</span></div><div class="actions"><button class="primary" id="fiscalClose">Fechar</button></div>`;m.querySelector('#fiscalClose')?.addEventListener('click',()=>m.remove());}
 }
 
 async function safePrint(key,type){
-  try{const r=await window.thor.printSale(key,type);if(r?.cancelled)return;showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');}
-  catch(e){if(e.message==='printer_not_configured'){infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');}else infoModal('Impressão',friendlyError(e.message));}
+  try{const r=await window.thor.printSale(key,type);if(r?.cancelled)return false;showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
+  catch(e){if(e.message==='printer_not_configured')infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');else infoModal('Impressão',friendlyError(e.message));return false;}
 }
 
 function renderFiscalWorkspace(){

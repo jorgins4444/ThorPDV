@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 import { fiscalCfopSave, fiscalConfigGet, fiscalPosSeriesSave, fiscalSeriesSave, fiscalSettingsSave } from './fiscal-config-actions';
 
@@ -20,6 +21,7 @@ const err=(v:unknown)=>errorLabels[String(v??'')]||String(v??'Não foi possível
 
 export function FiscalConfigurationWorkspace({initialSettings,onConfigChange}:Props){
   const [settings,setSettings]=useState<Row>(initialSettings);
+  const issuer=(settings.issuer&&typeof settings.issuer==='object'?settings.issuer:{}) as Row;
   const [message,setMessage]=useState('');
   const [busy,setBusy]=useState('');
   const [environment,setEnvironment]=useState(txt(initialSettings.environment)||'homologation');
@@ -68,6 +70,10 @@ export function FiscalConfigurationWorkspace({initialSettings,onConfigChange}:Pr
   async function saveCfop(e:FormEvent){e.preventDefault();setBusy('cfop');const r=await fiscalCfopSave({id:cfopEdit?.id??null,code:cfopCode,name:cfopName,active:cfopActive});setBusy('');if(r.ok){resetCfop();await refresh('CFOP salvo.')}else setMessage(err(r.error));}
 
   return <div className="fiscal-config-stack">
+    <section className="erp-module-card fiscal-config-card fiscal-matrix-source">
+      <div className="fiscal-section-head"><div><h2>Emitente fiscal · Matriz</h2><p>CNPJ, Inscrição Estadual, CRT e endereço são carregados do cadastro mestre da Matriz e usados pelo ThorFiscal na NFC-e.</p></div><Link className="erp-ghost" href="/dashboard/administrativo/empresas">Editar Matriz</Link></div>
+      <div className="fiscal-matrix-grid"><span><small>CNPJ</small><b>{txt(issuer.cnpj)||'Não informado'}</b></span><span><small>Inscrição Estadual</small><b>{txt(issuer.state_registration)||'Não informada'}</b></span><span><small>CRT</small><b>{txt(issuer.tax_regime)||'Não definido'}</b></span><span><small>Município / UF</small><b>{[txt(issuer.city),txt(issuer.state)].filter(Boolean).join(' / ')||'Não informado'}</b></span></div>
+    </section>
     <section className="erp-module-card fiscal-config-card">
       <div className="fiscal-section-head"><div><h2>Configurações da NFC-e</h2><p>Defina as informações fiscais fornecidas pela SEFAZ e o ambiente utilizado na emissão.</p></div><span className="fiscal-config-tag">NFC-e</span></div>
       <form className="fiscal-config-form" onSubmit={saveGeneral}>

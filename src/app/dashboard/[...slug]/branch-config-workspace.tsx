@@ -15,8 +15,8 @@ const obj=(v:unknown):Row=>v&&typeof v==='object'&&!Array.isArray(v)?v as Row:{}
 const rows=(v:unknown):Row[]=>Array.isArray(v)?v as Row[]:[];
 
 const tabs=[
-  ['general','Geral'],['terminals','Meus Terminais'],['fiscal','Fiscal'],['parameters','Parâmetros'],
-  ['tax','Grupo de tributos'],['delivery','Taxa de entrega'],['integrations','Integrações'],['history','Histórico'],
+  ['terminals','Meus Terminais'],['parameters','Parâmetros'],['tax','Grupo de tributos'],
+  ['delivery','Taxa de entrega'],['integrations','Integrações'],['history','Histórico'],
 ] as const;
 
 const providers={
@@ -34,7 +34,7 @@ async function fileData(file:File){if(file.size>260_000)throw new Error('Imagem 
 
 export function BranchConfigWorkspace({branches}:{branches:Row[]}){
   const [branchId,setBranchId]=useState(text(branches[0]?.id));
-  const [active,setActive]=useState<(typeof tabs)[number][0]>('general');
+  const [active,setActive]=useState<'general'|'fiscal'|(typeof tabs)[number][0]>('terminals');
   const [data,setData]=useState<ConfigResult>({});
   const [loading,setLoading]=useState(false);const [message,setMessage]=useState('');
   async function load(){if(!branchId)return;setLoading(true);const r=await branchConfigurationGet(branchId) as ConfigResult;setLoading(false);setData(r);if(!r.ok)setMessage(text(r.error||'Falha ao carregar filial.'));}
@@ -47,7 +47,7 @@ export function BranchConfigWorkspace({branches}:{branches:Row[]}){
   function formPayload(e:FormEvent<HTMLFormElement>){const fd=new FormData(e.currentTarget);const p:Row={};for(const [k,v] of fd.entries())p[k]=v;return p;}
 
   return <section className="branch-config-shell erp-module-card">
-    <div className="branch-config-top"><div><span>CONFIGURAÇÃO DA FILIAL</span><h2>{text(branch.name)||'Filial'}</h2><p>Dados do estabelecimento, terminais, parâmetros do PDV e integrações. Certificado, CSC, ambiente, séries e transmissão ficam centralizados no módulo Fiscal.</p></div><label>Filial<select value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={text(b.id)} value={text(b.id)}>{text(b.name)}</option>)}</select></label></div>
+    <div className="branch-config-top"><div><span>CONFIGURAÇÃO OPERACIONAL</span><h2>{branches.length===1?'Matriz':text(branch.name)||'Unidade'}</h2><p>Terminais, parâmetros do PDV e integrações. CNPJ, IE, CRT, endereço e demais dados do emitente são alterados exclusivamente em Administrativo → Matriz; certificado, ambiente, séries, CSC e DANFE ficam em Fiscal.</p></div>{branches.length>1?<label>Unidade<select value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={text(b.id)} value={text(b.id)}>{b.is_headquarters?'Matriz':text(b.name)}</option>)}</select></label>:<span className="branch-master-badge">Matriz</span>}</div>
     <div className="branch-tabs">{tabs.map(([id,label])=><button key={id} className={active===id?'active':''} onClick={()=>setActive(id)}>{label}</button>)}</div>
     {message&&<div className="branch-message">{message}</div>}{loading?<div className="branch-loading">Carregando configuração...</div>:null}
 
