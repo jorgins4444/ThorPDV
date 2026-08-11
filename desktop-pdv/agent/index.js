@@ -107,7 +107,7 @@ class ThorAgent {
     if(!sale){ const r=this.store.lastReceipt(); if(r){ sale={id:r.server_sale_id||null,client_event_id:r.event_id,number:r.server_number||null,status:'completed',total:r.total,items:r.payload.items||[],payments:r.payload.payments||[],completed_at:r.payload.createdAt||r.created_at,created_at:r.created_at,context:r.payload.context||{},fiscal:r.payload.fiscal||null}; } }
     if(!sale) throw new Error('receipt_not_found');
     if(type==='nfce'){
-      if(sale.fiscal?.status!=='authorized') throw new Error('nfce_not_authorized');
+      if(!['authorized','cancelled'].includes(String(sale.fiscal?.status||''))) throw new Error('nfce_not_authorized');
       if(!sale.fiscal?.pdf_path) throw new Error('nfce_pdf_unavailable');
       return {kind:'remote_pdf',url:String(sale.fiscal.pdf_path),title:`NFC-e ${sale.fiscal.number||sale.number||''}`,filename:`NFCe-${sale.fiscal.number||sale.number||Date.now()}.pdf`,sale};
     }

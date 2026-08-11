@@ -83,8 +83,13 @@ async function createWindow() {
 async function loadPrintable(doc) {
   const win = new BrowserWindow({ show: false, width: 900, height: 1200, webPreferences: { sandbox: true } });
   if (doc.kind === 'remote_pdf') {
-    if (!/^https?:\/\//i.test(doc.url || '')) { win.destroy(); throw new Error('nfce_pdf_url_unavailable'); }
-    await win.loadURL(doc.url);
+    const rawUrl = String(doc.url || '').trim();
+    let targetUrl = '';
+    try { targetUrl = new URL(rawUrl, `${String(agent.apiBase || '').replace(/\/+$/, '')}/`).toString(); }
+    catch { win.destroy(); throw new Error('nfce_pdf_url_unavailable'); }
+    if (!/^https?:\/\//i.test(targetUrl)) { win.destroy(); throw new Error('nfce_pdf_url_unavailable'); }
+    const token = agent.deviceToken();
+    await win.loadURL(targetUrl, token ? { extraHeaders: `Authorization: Bearer ${token}\n` } : undefined);
   } else {
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(doc.html || `<pre>${doc.text || ''}</pre>`)}`);
   }
