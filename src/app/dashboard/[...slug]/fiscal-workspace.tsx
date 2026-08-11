@@ -86,8 +86,10 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
     setErrors(list);
     if (r.ok && (r.authorized || r.already_authorized)) {
       setMessage(`NFC-e autorizada${r.protocol ? ` · protocolo ${String(r.protocol)}` : ''}${r.access_key ? ` · chave ${String(r.access_key)}` : ''}.`);
-    } else if (r.status === 'processing' && r.retryable) {
-      setMessage('A transmissão ficou sem confirmação conclusiva. O XML e a chave foram preservados; use “Tentar novamente” sem duplicar a numeração.');
+    } else if (['processing', 'transmission_error'].includes(String(r.status)) && r.retryable) {
+      setMessage(r.status === 'transmission_error'
+        ? `Falha de comunicação com a SEFAZ${r.error_code ? ` (${String(r.error_code)})` : ''}. O XML assinado e a chave foram preservados; use “Tentar novamente” sem gerar outra numeração.`
+        : 'A transmissão ficou sem confirmação conclusiva. O XML e a chave foram preservados; use “Tentar novamente” sem duplicar a numeração.');
     } else {
       const labels: Record<string, string> = {
         certificate_not_configured: 'Anexe o certificado digital A1 antes de transmitir.',certificate_expired: 'O certificado digital configurado está expirado.',company_fiscal_data_incomplete: 'Complete CNPJ, Inscrição Estadual e regime tributário da empresa.',branch_fiscal_address_incomplete: 'Complete o endereço fiscal da filial e o código IBGE do município.',local_validation: 'Há dados tributários obrigatórios ausentes nos produtos. Revise NCM, CFOP, CSOSN/CST, PIS e COFINS.',sefaz_rejection: `SEFAZ rejeitou a NFC-e${r.cStat ? ` (${String(r.cStat)})` : ''}: ${String(r.message ?? r.detail ?? 'verifique os dados fiscais')}`,
@@ -124,8 +126,8 @@ export function FiscalWorkspace({ initialDocs, sales, settings, preselect = 'nfe
     <section className="erp-module-card erp-fiscal-docs"><div className="erp-table-scroll"><table className="erp-data-table"><thead><tr><th>Data</th><th>Tipo</th><th>Número</th><th>Série</th><th>Ambiente</th><th>Status</th><th>Chave</th><th>Transmissão</th><th>Ação</th></tr></thead><tbody>{docs.length === 0 ? <tr><td colSpan={9} className="erp-empty">Nenhum documento fiscal preparado.</td></tr> : docs.map((d, i) => {
       const status = String(d.status ?? '');
       const isNfce=String(d.document_type)==='nfce';
-      const retryable = isNfce&&['draft', 'rejected', 'processing'].includes(status);
-      return <tr key={String(d.id ?? i)}><td>{dt(d.created_at)}</td><td>{String(d.document_type).toUpperCase()}</td><td>{String(d.number ?? '—')}</td><td>{String(d.series ?? '—')}</td><td>{String(d.environment)}</td><td><span className={`erp-pill ${status === 'rejected' ? 'danger' : ''}`}>{status}</span></td><td>{String(d.access_key ?? '—')}</td><td>{isNfce?(d.provider === 'svrs_direct' ? 'SVRS direta' : String(d.provider ?? 'SVRS direta')):'Modelo 55 pendente'}</td><td>{retryable ? <button className="erp-row-action" disabled={sending === String(d.id)} onClick={() => send(String(d.id))}>{sending === String(d.id) ? 'Transmitindo...' : status === 'draft' ? 'Transmitir' : 'Tentar novamente'}</button> : isNfce?'—':'Configuração / numeração'}</td></tr>;
+      const retryable = isNfce&&['draft', 'rejected', 'processing', 'transmission_error'].includes(status);
+      return <tr key={String(d.id ?? i)}><td>{dt(d.created_at)}</td><td>{String(d.document_type).toUpperCase()}</td><td>{String(d.number ?? '—')}</td><td>{String(d.series ?? '—')}</td><td>{String(d.environment)}</td><td><span className={`erp-pill ${['rejected', 'transmission_error'].includes(status) ? 'danger' : ''}`}>{status}</span></td><td>{String(d.access_key ?? '—')}</td><td>{isNfce?(d.provider === 'svrs_direct' ? 'SVRS direta' : String(d.provider ?? 'SVRS direta')):'Modelo 55 pendente'}</td><td>{retryable ? <button className="erp-row-action" disabled={sending === String(d.id)} onClick={() => send(String(d.id))}>{sending === String(d.id) ? 'Transmitindo...' : status === 'draft' ? 'Transmitir' : 'Tentar novamente'}</button> : isNfce?'—':'Configuração / numeração'}</td></tr>;
     })}</tbody></table></div></section>
   </div>;
 }
