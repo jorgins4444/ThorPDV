@@ -220,7 +220,11 @@ function buildProduct(item: Json, index: number, regime: number, homologation: b
     ? explicitIbsSource
     : (reformCst || reformClass ? { cst: reformCst, cClassTrib: reformClass } : {});
   let ibsCbs: Json | undefined;
-  const rtcRequired = regime === 3 && Date.now() >= Date.parse("2026-08-03T00:00:00-03:00");
+  // Ato Tecnico Conjunto CGIBS/RFB nº 1, de 31/07/2026: as regras de
+  // validacao que rejeitavam DF-e pela simples ausencia de IBS/CBS foram
+  // suspensas. Mantemos apenas uma chave operacional para futura reativacao
+  // sem novo deploy quando houver novo ato/cronograma oficial.
+  const rtcRequired = /^(1|true|yes)$/i.test(str(Deno.env.get("FORCE_IBSCBS_REQUIRED")));
 
   if (!Object.keys(ibsSource).length) {
     if (rtcRequired) errors.push(`item_${index}_ibscbs_required`);
