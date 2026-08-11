@@ -1,0 +1,47 @@
+name: Fix PDV fiscal visualizar v0710
+
+on:
+  push:
+    branches:
+      - fix/pdv-fiscal-visualizar-v0710
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/pdv-fiscal-visualizar-v0710
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply fix
+        run: python scripts/fix_pdv_fiscal_visualizar_v0710.py
+
+      - name: Validate Desktop JavaScript
+        run: |
+          node --check desktop-pdv/renderer/app.js
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/preload.js
+          node --check desktop-pdv/agent/index.js
+          node -e "const p=require('./desktop-pdv/package.json');if(p.version!=='0.7.10')process.exit(1)"
+          grep -q "function saleDiscountTotals" desktop-pdv/renderer/app.js
+          grep -q "function whatsappSaleModal" desktop-pdv/renderer/app.js
+          grep -q ">Visualizar</button>" desktop-pdv/renderer/app.js
+          grep -q "sale_detail_open_failed" desktop-pdv/renderer/app.js
+
+      - name: Commit validated fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/one-off-fix-pdv-fiscal-visualizar-v0710.yml scripts/fix_pdv_fiscal_visualizar_v0710.py
+          git add desktop-pdv/renderer/app.js desktop-pdv/package.json
+          git commit -m "fix: restore fiscal sale visualization"
+          git push origin HEAD:fix/pdv-fiscal-visualizar-v0710
