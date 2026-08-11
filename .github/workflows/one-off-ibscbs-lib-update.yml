@@ -1,0 +1,54 @@
+name: One-off IBS CBS Library Update
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-ibscbs-lib-update]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Upgrade brasil-fiscal NFe package
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('supabase/functions/thorfiscal-authorize/index.ts')
+          text = path.read_text(encoding='utf-8')
+          old = 'npm:@brasil-fiscal/nfe@2.0.6'
+          new = 'npm:@brasil-fiscal/nfe@2.0.7'
+          if old not in text:
+            raise SystemExit('Expected 2.0.6 import not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type-check ThorFiscal with package 2.0.7
+        run: deno check --node-modules-dir=auto supabase/functions/thorfiscal-authorize/index.ts
+
+      - name: Validate installed builder has IBS/CBS item and totals
+        shell: bash
+        run: |
+          BUILDER=$(find node_modules/@brasil-fiscal/nfe -type f \( -name 'DefaultXmlBuilder.js' -o -name 'DefaultXmlBuilder.cjs' \) | head -n 1)
+          test -n "$BUILDER"
+          grep -q 'IBSCBS' "$BUILDER"
+          grep -q 'IBSCBSTot' "$BUILDER"
+          grep -q 'vBCIBSCBS' "$BUILDER"
+
+      - name: Remove one-off workflow and commit
+        run: |
+          rm .github/workflows/one-off-ibscbs-lib-update.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/thorfiscal-authorize/index.ts .github/workflows/one-off-ibscbs-lib-update.yml
+          git commit -m "fix: generate IBS CBS groups with nfe 2.0.7 [skip-ibscbs-lib-update]"
+          git push origin HEAD:main
