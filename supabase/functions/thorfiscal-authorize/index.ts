@@ -116,7 +116,7 @@ function buildProduct(item: Json, index: number, regime: number, homologation: b
   const base = Math.max(0, num(item.total) - num(item.discount));
   const icms: Json = {
     origem: origin,
-    ...(csosn ? { csosn } : { cst }),
+    ...([1, 2, 4].includes(regime) ? { csosn } : { cst }),
   };
   const icmsAliq = taxValue(icmsSource, "aliquota", "pICMS", "percent");
   const icmsBase = taxValue(icmsSource, "baseCalculo", "base_calculo", "vBC");
