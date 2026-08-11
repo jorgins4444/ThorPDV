@@ -1,0 +1,42 @@
+name: One-off PDV settings performance v081
+
+on:
+  push:
+    branches: [fix/pdv-settings-fast-v081]
+    paths:
+      - '.github/scripts/patch-pdv-settings-fast-v081.py'
+      - '.github/workflows/oneoff-pdv-settings-fast-v081.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/pdv-settings-fast-v081
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply patch
+        run: python .github/scripts/patch-pdv-settings-fast-v081.py
+      - name: Validate renderer syntax
+        run: node --check desktop-pdv/renderer/app.js
+      - name: Validate main syntax
+        run: node --check desktop-pdv/main.js
+      - name: Validate package metadata
+        run: node -e "const p=require('./desktop-pdv/package.json'); if(p.version!=='0.8.1') process.exit(1); console.log(p.version)"
+      - name: Commit patched files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop-pdv/renderer/app.js desktop-pdv/package.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "perf: open PDV settings without blocking on Windows hardware"
+            git push origin HEAD:fix/pdv-settings-fast-v081
+          fi
