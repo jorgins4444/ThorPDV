@@ -1,0 +1,24 @@
+name: Fix NFC-e optimization runner
+on:
+  push:
+    branches: [feat/nfce-fast-smooth-20260811]
+    paths: ['.github/workflows/fix-nfce-fast-runner.yml']
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/nfce-fast-smooth-20260811
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch Deno check
+        run: |
+          sed -i 's#run: deno check supabase/functions/thorfiscal-authorize/index.ts#run: deno check --node-modules-dir=auto supabase/functions/thorfiscal-authorize/index.ts#' .github/workflows/one-off-nfce-fast-smooth.yml
+          rm .github/workflows/fix-nfce-fast-runner.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/one-off-nfce-fast-smooth.yml .github/workflows/fix-nfce-fast-runner.yml
+          git commit -m "ci: enable Deno npm auto install for fiscal check"
+          git push origin HEAD:feat/nfce-fast-smooth-20260811
