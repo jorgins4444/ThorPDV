@@ -146,7 +146,7 @@ jobs:
           deno-version: v2.x
 
       - name: Type-check ThorFiscal
-        run: deno check supabase/functions/thorfiscal-authorize/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/thorfiscal-authorize/index.ts
 
       - name: Remove one-off workflow and commit
         run: |
