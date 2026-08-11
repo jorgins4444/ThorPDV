@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import { login } from './actions';
 
-const TEST_EMAIL = 'silvas3cardos0@gmail.com';
-
 export default async function LoginPage({
   searchParams,
 }: {
@@ -14,9 +12,9 @@ export default async function LoginPage({
     <main className="auth-wrap">
       <section className="card auth-card">
         <Link href="/" className="brand">THOR<span>PDV</span></Link>
-        <h1>Acesso de testes</h1>
+        <h1>Acessar Thor Gestão</h1>
         <p className="muted">
-          O e-mail de teste já está definido. Use a senha atual da conta. A senha temporária de 8 dígitos é usada somente no primeiro acesso ou após um reset.
+          Entre com o e-mail cadastrado pelo ThorControl. No primeiro acesso, use a senha temporária recebida na implantação; o sistema solicitará a criação de uma nova senha.
         </p>
 
         {params.error ? <p className="error">{params.error}</p> : null}
@@ -29,10 +27,10 @@ export default async function LoginPage({
               id="email"
               name="email"
               type="email"
-              value={TEST_EMAIL}
-              readOnly
               autoComplete="username"
               required
+              autoFocus
+              placeholder="administrador@empresa.com.br"
             />
           </div>
           <div className="field">
@@ -44,7 +42,6 @@ export default async function LoginPage({
               autoComplete="current-password"
               minLength={8}
               required
-              autoFocus
             />
           </div>
           <button className="button" formAction={login}>Entrar</button>
