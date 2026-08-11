@@ -405,14 +405,14 @@ function accessKeyFromXml(xml: string) {
   return m[1];
 }
 
-function insertQrV3(signedXml: string, uf: string, homologation: boolean, accessKey: string) {
+function insertQrV3(signedXml: string, uf: string, homologation: boolean, tpAmb: number, accessKey: string) {
   const env = homologation ? "homologacao" : "producao";
   const qrBase = getNFCeQRCodeUrl(uf, env as any);
   const consulta = getNFCeConsultaUrl(uf, env as any);
 
-  // NT 2025.001 - QR-Code v3, emissão on-line (tpEmis=1):
-  // <chave_acesso>|3|  -- sem CSC e sem tpAmb no conteúdo do QR-Code v3.
-  const qr = `${qrBase}${qrBase.includes("?") ? "&" : "?"}p=${accessKey}|3|`;
+  // NT 2025.001 / MOC vigente: no QR-Code v3, tpAmb continua sendo o 3º parâmetro.
+  // Emissão on-line (tpEmis=1): <chave_acesso>|3|<tpAmb>, sem CSC/hash.
+  const qr = `${qrBase}${qrBase.includes("?") ? "&" : "?"}p=${accessKey}|3|${tpAmb}`;
   const supl = `<infNFeSupl><qrCode><![CDATA[${qr}]]></qrCode><urlChave>${consulta}</urlChave></infNFeSupl>`;
 
   // O schema TNFe exige a sequência: infNFe, infNFeSupl (opcional), Signature.
@@ -610,7 +610,7 @@ Deno.serve(async (req: Request) => {
         privateKey: cert.privateKeyPem,
       } as any);
       accessKey = accessKeyFromXml(signedBase);
-      const withQr = insertQrV3(signedBase, built.uf, built.homologation, accessKey);
+      const withQr = insertQrV3(signedBase, built.uf, built.homologation, built.environment, accessKey);
       signedXml = withQr.xml;
       qrCodeUrl = withQr.qr;
 
