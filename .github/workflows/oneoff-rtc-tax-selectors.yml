@@ -23,6 +23,7 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path('src/app/dashboard/[...slug]/product-fiscal-editor.tsx')
           text = path.read_text(encoding='utf-8')
@@ -34,27 +35,13 @@ jobs:
                   raise SystemExit('fiscalConfigGet import not found')
               text = text.replace(old_import, new_import, 1)
 
-          old_suggestions = """const reformSuggestions=[
-            ['000','Tributação integral'],['200','Alíquota reduzida'],['410','Imunidade e não incidência'],['510','Diferimento'],['515','Diferimento com redução de alíquota'],
-          ];
-          """
-          if old_suggestions in text:
-              text = text.replace(old_suggestions, '', 1)
+          text = re.sub(r"const reformSuggestions=\[\s*[\s\S]*?\n\];\n", "", text, count=1)
 
-          old_memo_tail = """  const cfopOptions=useMemo(()=>{
-            const list=[...cfops];
-            if(value.cfop_default&&!list.some(c=>text(c.code)===value.cfop_default)) list.unshift({code:value.cfop_default,name:'CFOP atualmente informado',active:true});
-            return list;
-          },[cfops,value.cfop_default]);
-
-          return <section className=\"product-tax-card\">"""
-          new_memo_tail = """  const cfopOptions=useMemo(()=>{
-            const list=[...cfops];
-            if(value.cfop_default&&!list.some(c=>text(c.code)===value.cfop_default)) list.unshift({code:value.cfop_default,name:'CFOP atualmente informado',active:true});
-            return list;
-          },[cfops,value.cfop_default]);
-
-          const reformClassOptions=useMemo(()=>{
+          if 'const reformClassOptions=useMemo' not in text:
+              marker = '  return <section className="product-tax-card">'
+              if marker not in text:
+                  raise SystemExit('component return marker not found')
+              helpers = """  const reformClassOptions=useMemo(()=>{
             const list=value.reform_cst
               ? RTC_CLASS_TRIB_OPTIONS.filter(option=>option.cst===value.reform_cst)
               : [];
@@ -71,32 +58,24 @@ jobs:
             }
           };
 
-          return <section className=\"product-tax-card\">"""
-          if 'const reformClassOptions=useMemo' not in text:
-              if old_memo_tail not in text:
-                  raise SystemExit('cfopOptions insertion point not found')
-              text = text.replace(old_memo_tail, new_memo_tail, 1)
+          """
+              text = text.replace(marker, helpers + marker, 1)
 
-          old_reform = """    {active==='reform'&&<div className=\"product-tax-panel\">
-              <div className=\"product-tax-notice\">Em 2026, NF-e e NFC-e passaram a contemplar os campos da Reforma Tributária do Consumo. Preencha CST IBS/CBS e cClassTrib conforme o enquadramento efetivo da operação.</div>
-              <div className=\"product-form-grid cols3\">
-                <label><span>Situação Tributária (CST) do IBS e CBS</span><input list=\"rtc-cst-options\" value={value.reform_cst} onChange={e=>onChange('reform_cst',e.target.value.replace(/\\D/g,'').slice(0,3))} placeholder=\"Selecione ou informe\"/><datalist id=\"rtc-cst-options\">{reformSuggestions.map(([code,label])=><option value={code} key={code}>{label}</option>)}</datalist><small>Ex.: 000, 200, 410, 510, 515. Consulte a tabela vigente.</small></label>
-                <label className=\"span2\"><span>Classificação Tributária (cClassTrib)</span><input value={value.reform_classification} onChange={e=>onChange('reform_classification',e.target.value.replace(/[^0-9A-Za-z.\\-]/g,'').slice(0,20))} placeholder=\"Informe o código oficial cClassTrib\"/><small>A classificação deve ser compatível com o CST IBS/CBS escolhido.</small></label>
-              </div>
-            </div>}
-          """
-          new_reform = """    {active==='reform'&&<div className=\"product-tax-panel\">
-              <div className=\"product-tax-notice\">Selecione CST IBS/CBS e cClassTrib pela tabela oficial vigente. O cClassTrib é filtrado automaticamente pelo CST para reduzir combinações inválidas.</div>
-              <div className=\"product-form-grid cols3\">
-                <label><span>Situação Tributária (CST) do IBS e CBS</span><select value={value.reform_cst} onChange={e=>updateReformCst(e.target.value)}><option value=\"\">Selecione o CST...</option>{RTC_CST_OPTIONS.map(option=><option key={option.code} value={option.code}>{option.code} - {option.label}</option>)}</select><small>{RTC_TABLE_REFERENCE.totalCst} CSTs • {RTC_TABLE_REFERENCE.informe} • publicação {RTC_TABLE_REFERENCE.publishedAtLabel}.</small></label>
-                <label className=\"span2\"><span>Classificação Tributária (cClassTrib)</span><select value={value.reform_classification} disabled={!value.reform_cst} onChange={e=>onChange('reform_classification',e.target.value)}><option value=\"\">{value.reform_cst?'Selecione o cClassTrib...':'Selecione primeiro o CST'}</option>{reformClassOptions.map(option=><option key={option.code} value={option.code}>{option.code} - {option.label}</option>)}</select><small>{RTC_TABLE_REFERENCE.totalClassifications} classificações no catálogo vigente. Os 3 primeiros dígitos do cClassTrib devem coincidir com o CST.</small></label>
-              </div>
-            </div>}
-          """
           if 'RTC_TABLE_REFERENCE.totalClassifications' not in text:
-              if old_reform not in text:
-                  raise SystemExit('reform panel not found')
-              text = text.replace(old_reform, new_reform, 1)
+              replacement = """    {active==='reform'&&<div className="product-tax-panel">
+              <div className="product-tax-notice">Selecione CST IBS/CBS e cClassTrib pela tabela oficial vigente. O cClassTrib é filtrado automaticamente pelo CST para reduzir combinações inválidas.</div>
+              <div className="product-form-grid cols3">
+                <label><span>Situação Tributária (CST) do IBS e CBS</span><select value={value.reform_cst} onChange={e=>updateReformCst(e.target.value)}><option value="">Selecione o CST...</option>{RTC_CST_OPTIONS.map(option=><option key={option.code} value={option.code}>{option.code} - {option.label}</option>)}</select><small>{RTC_TABLE_REFERENCE.totalCst} CSTs • {RTC_TABLE_REFERENCE.informe} • publicação {RTC_TABLE_REFERENCE.publishedAtLabel}.</small></label>
+                <label className="span2"><span>Classificação Tributária (cClassTrib)</span><select value={value.reform_classification} disabled={!value.reform_cst} onChange={e=>onChange('reform_classification',e.target.value)}><option value="">{value.reform_cst?'Selecione o cClassTrib...':'Selecione primeiro o CST'}</option>{reformClassOptions.map(option=><option key={option.code} value={option.code}>{option.code} - {option.label}</option>)}</select><small>{RTC_TABLE_REFERENCE.totalClassifications} classificações no catálogo vigente. Os 3 primeiros dígitos do cClassTrib devem coincidir com o CST.</small></label>
+              </div>
+            </div>}
+
+          """
+              pattern = r"    \{active==='reform'&&<div className=\"product-tax-panel\">[\s\S]*?\n    \{active==='icms'&&"
+              match = re.search(pattern, text)
+              if not match:
+                  raise SystemExit('reform panel range not found')
+              text = text[:match.start()] + replacement + "    {active==='icms'&&" + text[match.end():]
 
           path.write_text(text, encoding='utf-8')
 
