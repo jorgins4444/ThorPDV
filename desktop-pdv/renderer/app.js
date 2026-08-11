@@ -252,15 +252,73 @@ async function openSaleDetail(sale){
   if(cancelButton&&cancelState.authorized&&cancelState.deadline){const timer=setInterval(()=>{if(!m.isConnected){clearInterval(timer);return;}const remaining=cancelState.deadline-Date.now();if(remaining<=0){cancelButton.remove();const actions=m.querySelector('.sale-actions');if(actions){const note=document.createElement('span');note.className='muted';note.textContent=`Prazo de cancelamento encerrado em ${cancelDeadlineLabel(cancelState.deadline)}`;actions.appendChild(note);}clearInterval(timer);return;}cancelButton.textContent=`Cancelar venda + NFC-e (${cancelRemainingLabel(remaining)})`;},1000);}
 }
 
+function cancelProgressSteps(fiscalCancellation,phase,errorStage=0){
+  const steps=fiscalCancellation?['Validando prazo','Preparando evento','Assinando evento','Enviando à SEFAZ','Evento aceito','Estorno da venda']:['Validando','Estornando venda','Sincronizando Gestão'];
+  const map=fiscalCancellation?{validating:0,building:1,signing:2,sending:3,accepted:4,reversing:5,done:6}:{validating:0,reversing:1,syncing:2,done:3};
+  const phaseIndex=phase==='error'?errorStage:(map[phase]??0);
+  return `<div class="fiscal-progress-steps smooth cancel-progress-steps ${fiscalCancellation?'fiscal-cancel':'sale-cancel'}">${steps.map((label,index)=>{const done=phase==='done'||index<phaseIndex;const active=phase!=='done'&&phase!=='error'&&index===phaseIndex;const error=phase==='error'&&index===phaseIndex;return `<div class="fiscal-progress-step ${done?'done':''} ${active?'active':''} ${error?'error':''}"><i>${done?'✓':error?'!':''}</i><span>${label}</span></div>`}).join('')}</div>`;
+}
+function paintCancelProgress(m,sale,{fiscalCancellation,phase='validating',error='',errorStage=0,syncPending=false}={}){
+  if(!m?.isConnected)return;
+  if(!m.dataset.cancelStartedAt)m.dataset.cancelStartedAt=String(Date.now());
+  const elapsed=Math.max(0,Date.now()-Number(m.dataset.cancelStartedAt||Date.now()));
+  const fiscal=sale?.fiscal||{};
+  const fiscalPct={validating:8,building:23,signing:40,sending:62,accepted:80,reversing:94,done:100,error:Math.max(14,Math.min(88,(errorStage+1)*16))};
+  const localPct={validating:12,reversing:62,syncing:88,done:100,error:35};
+  const pct=(fiscalCancellation?fiscalPct:localPct)[phase]??10;
+  let title=fiscalCancellation?'Validando cancelamento da NFC-e':'Validando cancelamento da venda';
+  let subtitle=fiscalCancellation?'Conferindo prazo fiscal e dados do documento.':'Conferindo venda e permissões do operador.';
+  if(phase==='building'){title='Preparando evento de cancelamento';subtitle='Montando o evento 110111 com protocolo e justificativa.';}
+  if(phase==='signing'){title='Assinando evento com certificado A1';subtitle='Aplicando assinatura digital antes da transmissão.';}
+  if(phase==='sending'){title='Enviando cancelamento para a SEFAZ';subtitle='Aguardando o registro do evento no autorizador.';}
+  if(phase==='accepted'){title='Cancelamento aceito pela SEFAZ';subtitle='Evento registrado. Finalizando o estorno da venda neste caixa.';}
+  if(phase==='reversing'){title=fiscalCancellation?'NFC-e cancelada — estorno concluído':'Venda estornada';subtitle='Estoque e financeiro locais foram revertidos; sincronizando o Thor Gestão.';}
+  if(phase==='syncing'){title='Venda estornada';subtitle='Sincronizando o cancelamento com o Thor Gestão.';}
+  if(phase==='done'){title=fiscalCancellation?'NFC-e e venda canceladas':'Venda cancelada';subtitle=syncPending?'Cancelamento concluído neste caixa. A sincronização com o Gestão ficará pendente e será reenviada automaticamente.':'Estoque, financeiro e Gestão estão atualizados.';}
+  if(phase==='error'){title='Cancelamento não concluído';subtitle=error||'O cancelamento foi interrompido.';}
+  const body=m.querySelector('#cancelProgressBody');if(!body)return;
+  const protocol=fiscal.cancellation_protocol||'';
+  const code=String(fiscal.cancellation_cstat||fiscal.cStat||'').trim();
+  const deadline=nfceCancellationState(sale).deadline;
+  const stopped=phase==='done'||phase==='error';
+  body.innerHTML=`<div class="fiscal-progress-head smooth cancel-progress-head"><div class="fiscal-spinner ${stopped?'stopped':''} ${phase==='done'?'success':''} ${phase==='error'?'cancel-error-spinner':''}">${phase==='done'?'✓':phase==='error'?'!':''}</div><div><small>${fiscalCancellation?'THORFISCAL / CANCELAMENTO':'THORPDV / CANCELAMENTO'}</small><h3>${esc(title)}</h3><p>${esc(subtitle)}</p></div><span class="fiscal-elapsed">${(elapsed/1000).toFixed(1)}s</span></div><div class="fiscal-flight cancel-flight ${phase==='error'?'error':''}"><div class="fiscal-flight-fill" style="width:${pct}%"></div><div class="fiscal-flight-glow" style="left:${Math.max(pct-2,0)}%"></div></div>${cancelProgressSteps(fiscalCancellation,phase,errorStage)}<div class="fiscal-progress-meta"><span>Venda: <b>${sale.number?`#${esc(sale.number)}`:'local'}</b></span>${fiscalCancellation?`<span>Chave: <b>${esc(fiscal.access_key||'—')}</b></span>`:''}${deadline?`<span>Prazo: <b>${esc(cancelDeadlineLabel(deadline))}</b></span>`:''}${protocol?`<span>Protocolo cancelamento: <b>${esc(protocol)}</b></span>`:''}${code?`<span>cStat: <b>${esc(code)}</b></span>`:''}</div>${phase==='error'?`<div class="fiscal-diagnostic error cancel-progress-error"><b>Cancelamento interrompido</b><span>${esc(error||'Verifique o retorno e tente novamente somente se necessário.')}</span></div>`:''}${phase==='done'&&syncPending?'<div class="fiscal-diagnostic warning"><b>Sincronização pendente</b><span>O cancelamento fiscal e o estorno local já foram concluídos. O ThorPDV tentará reenviar a atualização ao Gestão nas próximas sincronizações.</span></div>':''}<div class="actions" id="cancelProgressActions"></div>`;
+  const actions=body.querySelector('#cancelProgressActions');
+  if(phase==='done'){actions.innerHTML='<button class="primary" id="cancelFinish">Concluir</button>';actions.querySelector('#cancelFinish').onclick=()=>m.remove();}
+  if(phase==='error'){const stateNow=nfceCancellationState(sale);const retryable=!fiscalCancellation||stateNow.available;actions.innerHTML=`<button class="secondary" id="cancelClose">Fechar</button>${retryable?'<button class="danger primary" id="cancelRetry">Tentar novamente</button>':''}`;actions.querySelector('#cancelClose').onclick=()=>m.remove();const retry=actions.querySelector('#cancelRetry');if(retry)retry.onclick=()=>{m.remove();cancelSaleModal(sale);};}
+}
+
 function cancelSaleModal(sale){
   const stateNow=nfceCancellationState(sale);
   if(stateNow.authorized&&!stateNow.available){infoModal('Cancelamento',friendlyError('nfce_cancellation_window_expired'));return;}
   const fiscalCancellation=stateNow.authorized;
-  const intro=fiscalCancellation?`A NFC-e será cancelada primeiro na SEFAZ. Somente após a autorização do evento o THOR estornará estoque e financeiro da venda. Prazo normal: até ${esc(cancelDeadlineLabel(stateNow.deadline))}.`:'O cancelamento estorna o estoque e o financeiro da venda.';
-  const m=modal(`<h3>${fiscalCancellation?'Cancelar venda + NFC-e':'Cancelar venda'} ${sale.number?`#${esc(sale.number)}`:''}</h3><p class="muted">${intro}</p>${fiscalCancellation?`<div class="fiscal-diagnostic processing"><b>Tempo restante</b><span id="cancelCountdown">${cancelRemainingLabel(stateNow.remainingMs)}</span></div>`:''}<div class="field"><label>Motivo do cancelamento</label><textarea id="cancelReason" rows="3" maxlength="255" placeholder="${fiscalCancellation?'Informe ao menos 15 caracteres...':'Informe o motivo...'}"></textarea></div><div class="actions"><button class="secondary" id="back">Voltar</button><button class="danger primary" id="confirmCancel">${fiscalCancellation?'Cancelar na SEFAZ e estornar venda':'Confirmar cancelamento'}</button></div>`);
+  const intro=fiscalCancellation?`A NFC-e será cancelada primeiro na SEFAZ. Somente após o registro do evento o THOR concluirá o estorno da venda. Prazo normal: até ${esc(cancelDeadlineLabel(stateNow.deadline))}.`:'O cancelamento estorna o estoque e o financeiro da venda.';
+  const m=modal(`<h3>${fiscalCancellation?'Cancelar venda + NFC-e':'Cancelar venda'} ${sale.number?`#${esc(sale.number)}`:''}</h3><p class="muted">${intro}</p>${fiscalCancellation?`<div class="fiscal-diagnostic processing"><b>Tempo restante</b><span id="cancelCountdown">${cancelRemainingLabel(stateNow.remainingMs)}</span></div>`:''}<div class="field"><label>Motivo do cancelamento</label><textarea id="cancelReason" rows="3" maxlength="255" placeholder="${fiscalCancellation?'Informe ao menos 15 caracteres...':'Informe o motivo...'}"></textarea></div><div class="actions"><button class="secondary" id="back">Voltar</button><button class="danger primary" id="confirmCancel">${fiscalCancellation?'Cancelar na SEFAZ e estornar venda':'Confirmar cancelamento'}</button></div>`,'wide');
   m.querySelector('#back').onclick=()=>m.remove();
-  if(fiscalCancellation&&stateNow.deadline){const timer=setInterval(()=>{if(!m.isConnected){clearInterval(timer);return;}const rem=stateNow.deadline-Date.now(),label=m.querySelector('#cancelCountdown'),button=m.querySelector('#confirmCancel');if(label)label.textContent=cancelRemainingLabel(rem);if(rem<=0){if(button)button.disabled=true;if(label)label.textContent='Prazo encerrado';clearInterval(timer);}},1000);}
-  m.querySelector('#confirmCancel').onclick=async()=>{try{const reason=m.querySelector('#cancelReason').value.trim().replace(/\s+/g,' ');if(!reason)return alert('Informe o motivo.');if(fiscalCancellation&&(reason.length<15||reason.length>255))return alert('A justificativa fiscal deve ter entre 15 e 255 caracteres.');const button=m.querySelector('#confirmCancel');button.disabled=true;button.textContent=fiscalCancellation?'Cancelando na SEFAZ...':'Cancelando...';await window.thor.cancelSale({saleKey:saleKey(sale),reason});m.remove();await window.thor.sync();await refreshProducts();await refreshFiscalSales();showToast(fiscalCancellation?'NFC-e cancelada na SEFAZ e venda estornada.':'Cancelamento enviado para o Gestão.');}catch(e){const code=String(e.message||'');const detail=e?.fiscal?.message;infoModal('Cancelamento',detail||friendlyError(code));const button=m.querySelector('#confirmCancel');if(button){button.disabled=false;button.textContent=fiscalCancellation?'Cancelar na SEFAZ e estornar venda':'Confirmar cancelamento';}}};
+  let countdownTimer=null;
+  if(fiscalCancellation&&stateNow.deadline){countdownTimer=setInterval(()=>{if(!m.isConnected){clearInterval(countdownTimer);return;}const rem=stateNow.deadline-Date.now(),label=m.querySelector('#cancelCountdown'),button=m.querySelector('#confirmCancel');if(label)label.textContent=cancelRemainingLabel(rem);if(rem<=0){if(button)button.disabled=true;if(label)label.textContent='Prazo encerrado';clearInterval(countdownTimer);}},1000);}
+  m.querySelector('#confirmCancel').onclick=async()=>{
+    const reason=m.querySelector('#cancelReason').value.trim().replace(/\s+/g,' ');
+    if(!reason)return alert('Informe o motivo.');
+    if(fiscalCancellation&&(reason.length<15||reason.length>255))return alert('A justificativa fiscal deve ter entre 15 e 255 caracteres.');
+    if(countdownTimer)clearInterval(countdownTimer);
+    const card=m.querySelector('.modal-card');card.innerHTML='<div id="cancelProgressBody"></div>';m.dataset.cancelStartedAt=String(Date.now());
+    paintCancelProgress(m,sale,{fiscalCancellation,phase:'validating'});
+    let settled=false,cancelError=null;
+    const task=window.thor.cancelSale({saleKey:saleKey(sale),reason}).then(()=>{settled=true;}).catch(e=>{cancelError=e;settled=true;});
+    while(!settled&&m.isConnected){const elapsed=Date.now()-Number(m.dataset.cancelStartedAt||Date.now());const phase=fiscalCancellation?(elapsed<350?'validating':elapsed<800?'building':elapsed<1350?'signing':'sending'):(elapsed<350?'validating':'reversing');paintCancelProgress(m,sale,{fiscalCancellation,phase});await wait(120);}
+    await task;
+    if(cancelError){const raw=String(cancelError?.message||cancelError||'');let stage=fiscalCancellation?3:1;if(raw.includes('window_expired'))stage=0;else if(raw.includes('reason_invalid'))stage=1;else if(raw.includes('rejected'))stage=4;else if(raw.includes('transmission'))stage=3;paintCancelProgress(m,sale,{fiscalCancellation,phase:'error',error:friendlyError(raw),errorStage:stage});return;}
+    let finalSale=sale;try{finalSale=await window.thor.fiscalSale(saleKey(sale));}catch{}
+    if(fiscalCancellation){paintCancelProgress(m,finalSale,{fiscalCancellation,phase:'accepted'});await wait(180);}
+    paintCancelProgress(m,finalSale,{fiscalCancellation,phase:'reversing'});
+    let syncPending=false;
+    try{await window.thor.sync();}catch{syncPending=true;}
+    try{await refreshProducts();}catch{}
+    try{await refreshFiscalSales();}catch{}
+    try{finalSale=await window.thor.fiscalSale(saleKey(sale));}catch{}
+    paintCancelProgress(m,finalSale,{fiscalCancellation,phase:'done',syncPending});
+    showToast(fiscalCancellation?'NFC-e cancelada e venda estornada.':'Venda cancelada.');
+  };
 }
 
 function returnSaleModal(sale){
