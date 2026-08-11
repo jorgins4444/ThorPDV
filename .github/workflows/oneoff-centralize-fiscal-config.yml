@@ -1,0 +1,32 @@
+name: One-off Centralize Fiscal Configuration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/oneoff-centralize-fiscal-config.yml'
+      - '.github/scripts/patch-centralize-fiscal-config.py'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply fiscal centralization patch
+        run: python .github/scripts/patch-centralize-fiscal-config.py
+      - name: Validate TypeScript build
+        run: |
+          npm install
+          npx tsc --noEmit
+      - name: Commit patch
+        run: |
+          git config user.name "ThorPDV Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/app/dashboard/'[...slug]'/branch-config-workspace.tsx src/app/dashboard/'[...slug]'/branch-config.css src/app/dashboard/'[...slug]'/page.tsx
+          git commit -m "refactor: centralize fiscal configuration in Fiscal module"
+          git push origin HEAD:main
