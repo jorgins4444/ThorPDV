@@ -38,11 +38,16 @@ jobs:
       - name: Validate installed builder has IBS/CBS item and totals
         shell: bash
         run: |
-          BUILDER=$(find node_modules/@brasil-fiscal/nfe -type f \( -name 'DefaultXmlBuilder.js' -o -name 'DefaultXmlBuilder.cjs' \) | head -n 1)
-          test -n "$BUILDER"
-          grep -q 'IBSCBS' "$BUILDER"
-          grep -q 'IBSCBSTot' "$BUILDER"
-          grep -q 'vBCIBSCBS' "$BUILDER"
+          MATCH=$(grep -R -l 'IBSCBSTot' node_modules/.deno 2>/dev/null | grep '@brasil-fiscal+nfe@2.0.7' | head -n 1 || true)
+          if [ -z "$MATCH" ]; then
+            echo 'IBSCBSTot not found in installed @brasil-fiscal/nfe@2.0.7 package'
+            find node_modules/.deno -maxdepth 5 -type f -path '*brasil-fiscal*nfe*' | head -n 100
+            exit 1
+          fi
+          echo "Validated builder artifact: $MATCH"
+          grep -q 'IBSCBS' "$MATCH"
+          grep -q 'IBSCBSTot' "$MATCH"
+          grep -q 'vBCIBSCBS' "$MATCH"
 
       - name: Remove one-off workflow and commit
         run: |
