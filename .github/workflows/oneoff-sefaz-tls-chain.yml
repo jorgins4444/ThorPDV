@@ -26,16 +26,20 @@ jobs:
             openssl x509 -in "$f" -noout -subject -issuer -serial -dates -fingerprint -sha256 | tee -a tls-chain/summary.txt
           done
           cat tls-chain/summary.txt
-      - name: Download official ICP-Brasil current CA bundle
+      - name: Download and verify official ICP-Brasil v10 root
         shell: bash
         run: |
           set -euo pipefail
           curl -fL --retry 3 --connect-timeout 15 --max-time 90 \
-            https://acraiz.icpbrasil.gov.br/credenciadas/CertificadosAC-ICP-Brasil/ACcompactado.zip \
-            -o tls-chain/ACcompactado.zip || true
-          if [ -s tls-chain/ACcompactado.zip ]; then
-            unzip -l tls-chain/ACcompactado.zip > tls-chain/icp-bundle-files.txt || true
+            https://acraiz.icpbrasil.gov.br/ICP-Brasilv10.crt \
+            -o tls-chain/icp-brasil-v10.crt
+          if openssl x509 -in tls-chain/icp-brasil-v10.crt -noout >/dev/null 2>&1; then
+            cp tls-chain/icp-brasil-v10.crt tls-chain/icp-brasil-v10.pem
+          else
+            openssl x509 -inform DER -in tls-chain/icp-brasil-v10.crt -out tls-chain/icp-brasil-v10.pem
           fi
+          openssl x509 -in tls-chain/icp-brasil-v10.pem -noout -subject -issuer -serial -dates -fingerprint -sha256 | tee tls-chain/root-v10-summary.txt
+          openssl verify -CAfile tls-chain/icp-brasil-v10.pem -untrusted tls-chain/cert-02.pem tls-chain/cert-01.pem | tee tls-chain/verify-with-v10.txt
       - uses: actions/upload-artifact@v4
         with:
           name: svrs-tls-chain
