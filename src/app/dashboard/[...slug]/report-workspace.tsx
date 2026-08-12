@@ -56,7 +56,7 @@ function formatValue(value: unknown, format?:Format) {
   if (format === 'number') return new Intl.NumberFormat('pt-BR',{maximumFractionDigits:3}).format(Number(value)||0);
   if (format === 'percent') return `${new Intl.NumberFormat('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2}).format(Number(value)||0)}%`;
   if (format === 'date') { const d=new Date(`${String(value)}T00:00:00`); return Number.isNaN(d.getTime())?String(value):d.toLocaleDateString('pt-BR'); }
-  if (format === 'datetime') { const d=new Date(String(value)); return Number.isNaN(d.getTime())?String(value):d.toLocaleString('pt-BR'); }
+  if (format === 'datetime') { const d=new Date(String(value)); return Number.isNaN(d.getTime())?String(value):d.toLocaleString('pt-BR',{timeZone:'America/Fortaleza'}); }
   if (format === 'payment') return paymentLabels[String(value)] ?? String(value);
   if (format === 'boolean') return value ? 'Sim' : 'Não';
   if (format === 'json') return typeof value==='string'?value:JSON.stringify(value);
@@ -82,12 +82,12 @@ export function ReportWorkspace({ report, branches, initial }: { report:string; 
     setLoading(true);
     const result=await erpReportV2(report,def.period===false?undefined:start,def.period===false?undefined:end,def.branch===false?undefined:branch);
     setLoading(false);
-    if(result.ok){setRows(result.data??[]);setMessage(`Relatório atualizado: ${(result.data??[]).length} linha(s).`);}else setMessage(`Não foi possível gerar: ${String(result.error??'erro desconhecido')}`);
+    if(result.ok){setRows(result.data??[]);setSearch('');setMessage(`Relatório atualizado: ${(result.data??[]).length} linha(s).`);}else setMessage(`Não foi possível gerar: ${String(result.error??'erro desconhecido')}`);
   }
 
-  function csv(){
-    const lines=[def.columns.map(c=>`"${c.label}"`).join(';'),...visible.map(row=>def.columns.map(c=>`"${formatValue(row[c.key],c.format).replaceAll('"','""')}"`).join(';'))];
-    const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`thor-${report}-${end||'relatorio'}.csv`;a.click();URL.revokeObjectURL(url);
+  function csv(source:Row[],suffix=''){
+    const lines=[def.columns.map(c=>`"${c.label}"`).join(';'),...source.map(row=>def.columns.map(c=>`"${formatValue(row[c.key],c.format).replaceAll('"','""')}"`).join(';'))];
+    const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`thor-${report}-${end||'relatorio'}${suffix}.csv`;a.click();URL.revokeObjectURL(url);
   }
 
   return <div className="report-v2">
@@ -97,15 +97,16 @@ export function ReportWorkspace({ report, branches, initial }: { report:string; 
         {def.branch!==false&&<label>Filial<select value={branch} onChange={e=>setBranch(e.target.value)}><option value="">Todas as filiais</option>{branches.map(b=><option key={String(b.id)} value={String(b.id)}>{String(b.name)}</option>)}</select></label>}
         <button className="erp-primary" onClick={generate} disabled={loading}>{loading?'Gerando...':'Gerar relatório'}</button>
       </div>
-      <div className="report-v2-actions"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar no resultado..."/><button className="erp-ghost" onClick={csv}>Exportar CSV</button><button className="erp-ghost" onClick={()=>window.print()}>Imprimir / PDF</button></div>
+      <div className="report-v2-actions"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar no resultado..."/>{search&&<button className="erp-ghost" onClick={()=>csv(visible,'-filtrado')}>Exportar filtrado</button>}<button className="erp-ghost" onClick={()=>csv(rows)}>Exportar CSV</button><button className="erp-ghost" onClick={()=>window.print()}>Imprimir / PDF</button></div>
+      {search&&<p className="report-v2-search-note">Busca local: mostrando {visible.length} de {rows.length} linha(s). Os KPIs permanecem calculados sobre o relatório completo.</p>}
       {def.note&&<p className="report-v2-note">{def.note}</p>}
       {message&&<p className="report-v2-note">{message}</p>}
     </section>
 
-    {def.metrics.length>0&&<section className="report-v2-metrics">{def.metrics.map(m=>{const value=m.count?visible.length:sum(visible,m.key);return <article key={m.label}><span>{m.label}</span><strong className={Number(value)<0?'report-negative':''}>{formatValue(value,m.count?'number':m.format)}</strong><small>{visible.length} linha(s) visível(is)</small></article>;})}</section>}
+    {def.metrics.length>0&&<section className="report-v2-metrics">{def.metrics.map(m=>{const value=m.count?rows.length:sum(rows,m.key);return <article key={m.label}><span>{m.label}</span><strong className={Number(value)<0?'report-negative':''}>{formatValue(value,m.count?'number':m.format)}</strong><small>{search?`${visible.length} de ${rows.length} linhas exibidas`:`${rows.length} linha(s) no relatório`}</small></article>;})}</section>}
 
     <section className="erp-module-card report-v2-table-card">
-      <div className="report-v2-title"><div><h2>{def.title}</h2><p>{start&&end&&def.period!==false?`${start} até ${end}`:'Posição atual'} · {visible.length} registro(s)</p></div></div>
+      <div className="report-v2-title"><div><h2>{def.title}</h2><p>{start&&end&&def.period!==false?`${start} até ${end}`:'Posição atual'} · {search?`${visible.length} de ${rows.length}`:`${rows.length}`} registro(s) · America/Fortaleza</p></div></div>
       <div className="erp-table-scroll"><table className="erp-data-table"><thead><tr>{def.columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead><tbody>{visible.length===0?<tr><td className="erp-empty" colSpan={def.columns.length}>Sem dados para os filtros selecionados.</td></tr>:visible.map((row,index)=><tr key={String(row.id??`${report}-${index}`)}>{def.columns.map(c=>{const numeric=Number(row[c.key]??0);return <td className={(c.format==='money'||c.format==='number'||c.format==='percent')&&numeric<0?'report-negative':''} key={c.key}>{formatValue(row[c.key],c.format)}</td>;})}</tr>)}</tbody></table></div>
     </section>
   </div>;
