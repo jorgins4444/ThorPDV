@@ -1,0 +1,27 @@
+/* ThorPDV v0.8.12 — alerta claro de estoque zerado */
+.thor-v089 .v089-badges{z-index:6!important}
+.thor-v089 .v089-badges .out,
+.thor-v089 .v090-no-photo .v089-badges .out{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-height:22px!important;
+  padding:0 8px!important;
+  border:1px solid #f5b7b1!important;
+  border-radius:999px!important;
+  background:#fff1f0!important;
+  color:#cf2e2e!important;
+  font-size:8px!important;
+  line-height:1!important;
+  font-weight:900!important;
+  letter-spacing:.035em!important;
+  white-space:nowrap!important;
+  box-shadow:0 2px 6px rgba(207,46,46,.08)!important;
+}
+.thor-v089 .v090-product-list .v089-badges .out{
+  left:5px!important;
+  top:5px!important;
+  min-height:19px!important;
+  padding:0 6px!important;
+  font-size:7px!important;
+}
