@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   branchConfigurationGet,branchConfigurationSave,branchDeliveryRateSave,
@@ -33,7 +34,10 @@ type Provider=keyof typeof providers;
 async function fileData(file:File){if(file.size>260_000)throw new Error('Imagem acima de 250 KB. Reduza o arquivo antes de enviar.');return await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result));r.onerror=()=>reject(new Error('Falha ao ler imagem.'));r.readAsDataURL(file);});}
 
 export function BranchConfigWorkspace({branches}:{branches:Row[]}){
-  const [branchId,setBranchId]=useState(text(branches[0]?.id));
+  const searchParams=useSearchParams();
+  const requestedBranch=text(searchParams.get('branch'));
+  const initialBranch=branches.some(b=>text(b.id)===requestedBranch)?requestedBranch:text(branches[0]?.id);
+  const [branchId,setBranchId]=useState(initialBranch);
   const [active,setActive]=useState<'general'|'fiscal'|(typeof tabs)[number][0]>('terminals');
   const [data,setData]=useState<ConfigResult>({});
   const [loading,setLoading]=useState(false);const [message,setMessage]=useState('');
@@ -47,7 +51,7 @@ export function BranchConfigWorkspace({branches}:{branches:Row[]}){
   function formPayload(e:FormEvent<HTMLFormElement>){const fd=new FormData(e.currentTarget);const p:Row={};for(const [k,v] of fd.entries())p[k]=v;return p;}
 
   return <section className="branch-config-shell erp-module-card">
-    <div className="branch-config-top"><div><span>CONFIGURAÇÃO OPERACIONAL</span><h2>{branches.length===1?'Matriz':text(branch.name)||'Unidade'}</h2><p>Terminais, parâmetros do PDV e integrações. CNPJ, IE, CRT, endereço e demais dados do emitente são alterados exclusivamente em Administrativo → Matriz; certificado, ambiente, séries, CSC e DANFE ficam em Fiscal.</p></div>{branches.length>1?<label>Unidade<select value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={text(b.id)} value={text(b.id)}>{b.is_headquarters?'Matriz':text(b.name)}</option>)}</select></label>:<span className="branch-master-badge">Matriz</span>}</div>
+    <div className="branch-config-top"><div><span>CONFIGURAÇÃO OPERACIONAL</span><h2>{branches.length===1?'Matriz':text(branch.name)||'Unidade'}</h2><p>Terminais, parâmetros do PDV e integrações da unidade selecionada. Dados da Matriz ficam em Administrativo → Matriz; dados cadastrais das filiais ficam em Administrativo → Lojas / Filiais. Certificado, ambiente, séries, CSC e DANFE ficam em Fiscal.</p></div>{branches.length>1?<label>Unidade<select value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={text(b.id)} value={text(b.id)}>{b.is_headquarters?'Matriz':text(b.name)}</option>)}</select></label>:<span className="branch-master-badge">Matriz</span>}</div>
     <div className="branch-tabs">{tabs.map(([id,label])=><button key={id} className={active===id?'active':''} onClick={()=>setActive(id)}>{label}</button>)}</div>
     {message&&<div className="branch-message">{message}</div>}{loading?<div className="branch-loading">Carregando configuração...</div>:null}
 

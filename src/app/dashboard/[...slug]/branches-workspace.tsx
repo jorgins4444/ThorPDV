@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useMemo, useState, useTransition } from 'react';
+import { FormEvent, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { branchLicenseSave } from './branch-license-actions';
+import { branchLicenseList, branchLicenseSave } from './branch-license-actions';
 
 type Row=Record<string,unknown>;
 const text=(v:unknown)=>v==null?'':String(v);
@@ -19,17 +19,18 @@ const messages:Record<string,string>={
 };
 
 export function BranchesWorkspace({initialBranches,license}:{initialBranches:Row[];license:Row}){
- const router=useRouter();const [editing,setEditing]=useState<Row|null>(null);const [open,setOpen]=useState(false);const [message,setMessage]=useState('');const [lookup,setLookup]=useState('');const [pending,startTransition]=useTransition();
- const branchLimit=Math.max(num(license.branch_limit),1);const used=initialBranches.length;const remaining=Math.max(branchLimit-used,0);const enabled=Boolean((license.modules as Record<string,boolean>|undefined)?.branches);const headquarters=initialBranches.find(b=>Boolean(b.is_headquarters));
+ const router=useRouter();const [rows,setRows]=useState<Row[]>(initialBranches);const [editing,setEditing]=useState<Row|null>(null);const [open,setOpen]=useState(false);const [message,setMessage]=useState('');const [lookup,setLookup]=useState('');const [pending,startTransition]=useTransition();
+ useEffect(()=>{let alive=true;void branchLicenseList().then(r=>{if(alive&&r.ok)setRows(r.data)});return()=>{alive=false}},[]);
+ const branchLimit=Math.max(num(license.branch_limit),1);const used=rows.length;const remaining=Math.max(branchLimit-used,0);const enabled=Boolean((license.modules as Record<string,boolean>|undefined)?.branches);const headquarters=rows.find(b=>Boolean(b.is_headquarters));
  const extraUsed=Math.max(used-1,0);const extraLicensed=Math.max(branchLimit-1,0);
- const sorted=useMemo(()=>[...initialBranches].sort((a,b)=>Number(Boolean(b.is_headquarters))-Number(Boolean(a.is_headquarters))||text(a.name).localeCompare(text(b.name),'pt-BR')),[initialBranches]);
+ const sorted=useMemo(()=>[...rows].sort((a,b)=>Number(Boolean(b.is_headquarters))-Number(Boolean(a.is_headquarters))||text(a.name).localeCompare(text(b.name),'pt-BR')),[rows]);
  const empty:Row={name:'',cnpj:'',state_registration:'',municipal_registration:'',crt:'',email:'',phone:'',contact:'',responsible:'',postal_code:'',street:'',number:'',complement:'',district:'',city:'',state:'',ibge_city_code:''};
  const current=editing??empty;
  function beginNew(){setEditing(null);setOpen(true);setMessage('');}
  function beginEdit(row:Row){if(row.is_headquarters){setMessage('A Matriz é editada em Administrativo → Matriz.');return}setEditing(row);setOpen(true);setMessage('');}
  async function lookupCnpj(form:HTMLFormElement){const fd=new FormData(form);const cnpj=digits(text(fd.get('cnpj')));if(cnpj.length!==14){setMessage('Digite os 14 dígitos do CNPJ.');return}setLookup('cnpj');try{const r=await fetch(`/api/lookup/cnpj?cnpj=${cnpj}`,{cache:'no-store'});const j=await r.json();if(!r.ok||!j.ok)throw new Error();const d=j.data||{};const set=(name:string,value:unknown)=>{const el=form.elements.namedItem(name) as HTMLInputElement|null;if(el&&!el.value)el.value=text(value)};set('name',d.trade_name||d.name);set('state_registration',d.state_registration);set('email',d.email);set('phone',d.phone);set('postal_code',d.postal_code);set('street',d.street);set('number',d.number);set('complement',d.complement);set('district',d.district);set('city',d.city);set('state',d.state);set('ibge_city_code',d.ibge_city_code);setMessage('Dados da filial carregados pelo CNPJ. Revise antes de salvar.');}catch{setMessage('Não foi possível consultar o CNPJ agora. O cadastro manual continua disponível.');}finally{setLookup('')}}
  async function lookupCep(form:HTMLFormElement){const fd=new FormData(form);const cep=digits(text(fd.get('postal_code')));if(cep.length!==8)return;setLookup('cep');try{const r=await fetch(`/api/lookup/cep?cep=${cep}`,{cache:'no-store'});const j=await r.json();if(r.ok&&j.ok){const d=j.data||{};const set=(name:string,value:unknown)=>{const el=form.elements.namedItem(name) as HTMLInputElement|null;if(el&&!el.value)el.value=text(value)};set('street',d.street);set('complement',d.complement);set('district',d.district);set('city',d.city);set('state',d.state);set('ibge_city_code',d.ibge_city_code);}}finally{setLookup('')}}
- function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const fd=new FormData(e.currentTarget);const payload:Row=Object.fromEntries(fd.entries());if(editing?.id)payload.id=editing.id;payload.cnpj=digits(text(payload.cnpj));payload.postal_code=digits(text(payload.postal_code));payload.state=text(payload.state).toUpperCase();startTransition(async()=>{const r=await branchLicenseSave(payload);if(!r.ok){setMessage(messages[text(r.error)]||`Não foi possível salvar a filial: ${text(r.error)}`);return}setOpen(false);setEditing(null);setMessage('Filial salva e vinculada à licença.');router.refresh();});}
+ function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const fd=new FormData(e.currentTarget);const payload:Row=Object.fromEntries(fd.entries());if(editing?.id)payload.id=editing.id;payload.cnpj=digits(text(payload.cnpj));payload.postal_code=digits(text(payload.postal_code));payload.state=text(payload.state).toUpperCase();startTransition(async()=>{const r=await branchLicenseSave(payload);if(!r.ok){setMessage(messages[text(r.error)]||`Não foi possível salvar a filial: ${text(r.error)}`);return}setOpen(false);setEditing(null);setMessage('Filial salva e vinculada à licença.');const latest=await branchLicenseList();if(latest.ok)setRows(latest.data);router.refresh();});}
  return <div className="licensed-branches-shell">
   <section className="erp-module-card branch-license-hero"><div><small>LICENÇA MULTILOJA</small><h2>Matriz + Lojas / Filiais</h2><p>A Matriz está incluída na licença-base. Cada unidade adicional consome uma vaga de filial liberada pelo ThorControl.</p></div><button className="erp-primary" onClick={beginNew} disabled={!enabled||remaining<=0}>+ Nova filial</button></section>
   <section className="branch-license-kpis"><article><span>Total licenciado</span><strong>{branchLimit}</strong><small>loja(s), incluindo Matriz</small></article><article><span>Em uso</span><strong>{used}</strong><small>1 Matriz + {extraUsed} filial(is)</small></article><article><span>Filiais adicionais</span><strong>{extraUsed} / {extraLicensed}</strong><small>usadas / contratadas</small></article><article><span>Disponíveis</span><strong>{remaining}</strong><small>vaga(s) para nova filial</small></article></section>
