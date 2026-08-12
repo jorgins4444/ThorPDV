@@ -21,8 +21,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply 0.8.5 transport patch
-        run: python .github/scripts/patch-daily-cash-transport-v085.py
+      - name: Apply and commit 0.8.5 transport patch
+        run: |
+          python .github/scripts/patch-daily-cash-transport-v085.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop-pdv/agent/sync.js desktop-pdv/agent/daily-cash-v083.js desktop-pdv/package.json
+          if git diff --cached --quiet; then
+            echo "No implementation changes"
+          else
+            git commit -m "fix: use deployed PDV push transport for daily cash"
+            git push origin HEAD:fix/daily-cash-existing-transport-v085
+          fi
       - name: Validate Desktop JavaScript
         run: |
           node --check desktop-pdv/agent/sync.js
@@ -45,16 +55,3 @@ jobs:
         run: npm run build
       - name: Lint
         run: npm run lint
-      - name: Commit implementation
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add desktop-pdv/agent/sync.js desktop-pdv/agent/daily-cash-v083.js desktop-pdv/package.json
-          if git diff --cached --quiet; then
-            echo "No implementation changes"
-          else
-            git commit -m "fix: use deployed PDV push transport for daily cash"
-            git fetch origin fix/daily-cash-existing-transport-v085
-            git rebase origin/fix/daily-cash-existing-transport-v085
-            git push origin HEAD:fix/daily-cash-existing-transport-v085
-          fi
