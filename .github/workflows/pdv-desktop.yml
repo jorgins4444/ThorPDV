@@ -100,7 +100,8 @@ jobs:
             'renderer/redesign-v098.js',
             'renderer/redesign-v099.js',
             'renderer/redesign-v100.js',
-            'renderer/redesign-v101.js'
+            'renderer/redesign-v101.js',
+            'renderer/term-finalize-v102.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
