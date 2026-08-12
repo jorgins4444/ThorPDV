@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const CASH_SYNC_TIME_ZONE='America/Fortaleza';
 
 function syncBusinessDate(value=Date.now()){
@@ -32,6 +33,17 @@ class SyncEngine {
   headers(){
     const token=this.tokenProvider();
     return { 'content-type':'application/json', ...(token?{authorization:`Bearer ${token}`}:{}) };
+  }
+
+
+  async control(type,payload={}){
+    const id=crypto.randomUUID();
+    const response=await this.request('/api/pdv/push',{events:[{id,type,payload}]});
+    const row=(response.results||[]).find((item)=>String(item.id)===String(id))||(response.results||[])[0];
+    if(!row) throw new Error('cash_command_empty_response');
+    if(row.status!=='processed') throw new Error(row.error||row.result?.error||'cash_command_failed');
+    if(row.result?.ok===false) throw new Error(row.result.error||'cash_command_failed');
+    return row.result||{};
   }
 
   async request(path,body){
@@ -133,7 +145,7 @@ class SyncEngine {
 
       // Only after all operations that truly happened on previous dates are on
       // the server do we freeze those sessions as pending_close.
-      await this.request('/api/pdv/cash/rollover',{});
+      await this.control('cash_rollover',{});
 
       // Current-day events can now safely open/use today's independent cash.
       const pending=this.store.pending(100);
@@ -145,7 +157,7 @@ class SyncEngine {
 
       // Covers a fully-offline historical cash_open that was first uploaded in
       // this run; if it was old, it is frozen only after its historical events.
-      await this.request('/api/pdv/cash/rollover',{});
+      await this.control('cash_rollover',{});
 
       const pull=await this.request('/api/pdv/pull',{since:this.store.get('cursor')||null});
       this.store.applyPull(pull);
