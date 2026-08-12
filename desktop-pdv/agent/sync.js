@@ -69,6 +69,10 @@ class SyncEngine {
     this.running=true;
     this.onState({syncing:true});
     try{
+      // A virada diária acontece no servidor antes de enviar operações. Assim um
+      // cash_open novo nunca é anexado ao caixa de ontem quando o terminal ficou offline.
+      await this.request('/api/pdv/cash/rollover',{});
+
       const pending=this.store.pending(100);
       if(pending.length){
         const push=await this.request('/api/pdv/push',{events:pending.map(({id,type,payload})=>({id,type,payload}))});
@@ -87,7 +91,7 @@ class SyncEngine {
 
       await this.request('/api/pdv/heartbeat',{
         appVersion:this.appVersion,
-        capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true,operatorSyncProgress:true,searchOnlySaleCatalog:true,fullProductCatalogScreen:true},
+        capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true,operatorSyncProgress:true,searchOnlySaleCatalog:true,fullProductCatalogScreen:true,dailyCashSessions:true,dynamicCashPaymentMethods:true,overdueCashClosing:true},
         metrics:{
           queue:this.store.queueStats(),
           operatorId:this.store.get('current_operator_id')||null,
