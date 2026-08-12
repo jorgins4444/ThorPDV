@@ -118,6 +118,7 @@ try {
 
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Atualização do ThorPDV" Height="430" Width="610"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         Background="#0E1713" Foreground="#F5FAF7" Topmost="True" ShowInTaskbar="True">
