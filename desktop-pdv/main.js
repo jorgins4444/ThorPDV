@@ -17,6 +17,7 @@ const { installPreSaleReceipt } = require('./agent/pre-sale-v064');
 const { installCommercialV070 } = require('./agent/commercial-v070');
 const { installSalesOptionsV071 } = require('./agent/sales-options-v071');
 const { installSalesSettlementV073 } = require('./agent/sales-settlement-v073');
+const { installDailyCashV083 } = require('./agent/daily-cash-v083');
 const { version: DESKTOP_VERSION } = require('./package.json');
 
 installThorAgentV3(ThorAgent);
@@ -33,6 +34,7 @@ installCommercialV070(ThorAgent);
 installSalesOptionsV071(ThorAgent);
 installSalesSettlementV073(ThorAgent);
 installSyncPolicy(ThorAgent);
+installDailyCashV083(ThorAgent);
 
 let mainWindow;
 let agent;
@@ -281,7 +283,9 @@ function registerIpc() {
   handle('thor:supervisor-authorize', (payload) => agent.authorizeSupervisor(payload));
   handle('thor:open-cash', (payload) => agent.openCash(payload));
   handle('thor:cash-movement', (payload) => agent.cashMovement(payload));
-  handle('thor:cash-preview', () => agent.cashClosingPreview());
+  handle('thor:cash-preview', (options) => agent.cashClosingPreview(options || {}));
+  handle('thor:cash-sessions', (filters) => agent.cashSessions(filters || {}));
+  handle('thor:close-historical-cash', (payload) => agent.closeHistoricalCash(payload || {}));
   handle('thor:close-cash', (payload) => agent.closeCash(payload));
   handle('thor:last-cash-close', () => agent.lastCashCloseSummary());
   handle('thor:print-cash-close', (summary) => printCashClose(summary));
