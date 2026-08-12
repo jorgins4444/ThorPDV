@@ -86,7 +86,9 @@ jobs:
             'renderer/commercial-v070.js',
             'renderer/sales-options-v071.js',
             'renderer/term-settlement-v072.js',
-            'renderer/sales-settlement-v073.js'
+            'renderer/sales-settlement-v073.js',
+            'renderer/first-sale-sync-v087.js',
+            'renderer/redesign-v088.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
