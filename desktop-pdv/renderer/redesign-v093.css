@@ -1,0 +1,72 @@
+/* ThorPDV v0.8.13 — card de produto sem foto corrigido */
+.thor-v089 #products.v090-product-grid .v093-grid-no-photo{
+  min-height:205px!important;
+  background:linear-gradient(145deg,#fbf9ff,#f8f9fc)!important;
+}
+.thor-v089 #products.v090-product-grid .v093-grid-no-photo .v088-product-copy{display:none!important}
+.thor-v089 #products.v090-product-grid .v093-grid-no-photo .v088-product-media{
+  position:relative!important;
+  width:100%!important;
+  height:100%!important;
+  min-height:205px!important;
+  background:transparent!important;
+  display:block!important;
+  overflow:hidden!important;
+}
+.thor-v089 #products.v090-product-grid .v093-grid-no-photo .v089-badges .stock{display:none!important}
+.thor-v089 #products.v090-product-grid .v093-grid-no-photo .v089-badges .out{
+  top:8px!important;
+  left:8px!important;
+  z-index:8!important;
+}
+.thor-v089 .v093-no-photo-content{
+  position:absolute!important;
+  inset:0!important;
+  z-index:2!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:8px!important;
+  padding:38px 12px 18px!important;
+  text-align:center!important;
+  box-sizing:border-box!important;
+  background:linear-gradient(145deg,#fbf9ff 0%,#f8f9fc 100%)!important;
+  color:#2e2b42!important;
+}
+.thor-v089 .v093-no-photo-content strong{
+  font-size:13px!important;
+  line-height:1.28!important;
+  font-weight:800!important;
+  color:#302d43!important;
+  display:-webkit-box!important;
+  -webkit-line-clamp:4!important;
+  -webkit-box-orient:vertical!important;
+  overflow:hidden!important;
+}
+.thor-v089 .v093-no-photo-content b{
+  font-size:18px!important;
+  line-height:1!important;
+  font-weight:900!important;
+  color:#00abd8!important;
+}
+.thor-v089 .v093-no-photo-content small{
+  min-width:34px!important;
+  height:22px!important;
+  padding:0 8px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  border:1px solid #ded8e8!important;
+  border-radius:999px!important;
+  background:#fff!important;
+  color:#6f687c!important;
+  font-size:9px!important;
+  font-weight:850!important;
+  letter-spacing:.03em!important;
+}
+/* Lista mantém o layout compacto e nunca reaproveita a unidade como placeholder visual. */
+.thor-v089 #products.v090-product-list .v093-no-photo-content{position:relative!important;inset:auto!important;width:100%!important;height:100%!important;min-height:62px!important;padding:4px!important;gap:2px!important;background:#faf9fc!important}
+.thor-v089 #products.v090-product-list .v093-no-photo-content strong{font-size:0!important}
+.thor-v089 #products.v090-product-list .v093-no-photo-content b{display:none!important}
+.thor-v089 #products.v090-product-list .v093-no-photo-content small{height:18px!important;min-width:28px!important;font-size:7px!important;padding:0 5px!important}
