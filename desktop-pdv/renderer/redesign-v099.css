@@ -1,0 +1,162 @@
+/* ThorPDV v0.8.19 — finalização reorganizada e mais objetiva */
+
+/* Topo: cliente no lugar de busca/modelo/operação. */
+.thor-v089 .v099-checkout .v089-payment-top{
+  display:block!important;
+  margin:0 2px 10px!important;
+  width:100%!important;
+}
+.thor-v089 .v099-checkout .v099-customer-top{
+  margin:0!important;
+  display:grid!important;
+  grid-template-columns:72px minmax(0,1fr)!important;
+  align-items:center!important;
+  gap:10px!important;
+  padding:0!important;
+  background:transparent!important;
+}
+.thor-v089 .v099-checkout .v099-customer-top>label{
+  font-size:13px!important;
+  font-weight:700!important;
+  color:#29283a!important;
+  margin:0!important;
+}
+.thor-v089 .v099-checkout .v099-customer-top>div{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 38px 38px!important;
+  gap:7px!important;
+}
+.thor-v089 .v099-checkout .v099-customer-top button{
+  height:38px!important;
+  border:1px solid #d9d6e3!important;
+  background:transparent!important;
+  color:#48465a!important;
+  box-shadow:none!important;
+  font-size:12px!important;
+}
+.thor-v089 .v099-checkout .v099-customer-top button:first-child{
+  text-align:left!important;
+  padding:0 13px!important;
+  border-radius:12px!important;
+}
+.thor-v089 .v099-checkout .v099-customer-top button:nth-child(2),
+.thor-v089 .v099-checkout .v099-customer-top button:nth-child(3){
+  border-radius:12px!important;
+  color:#7441d7!important;
+  font-size:18px!important;
+}
+
+/* Resumo financeiro: Total e Saldo maiores. */
+.thor-v089 .v099-checkout .v099-main-kpis{
+  grid-template-columns:1fr!important;
+  gap:10px!important;
+}
+.thor-v089 .v099-checkout .v099-main-kpis article{
+  height:108px!important;
+  min-height:108px!important;
+  padding:15px 17px!important;
+  border:1px solid #ebe8f2!important;
+  box-shadow:0 5px 16px rgba(35,29,65,.06)!important;
+}
+.thor-v089 .v099-checkout .v099-main-kpis article small{
+  font-size:14px!important;
+  font-weight:700!important;
+}
+.thor-v089 .v099-checkout .v099-main-kpis article b{
+  font-size:31px!important;
+  font-weight:700!important;
+  letter-spacing:-.02em!important;
+}
+.thor-v089 .v099-checkout .v099-main-kpis article i{
+  width:42px!important;
+  height:42px!important;
+  font-size:22px!important;
+}
+
+/* Desconto, Acréscimo e Cashback viram cards, no mesmo padrão de leitura. */
+.thor-v089 .v099-checkout .v099-adjustment-kpis{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:8px!important;
+  padding:10px 0 0!important;
+  font-size:12px!important;
+}
+.thor-v089 .v099-checkout .v099-adjustment-kpis>span{
+  min-height:54px!important;
+  border:1px solid #e8e6ee!important;
+  border-radius:13px!important;
+  background:#fff!important;
+  padding:9px 12px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  font-size:13px!important;
+  font-weight:700!important;
+  box-shadow:0 3px 10px rgba(35,29,65,.04)!important;
+}
+.thor-v089 .v099-checkout .v099-adjustment-kpis>span b{
+  font-size:18px!important;
+  font-weight:700!important;
+}
+.thor-v089 .v099-checkout .v099-adjustment-kpis>span.discount{border-left:4px solid #00b9e8!important}
+.thor-v089 .v099-checkout .v099-adjustment-kpis>span.discount b{color:#00a7d3!important}
+.thor-v089 .v099-checkout .v099-adjustment-kpis>span.surcharge{border-left:4px solid #ff9a33!important}
+.thor-v089 .v099-checkout .v099-adjustment-kpis>span.surcharge b{color:#e98020!important}
+.thor-v089 .v099-checkout .v099-adjustment-kpis>span.cashback{border-left:4px solid #18b878!important}
+.thor-v089 .v099-checkout .v099-adjustment-kpis>span.cashback b{color:#149760!important}
+
+/* Mais espaço para o resumo, mantendo as formas de pagamento confortáveis. */
+.thor-v089 .v099-checkout .v089-payment-layout{
+  grid-template-columns:minmax(0,1.18fr) minmax(300px,.82fr)!important;
+  gap:16px!important;
+}
+.thor-v089 .v099-checkout .v099-payment-summary{
+  padding-left:4px!important;
+}
+
+/* Rodapé: sem Voltar e com Concluir Venda dominante e centralizado. */
+.thor-v089 .v099-checkout .v099-payment-footer{
+  margin-top:12px!important;
+  padding-top:10px!important;
+}
+.thor-v089 .v099-checkout .v099-finish-actions{
+  display:flex!important;
+  justify-content:center!important;
+  align-items:center!important;
+  grid-template-columns:none!important;
+  width:100%!important;
+}
+.thor-v089 .v099-checkout .v099-finish-checkout{
+  width:min(360px,100%)!important;
+  min-width:260px!important;
+  height:54px!important;
+  min-height:54px!important;
+  border-radius:16px!important;
+  font-size:16px!important;
+  font-weight:700!important;
+  padding:0 26px!important;
+  margin:0 auto!important;
+  box-shadow:0 7px 18px rgba(18,184,93,.20)!important;
+}
+
+/* Pago/Restante/Troco continuam visíveis, mas sem competir com o botão principal. */
+.thor-v089 .v099-checkout .v099-payment-footer>div:first-child{
+  font-size:12px!important;
+  margin-bottom:4px!important;
+}
+
+@media(max-height:780px){
+  .thor-v089 .v099-checkout .v099-main-kpis article{height:86px!important;min-height:86px!important;padding:11px 14px!important}
+  .thor-v089 .v099-checkout .v099-main-kpis article b{font-size:27px!important}
+  .thor-v089 .v099-checkout .v099-adjustment-kpis{gap:6px!important;padding-top:7px!important}
+  .thor-v089 .v099-checkout .v099-adjustment-kpis>span{min-height:43px!important;padding:7px 10px!important}
+  .thor-v089 .v099-checkout .v099-adjustment-kpis>span b{font-size:16px!important}
+  .thor-v089 .v099-checkout .v099-finish-checkout{height:46px!important;min-height:46px!important;font-size:15px!important}
+}
+
+@media(max-width:900px){
+  .thor-v089 .v099-checkout .v099-customer-top{grid-template-columns:1fr!important;gap:5px!important}
+  .thor-v089 .v099-checkout .v089-payment-layout{grid-template-columns:1fr!important}
+  .thor-v089 .v099-checkout .v099-payment-summary{display:none!important}
+}
