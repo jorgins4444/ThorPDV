@@ -65,6 +65,7 @@ body.thor-v089,
 .thor-v089 .v089-menu-grid button[data-act="operator"]{background:linear-gradient(135deg,#565765,#747584)!important}
 .thor-v089 .v089-menu-grid button[data-v090-movement="supply"],
 .thor-v089 .v089-menu-grid button[data-v090-movement="suprimento"]{background:linear-gradient(135deg,var(--v94-green-dark),var(--v94-green))!important}
+.thor-v089 .v089-menu-grid button[data-v090-movement="withdrawal"],
 .thor-v089 .v089-menu-grid button[data-v090-movement="withdraw"],
 .thor-v089 .v089-menu-grid button[data-v090-movement="sangria"]{background:linear-gradient(135deg,var(--v94-red-dark),var(--v94-red))!important}
 
@@ -110,12 +111,19 @@ body.thor-v089,
 .thor-v089 .v089-pay-methods button.active,
 .thor-v089 .v089-pay-methods button[aria-pressed="true"]{outline:3px solid rgba(255,255,255,.72)!important;outline-offset:-5px!important;box-shadow:0 0 0 3px rgba(116,65,215,.18),0 7px 16px rgba(48,36,79,.18)!important}
 
-/* Ações dentro da finalização. */
+/* Ações dentro da finalização: todos com fundo sólido e letras brancas. */
 .thor-v089 .v089-add-payment{
   color:#fff!important;
   background:linear-gradient(135deg,var(--v94-purple),#8750dc)!important;
   border:0!important;
   box-shadow:0 5px 12px rgba(116,65,215,.17)!important;
+}
+.thor-v089 .v089-payment-top>button,
+.thor-v089 .v089-payment-customer button{
+  color:#fff!important;
+  background:linear-gradient(135deg,var(--v94-cyan-dark),var(--v94-cyan))!important;
+  border-color:transparent!important;
+  box-shadow:0 3px 8px rgba(0,157,199,.14)!important;
 }
 .thor-v089 .v090-payment-footer #finishCheckout,
 .thor-v089 #finishCheckout{
@@ -135,6 +143,20 @@ body.thor-v089,
   background:linear-gradient(135deg,var(--v94-green-dark),var(--v94-green))!important;
   border:0!important;
   font-weight:800!important;
+}
+.thor-v089 .v090-movement-modal .primary.danger,
+.thor-v089 .v090-movement-modal .danger{
+  color:#fff!important;
+  background:linear-gradient(135deg,var(--v94-red-dark),var(--v94-red))!important;
+  border:0!important;
+}
+.thor-v089 .v090-movement-modal .secondary,
+.thor-v089 .v089-payment-card .secondary,
+.thor-v089 .v090-payment-card .secondary{
+  color:#fff!important;
+  background:linear-gradient(135deg,#5f606d,#777886)!important;
+  border-color:transparent!important;
+  font-weight:750!important;
 }
 
 /* Fiscal: botões que antes eram apenas contorno passam a ser preenchidos. */
