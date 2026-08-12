@@ -1,0 +1,14 @@
+/* ThorPDV 0.8.22 — correção de finalização da Venda a Prazo */
+.thor-v089 .v102-checkout #payError.v102-visible-error{
+  display:block!important;
+  visibility:visible!important;
+  min-height:18px;
+  margin-top:6px;
+  color:#a83c3c;
+  font-size:10.5px;
+  line-height:1.35;
+}
+.thor-v089 .v102-checkout #finishCheckout:disabled{
+  opacity:.72!important;
+  cursor:wait!important;
+}
