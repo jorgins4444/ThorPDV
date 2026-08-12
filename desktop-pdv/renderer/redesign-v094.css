@@ -1,0 +1,173 @@
+/* ThorPDV v0.8.14 — botões preenchidos, contraste alto e tipografia mais nítida */
+
+:root{
+  --v94-purple:#7441d7;
+  --v94-purple-dark:#6232bd;
+  --v94-cyan:#00add8;
+  --v94-cyan-dark:#008fb9;
+  --v94-green:#16b963;
+  --v94-green-dark:#0d9850;
+  --v94-orange:#f39a32;
+  --v94-orange-dark:#db7c18;
+  --v94-red:#d94848;
+  --v94-red-dark:#bd3333;
+  --v94-slate:#676777;
+}
+
+/* Tipografia geral mais legível, mantendo o desenho compacto do PDV. */
+body.thor-v089,
+.thor-v089 button,
+.thor-v089 input,
+.thor-v089 select,
+.thor-v089 textarea{
+  font-family:"Segoe UI Variable Text","Segoe UI",Inter,Arial,sans-serif!important;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  font-kerning:normal;
+}
+.thor-v089 button{font-weight:750;letter-spacing:.005em}
+.thor-v089 button b{font-weight:800!important}
+
+/* Ações rápidas do topo: cor que era da borda/letra vira fundo; texto sempre branco. */
+.thor-v089 .v089-quick button{
+  border:0!important;
+  color:#fff!important;
+  box-shadow:0 5px 13px rgba(30,25,50,.13),inset 0 1px 0 rgba(255,255,255,.17)!important;
+  transition:transform .14s ease,box-shadow .14s ease,filter .14s ease!important;
+}
+.thor-v089 .v089-quick button span,
+.thor-v089 .v089-quick button b,
+.thor-v089 .v089-quick button small{color:#fff!important;text-shadow:0 1px 1px rgba(0,0,0,.12)}
+.thor-v089 .v089-quick .purple{background:linear-gradient(135deg,var(--v94-purple),#8954e1)!important}
+.thor-v089 .v089-quick .cyan{background:linear-gradient(135deg,var(--v94-cyan),#10c3e9)!important}
+.thor-v089 .v089-quick .orange{background:linear-gradient(135deg,var(--v94-orange),#ffad49)!important}
+.thor-v089 .v089-quick button:hover{transform:translateY(-1px)!important;filter:brightness(1.035);box-shadow:0 7px 16px rgba(30,25,50,.18)!important}
+.thor-v089 .v089-quick button:active{transform:translateY(0)!important;filter:brightness(.97)}
+.thor-v089 .v089-quick button:focus-visible{outline:3px solid rgba(116,65,215,.22)!important;outline-offset:2px}
+
+/* Ações F2: cada função ganha cor semântica forte com texto branco. */
+.thor-v089 .v089-menu-grid button{
+  color:#fff!important;
+  border:0!important;
+  background:linear-gradient(135deg,var(--v94-purple),#8750dc)!important;
+  box-shadow:0 6px 14px rgba(43,31,75,.14)!important;
+  transition:transform .14s ease,filter .14s ease,box-shadow .14s ease!important;
+}
+.thor-v089 .v089-menu-grid button i,
+.thor-v089 .v089-menu-grid button b,
+.thor-v089 .v089-menu-grid button small{color:#fff!important}
+.thor-v089 .v089-menu-grid button i{background:rgba(255,255,255,.16)!important;border:1px solid rgba(255,255,255,.17)!important}
+.thor-v089 .v089-menu-grid button small{opacity:.88!important}
+.thor-v089 .v089-menu-grid button:hover{transform:translateY(-2px)!important;filter:brightness(1.04);box-shadow:0 9px 18px rgba(43,31,75,.20)!important}
+.thor-v089 .v089-menu-grid button[data-act="fiscal"],
+.thor-v089 .v089-menu-grid button[data-act="sync"]{background:linear-gradient(135deg,var(--v94-cyan-dark),var(--v94-cyan))!important}
+.thor-v089 .v089-menu-grid button[data-act="drawer"]{background:linear-gradient(135deg,var(--v94-orange-dark),var(--v94-orange))!important}
+.thor-v089 .v089-menu-grid button[data-act="operator"]{background:linear-gradient(135deg,#565765,#747584)!important}
+.thor-v089 .v089-menu-grid button[data-v090-movement="supply"],
+.thor-v089 .v089-menu-grid button[data-v090-movement="suprimento"]{background:linear-gradient(135deg,var(--v94-green-dark),var(--v94-green))!important}
+.thor-v089 .v089-menu-grid button[data-v090-movement="withdraw"],
+.thor-v089 .v089-menu-grid button[data-v090-movement="sangria"]{background:linear-gradient(135deg,var(--v94-red-dark),var(--v94-red))!important}
+
+/* Botão principal da venda recebe verde mais sólido e leitura maior. */
+.thor-v089 .v089-finalize,
+.thor-v089 .v090-finalize{
+  color:#fff!important;
+  background:linear-gradient(135deg,#0da953,#20c86b)!important;
+  border:0!important;
+  box-shadow:0 7px 16px rgba(14,166,82,.20),inset 0 1px 0 rgba(255,255,255,.18)!important;
+  text-shadow:0 1px 1px rgba(0,0,0,.12)!important;
+  font-size:13px!important;
+  font-weight:850!important;
+}
+.thor-v089 .v089-finalize:hover,.thor-v089 .v090-finalize:hover{filter:brightness(1.035)}
+
+/* Grade/Lista: opção ativa vira botão roxo preenchido. */
+.thor-v089 .v090-view-switch button.active{
+  color:#fff!important;
+  background:linear-gradient(135deg,var(--v94-purple),#8750dc)!important;
+  border-color:transparent!important;
+  box-shadow:0 3px 8px rgba(116,65,215,.18)!important;
+}
+.thor-v089 .v090-view-switch button.active b{color:#fff!important}
+
+/* Finalização de pagamento: formas de pagamento viram cards coloridos e mais nítidos. */
+.thor-v089 .v089-pay-methods button{
+  color:#fff!important;
+  border:0!important;
+  background:linear-gradient(135deg,var(--v94-purple),#8750dc)!important;
+  box-shadow:0 5px 12px rgba(48,36,79,.13)!important;
+  text-shadow:0 1px 1px rgba(0,0,0,.10)!important;
+  transition:transform .12s ease,filter .12s ease!important;
+}
+.thor-v089 .v089-pay-methods button i,
+.thor-v089 .v089-pay-methods button span,
+.thor-v089 .v089-pay-methods button b,
+.thor-v089 .v089-pay-methods button small{color:#fff!important}
+.thor-v089 .v089-pay-methods button:nth-child(2n){background:linear-gradient(135deg,var(--v94-cyan-dark),var(--v94-cyan))!important}
+.thor-v089 .v089-pay-methods button:nth-child(3n){background:linear-gradient(135deg,var(--v94-green-dark),var(--v94-green))!important}
+.thor-v089 .v089-pay-methods button:nth-child(4n){background:linear-gradient(135deg,#5e42bd,#7a5ddd)!important}
+.thor-v089 .v089-pay-methods button:hover{transform:translateY(-1px)!important;filter:brightness(1.04)}
+.thor-v089 .v089-pay-methods button.active,
+.thor-v089 .v089-pay-methods button[aria-pressed="true"]{outline:3px solid rgba(255,255,255,.72)!important;outline-offset:-5px!important;box-shadow:0 0 0 3px rgba(116,65,215,.18),0 7px 16px rgba(48,36,79,.18)!important}
+
+/* Ações dentro da finalização. */
+.thor-v089 .v089-add-payment{
+  color:#fff!important;
+  background:linear-gradient(135deg,var(--v94-purple),#8750dc)!important;
+  border:0!important;
+  box-shadow:0 5px 12px rgba(116,65,215,.17)!important;
+}
+.thor-v089 .v090-payment-footer #finishCheckout,
+.thor-v089 #finishCheckout{
+  color:#fff!important;
+  background:linear-gradient(135deg,var(--v94-green-dark),var(--v94-green))!important;
+  border:0!important;
+  box-shadow:0 6px 14px rgba(14,166,82,.20)!important;
+  font-weight:850!important;
+}
+
+/* Modais de desconto/acréscimo e movimentos de caixa. */
+.thor-v089 .v090-movement-modal .primary,
+.thor-v089 .v090-movement-modal button[type="submit"],
+.thor-v089 .discount-v45-modal .primary,
+.thor-v089 .discount-v45-modal button[type="submit"]{
+  color:#fff!important;
+  background:linear-gradient(135deg,var(--v94-green-dark),var(--v94-green))!important;
+  border:0!important;
+  font-weight:800!important;
+}
+
+/* Fiscal: botões que antes eram apenas contorno passam a ser preenchidos. */
+.thor-v089 .v090-fiscal-head>button,
+.thor-v089 .v090-fiscal-toolbar button,
+.thor-v089 .v090-fiscal-table-card .table-action{
+  color:#fff!important;
+  background:linear-gradient(135deg,var(--v94-purple),#8750dc)!important;
+  border-color:transparent!important;
+  font-weight:800!important;
+  box-shadow:0 3px 8px rgba(116,65,215,.14)!important;
+}
+.thor-v089 .v090-fiscal-nav button{
+  color:#fff!important;
+  background:linear-gradient(135deg,#6d6c79,#858491)!important;
+  border-color:transparent!important;
+  font-weight:750!important;
+}
+.thor-v089 .v090-fiscal-nav button:first-child{background:linear-gradient(135deg,var(--v94-purple),#8750dc)!important}
+.thor-v089 .v090-fiscal-nav button:nth-child(3n){background:linear-gradient(135deg,var(--v94-cyan-dark),var(--v94-cyan))!important}
+.thor-v089 .v090-fiscal-nav button:nth-child(4n){background:linear-gradient(135deg,var(--v94-orange-dark),var(--v94-orange))!important}
+.thor-v089 .v090-fiscal-nav button:hover{filter:brightness(1.04)!important;color:#fff!important}
+
+/* Pequeno ganho adicional de leitura em botões sem aumentar demais a altura. */
+.thor-v089 .v089-quick button b{font-size:10px!important}
+.thor-v089 .v089-quick button small{font-size:8px!important;opacity:.9}
+.thor-v089 .v089-menu-grid button b{font-size:12px!important}
+.thor-v089 .v089-menu-grid button small{font-size:9px!important}
+.thor-v089 .v089-pay-methods button{font-size:11px!important;font-weight:800!important}
+.thor-v089 .v090-fiscal-nav button{font-size:10px!important}
+
+/* Não saturar notebooks menores: mantém contraste, reduz somente sombras. */
+@media(max-width:1100px), (max-height:720px){
+  .thor-v089 .v089-quick button,.thor-v089 .v089-menu-grid button,.thor-v089 .v089-pay-methods button{box-shadow:0 3px 8px rgba(35,28,55,.12)!important}
+  .thor-v089 .v089-quick button b{font-size:9px!important}
+}
