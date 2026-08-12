@@ -233,12 +233,7 @@ function installDailyCashV083(ThorAgent) {
     }
     try {
       await this.sync.run(true);
-      const response = await fetch(`${this.apiBase.replace(/\/$/,'')}/api/pdv/cash/preview`, {
-        method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ cashOpenEventId: target || null }),
-      });
-      const server = await response.json().catch(() => ({}));
-      if (!response.ok || !server.ok) throw new Error(server.error || `http_${response.status}`);
+      const server = await this.sync.control('cash_preview_query', { cash_open_event_id: target || '' });
       let unsynced = null;
       if (target) { try { unsynced = this._dailyLocalCashSummary(target, { onlyUnsynced: true }); } catch {} }
       const payments = this._mergeCashPaymentRows(server.payments || [], unsynced?.payments || []);
@@ -269,13 +264,12 @@ function installDailyCashV083(ThorAgent) {
     let serverDate = businessDate();
     if (token) {
       try {
-        await fetch(`${this.apiBase.replace(/\/$/,'')}/api/pdv/cash/rollover`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: '{}' });
-        const response = await fetch(`${this.apiBase.replace(/\/$/,'')}/api/pdv/cash/sessions`, {
-          method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-          body: JSON.stringify({ from: filters.from || null, to: filters.to || null, status: filters.status || 'all' }),
+        await this.sync.run(true);
+        const data = await this.sync.control('cash_sessions_query', {
+          from: filters.from || '', to: filters.to || '', status: filters.status || 'all',
         });
-        const data = await response.json().catch(() => ({}));
-        if (response.ok && data.ok) { server = data.sessions || []; serverDate = data.business_date || serverDate; }
+        server = data.sessions || [];
+        serverDate = data.business_date || serverDate;
       } catch {}
     }
     const map = new Map();
@@ -296,19 +290,20 @@ function installDailyCashV083(ThorAgent) {
     const operator = this.currentOperator?.();
     if (!operator) throw new Error('operator_required');
     if (!permitted(operator, 'cash.close')) throw new Error('operator_not_allowed_to_close_cash');
-    const token = this.deviceToken();
-    if (!token) throw new Error('historical_cash_close_requires_online');
-    const response = await fetch(`${this.apiBase.replace(/\/$/,'')}/api/pdv/cash/close-session`, {
-      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ cashOpenEventId: eventId, closingAmount: num(closingAmount), notes: text(notes), operatorUserId: operator.id, reconciliation }),
+    if (!this.deviceToken()) throw new Error('historical_cash_close_requires_online');
+    const data = await this.sync.control('cash_historical_close', {
+      cash_open_event_id: eventId,
+      closing_amount: num(closingAmount),
+      notes: text(notes),
+      operator_user_id: operator.id,
+      reconciliation,
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) throw new Error(data.error || `http_${response.status}`);
     this.store.set(`cash_direct_closed_${eventId}`, data.closed_at || new Date().toISOString());
-    const summary = { ...reconciliation, ...data, client_event_id: eventId, closing_amount: num(closingAmount), difference: num(data.difference), closed_at: data.closed_at || new Date().toISOString(), operator: { id: operator.id, name: operator.name }, notes: text(notes), source: 'server' };
+    const summary = { ...reconciliation, ...data, client_event_id: eventId, closing_amount: num(data.closing_amount ?? closingAmount), difference: num(data.difference), closed_at: data.closed_at || new Date().toISOString(), operator: { id: operator.id, name: operator.name }, notes: text(notes), source: 'server' };
     this.store.set('last_cash_close_summary', JSON.stringify(summary));
     return { ok: true, summary };
   };
+
 }
 
 module.exports = { installDailyCashV083, CASH_TIME_ZONE, businessDate };
