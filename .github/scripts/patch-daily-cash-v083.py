@@ -29,11 +29,38 @@ cash = cash.replace("`${PAYMENT_LABELS[p.method] || p.method}: Sist R$", "`${p.n
 cash = cash.replace("`${PAYMENT_LABELS[p.method] || p.method}: R$", "`${p.name || PAYMENT_LABELS[p.method] || p.method}: R$")
 cash_path.write_text(cash, encoding='utf-8')
 
+# Keep the high-frequency status path light: count overdue sessions without calculating every closing summary.
+daily_path = Path('desktop-pdv/agent/daily-cash-v083.js')
+daily = daily_path.read_text(encoding='utf-8')
+status_marker = "  ThorAgent.prototype.status = async function () {"
+if '_localOverdueCashCount' not in daily:
+    helper = r'''  ThorAgent.prototype._localOverdueCashCount = function () {
+    const today = businessDate();
+    const opens = this.store.db.prepare("select id,payload,created_at from queue where type='cash_open'").all();
+    const closeRows = this.store.db.prepare("select payload from queue where type='cash_close'").all();
+    const closed = new Set(closeRows.map((row) => String(json(row.payload, {}).cash_open_event_id || '')).filter(Boolean));
+    let count = 0;
+    for (const row of opens) {
+      if (closed.has(String(row.id)) || this.store.get(`cash_direct_closed_${row.id}`)) continue;
+      const payload = json(row.payload, {});
+      const date = text(payload.business_date) || businessDate(payload.occurred_at || row.created_at);
+      if (date && date < today) count++;
+    }
+    return count;
+  };
+
+'''
+    if status_marker not in daily:
+        raise SystemExit('daily status marker not found')
+    daily = daily.replace(status_marker, helper + status_marker, 1)
+daily = daily.replace("    const overdue = this._localCashSessions().filter((session) => session.status === 'pending_close').length;", "    const overdue = this._localOverdueCashCount();")
+daily_path.write_text(daily, encoding='utf-8')
+
 # Static checks.
 checks = {
     'desktop-pdv/main.js': ['installDailyCashV083(ThorAgent);', "thor:cash-sessions", "thor:close-historical-cash"],
     'desktop-pdv/preload.js': ['cashSessions:', 'closeHistoricalCash:'],
-    'desktop-pdv/agent/daily-cash-v083.js': ['cash_day_expired', 'term_sale', 'closeHistoricalCash'],
+    'desktop-pdv/agent/daily-cash-v083.js': ['cash_day_expired', 'term_sale', 'closeHistoricalCash', '_localOverdueCashCount'],
     'desktop-pdv/renderer/cash-daily-v083.js': ['Buscar caixas', 'Venda a prazo', 'Abertos / pendentes'],
     'desktop-pdv/package.json': ['"version": "0.8.3"'],
 }
