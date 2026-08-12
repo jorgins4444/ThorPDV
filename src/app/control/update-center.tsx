@@ -21,12 +21,25 @@ type UpdateData = {
 const empty: UpdateData = { summary: {}, releases: [], tenants: [], policies: [], devices: [], events: [] };
 const text = (v: unknown) => String(v ?? '');
 const dt = (v: unknown) => v ? new Date(String(v)).toLocaleString('pt-BR') : '—';
+const releaseLines = (value: string) => value.split(/\r?\n/).map(v => v.trim().replace(/^[-•*]\s*/, '')).filter(Boolean);
+function composeReleaseNotes(form: { changes: string; improvements: string; fixes: string }) {
+  const groups: Array<[string,string[]]> = [
+    ['MUDANÇAS', releaseLines(form.changes)],
+    ['MELHORIAS', releaseLines(form.improvements)],
+    ['CORREÇÕES', releaseLines(form.fixes)],
+  ];
+  return groups.filter(([,items]) => items.length).map(([title,items]) => `${title}\n${items.map(item => `- ${item}`).join('\n')}`).join('\n\n');
+}
+function releaseNotesPreview(value: unknown) {
+  const lines = text(value).split(/\r?\n/).map(v => v.trim()).filter(Boolean).filter(v => !/^(MUDANÇAS|MELHORIAS|CORREÇÕES)$/i.test(v));
+  return lines.map(v => v.replace(/^[-•*]\s*/, '')).slice(0, 5).join(' • ') || 'Sem notas cadastradas';
+}
 
 export default function UpdateCenter() {
   const [data, setData] = useState<UpdateData>(empty);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [releaseForm, setReleaseForm] = useState({ version: '', channel: 'stable', status: 'published', download_url: '', sha256: '', release_notes: '' });
+  const [releaseForm, setReleaseForm] = useState({ version: '', channel: 'stable', status: 'published', download_url: '', sha256: '', changes: '', improvements: '', fixes: '' });
   const [policy, setPolicy] = useState({ scope: 'global', tenant_id: '', device_id: '', release_id: '', mode: 'notify', reason: '' });
 
   async function load() {
@@ -50,12 +63,16 @@ export default function UpdateCenter() {
   const globalTarget = text(data.summary.global_target_version) || 'Nenhuma';
 
   async function saveRelease(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setMessage('');
+    e.preventDefault(); setMessage('');
+    const release_notes = composeReleaseNotes(releaseForm);
+    if (!release_notes) { setMessage('Informe ao menos uma mudança, melhoria ou correção desta versão.'); return; }
+    setBusy(true);
     try {
-      const result = await controlReleaseSave(releaseForm);
+      const { changes, improvements, fixes, ...base } = releaseForm;
+      const result = await controlReleaseSave({ ...base, release_notes });
       if (!result?.ok) throw new Error(result?.error || 'release_save_failed');
-      setMessage(`Versão ${releaseForm.version} cadastrada.`);
-      setReleaseForm({ version: '', channel: 'stable', status: 'published', download_url: '', sha256: '', release_notes: '' });
+      setMessage(`Versão ${releaseForm.version} cadastrada com notas de atualização.`);
+      setReleaseForm({ version: '', channel: 'stable', status: 'published', download_url: '', sha256: '', changes: '', improvements: '', fixes: '' });
       await load();
     } catch (err) { setMessage(String((err as Error).message || err)); }
     finally { setBusy(false); }
@@ -129,14 +146,16 @@ export default function UpdateCenter() {
         <label><span>Status</span><select value={releaseForm.status} onChange={e => setReleaseForm(f => ({ ...f, status: e.target.value }))}><option value="published">Publicada</option><option value="draft">Rascunho</option></select></label>
         <label className="wide"><span>URL HTTPS do instalador</span><input required type="url" placeholder="https://github.com/.../ThorPDV-Desktop-0.8.1-x64.exe" value={releaseForm.download_url} onChange={e => setReleaseForm(f => ({ ...f, download_url: e.target.value }))} /></label>
         <label className="wide"><span>SHA-256</span><input required minLength={64} maxLength={64} placeholder="64 caracteres hexadecimais" value={releaseForm.sha256} onChange={e => setReleaseForm(f => ({ ...f, sha256: e.target.value.toLowerCase() }))} /></label>
-        <label className="wide"><span>Notas da versão</span><textarea rows={3} value={releaseForm.release_notes} onChange={e => setReleaseForm(f => ({ ...f, release_notes: e.target.value }))} placeholder="Correções e novidades mostradas no PDV." /></label>
+        <label className="wide"><span>Mudanças e novidades</span><textarea rows={3} value={releaseForm.changes} onChange={e => setReleaseForm(f => ({ ...f, changes: e.target.value }))} placeholder="Uma mudança por linha. Ex.: Nova tela de atualização contínua" /></label>
+        <label className="wide"><span>Melhorias</span><textarea rows={3} value={releaseForm.improvements} onChange={e => setReleaseForm(f => ({ ...f, improvements: e.target.value }))} placeholder="Uma melhoria por linha. Ex.: Sincronização pós-update mais segura" /></label>
+        <label className="wide"><span>Correções</span><textarea rows={3} value={releaseForm.fixes} onChange={e => setReleaseForm(f => ({ ...f, fixes: e.target.value }))} placeholder="Uma correção por linha. Ex.: Corrigido logout desnecessário após atualização" /></label>
         <div className="control-actions wide"><button type="submit" disabled={busy}>{busy ? 'Salvando...' : 'Cadastrar versão'}</button></div>
       </form>
     </section>
 
     <section className="control-panel">
       <div className="control-panel-title"><div><small>VERSÕES</small><h2>Releases disponíveis</h2></div></div>
-      <div className="control-table-wrap"><table><thead><tr><th>Versão</th><th>Canal</th><th>Status</th><th>SHA-256</th><th>Publicada</th><th>Ações</th></tr></thead><tbody>{data.releases.map(r => <tr key={text(r.id)}><td><strong>v{text(r.version)}</strong><small>{text(r.release_notes)}</small></td><td>{text(r.channel)}</td><td><span className={`control-badge ${text(r.status)}`}>{text(r.status)}</span></td><td><code>{text(r.sha256).slice(0, 12)}…</code></td><td>{dt(r.published_at)}</td><td className="update-row-actions">{text(r.status) !== 'published' && <button onClick={() => changeReleaseStatus(r, 'published')}>Publicar</button>}{text(r.status) === 'published' && <button className="danger-link" onClick={() => changeReleaseStatus(r, 'blocked')}>Bloquear</button>}{text(r.status) !== 'archived' && <button className="ghost-link" onClick={() => changeReleaseStatus(r, 'archived')}>Arquivar</button>}</td></tr>)}</tbody></table></div>
+      <div className="control-table-wrap"><table><thead><tr><th>Versão</th><th>Canal</th><th>Status</th><th>SHA-256</th><th>Publicada</th><th>Ações</th></tr></thead><tbody>{data.releases.map(r => <tr key={text(r.id)}><td><strong>v{text(r.version)}</strong><small>{releaseNotesPreview(r.release_notes)}</small></td><td>{text(r.channel)}</td><td><span className={`control-badge ${text(r.status)}`}>{text(r.status)}</span></td><td><code>{text(r.sha256).slice(0, 12)}…</code></td><td>{dt(r.published_at)}</td><td className="update-row-actions">{text(r.status) !== 'published' && <button onClick={() => changeReleaseStatus(r, 'published')}>Publicar</button>}{text(r.status) === 'published' && <button className="danger-link" onClick={() => changeReleaseStatus(r, 'blocked')}>Bloquear</button>}{text(r.status) !== 'archived' && <button className="ghost-link" onClick={() => changeReleaseStatus(r, 'archived')}>Arquivar</button>}</td></tr>)}</tbody></table></div>
     </section>
 
     <section className="control-panel">

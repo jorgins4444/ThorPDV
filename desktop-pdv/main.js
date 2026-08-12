@@ -54,20 +54,50 @@ function codec() {
   };
 }
 
+function readPendingUpdateMarker(dataDir) {
+  try { return JSON.parse(fs.readFileSync(path.join(dataDir, 'pending-update.json'), 'utf8')); }
+  catch { return null; }
+}
+
+function validatedUpdateResume(marker, localCodec) {
+  try {
+    if (!marker?.targetVersion || String(marker.targetVersion) !== DESKTOP_VERSION) return null;
+    const created = Date.parse(String(marker.createdAt || ''));
+    if (!Number.isFinite(created) || Date.now() - created > 30 * 60 * 1000) return null;
+    const token = String(marker.resumeToken || '');
+    if (!token.startsWith('enc:')) return null;
+    const claim = JSON.parse(localCodec.decrypt(token) || '{}');
+    const issued = Date.parse(String(claim.issuedAt || ''));
+    if (!claim.operatorId || String(claim.targetVersion) !== DESKTOP_VERSION) return null;
+    if (!Number.isFinite(issued) || Date.now() - issued > 30 * 60 * 1000) return null;
+    return claim;
+  } catch { return null; }
+}
+
 async function createWindow() {
+  const dataDir = app.getPath('userData');
+  const pendingUpdate = readPendingUpdateMarker(dataDir);
+  const localCodec = codec();
+  const resumeClaim = validatedUpdateResume(pendingUpdate, localCodec);
+  const resumeUpdate = Boolean(resumeClaim);
+
   agent = new ThorAgent({
-    dataDir: app.getPath('userData'),
+    dataDir,
     apiBase: process.env.THORPDV_API_URL || 'https://thorpdv.vercel.app',
-    codec: codec(),
+    codec: localCodec,
   });
   agent.sync.appVersion = DESKTOP_VERSION;
-  if (typeof agent.logoutOperator === 'function') agent.logoutOperator();
+
+  // Normal startup still requires a fresh operator login. A validated update restart
+  // is the only case where the existing local operator session may be resumed.
+  if (!resumeUpdate && typeof agent.logoutOperator === 'function') agent.logoutOperator();
   await agent.start();
+
   updater = new ThorUpdater({
     agent,
     appVersion: DESKTOP_VERSION,
     apiBase: agent.apiBase,
-    userDataDir: app.getPath('userData'),
+    userDataDir: dataDir,
     tempDir: app.getPath('temp'),
     onProgress: (payload) => { try { mainWindow?.webContents.send('thor:update-progress', payload); } catch {} },
     quit: () => app.quit(),
@@ -81,6 +111,7 @@ async function createWindow() {
     backgroundColor: '#f4f6f5',
     title: 'ThorPDV Desktop',
     autoHideMenuBar: true,
+    show: !resumeUpdate,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -88,9 +119,32 @@ async function createWindow() {
       sandbox: false,
     },
   });
+
   await mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  void updater.finalizePending().catch(() => {});
-  void updater.check({ silent: true }).then(() => { try { mainWindow?.webContents.send('thor:update-status', updater.updateInfo()); } catch {} }).catch(() => {});
+
+  if (resumeUpdate) {
+    try {
+      await updater.finalizePending({ strict: true });
+      // Reload after the post-update sync so operator, products and permissions are
+      // rendered from the freshly synchronized local database.
+      await mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+    } catch (error) {
+      updater.writeHelperStatus?.('error', String(error?.message || error));
+      console.error('[ThorPDV update resume]', error);
+    } finally {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  } else {
+    const strictResume = process.argv.includes('--thor-update-resume');
+    void updater.finalizePending({ strict: strictResume }).catch((error) => {
+      updater.writeHelperStatus?.('error', String(error?.message || error));
+    });
+  }
+
+  void updater.check({ silent: true }).then(() => {
+    try { mainWindow?.webContents.send('thor:update-status', updater.updateInfo()); } catch {}
+  }).catch(() => {});
 }
 
 async function loadPrintable(doc) {
