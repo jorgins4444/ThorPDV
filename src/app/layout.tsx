@@ -11,6 +11,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="pt-BR">
       <body>{children}</body>
+      <script src="/product-image-upload-v090.js" defer />
     </html>
   );
 }
