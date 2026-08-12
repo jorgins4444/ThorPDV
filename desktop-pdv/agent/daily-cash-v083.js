@@ -158,10 +158,25 @@ function installDailyCashV083(ThorAgent) {
     }).filter(Boolean);
   };
 
+  ThorAgent.prototype._localOverdueCashCount = function () {
+    const today = businessDate();
+    const opens = this.store.db.prepare("select id,payload,created_at from queue where type='cash_open'").all();
+    const closeRows = this.store.db.prepare("select payload from queue where type='cash_close'").all();
+    const closed = new Set(closeRows.map((row) => String(json(row.payload, {}).cash_open_event_id || '')).filter(Boolean));
+    let count = 0;
+    for (const row of opens) {
+      if (closed.has(String(row.id)) || this.store.get(`cash_direct_closed_${row.id}`)) continue;
+      const payload = json(row.payload, {});
+      const date = text(payload.business_date) || businessDate(payload.occurred_at || row.created_at);
+      if (date && date < today) count++;
+    }
+    return count;
+  };
+
   ThorAgent.prototype.status = async function () {
     const rollover = this._normalizeCurrentCashDay();
     const result = await originalStatus.call(this);
-    const overdue = this._localCashSessions().filter((session) => session.status === 'pending_close').length;
+    const overdue = this._localOverdueCashCount();
     return { ...result, cashOpenEventId: this.store.get('cash_open_event_id') || null, cashBusinessDate: businessDate(), cashDayRollover: rollover.rolledOver ? rollover : null, overdueCashCount: overdue };
   };
 
