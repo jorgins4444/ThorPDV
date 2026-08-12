@@ -1,0 +1,70 @@
+/* ThorPDV 0.8.21 — Venda a Prazo em duas etapas com cronograma */
+.thor-v089 .v101-checkout .v089-pay-methods button[data-method="term_sale"]{background:linear-gradient(135deg,#6540c9,#8155dc)!important}
+.thor-v089 .v101-checkout .v089-pay-methods button[data-method="term_sale"] i{background:rgba(255,255,255,.18)!important;color:#fff!important;border:1px solid rgba(255,255,255,.22)!important}
+.thor-v089 .v101-checkout .v089-pay-methods button[data-method="term_sale"] i svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* Quando Venda a Prazo está aberta, os campos de pagamento imediato cedem espaço ao parcelamento. */
+.thor-v089 .v101-checkout .payment-entry.v101-term-mode>.field,
+.thor-v089 .v101-checkout .payment-entry.v101-term-mode>#cashTenderWrap,
+.thor-v089 .v101-checkout .payment-entry.v101-term-mode>#s71CardFields,
+.thor-v089 .v101-checkout .payment-entry.v101-term-mode>.payment-entry-actions,
+.thor-v089 .v101-checkout .payment-entry.v101-term-mode>#payError:not(:last-child){display:none!important}
+
+.thor-v089 .v101-term-panel{margin-top:10px;border:1px solid #e1dced;border-radius:16px;background:#fbfaff;padding:13px;display:grid;gap:10px;box-shadow:0 4px 14px rgba(62,45,103,.05)}
+.thor-v089 .v101-term-panel[hidden]{display:none!important}
+.thor-v089 .v101-term-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.thor-v089 .v101-term-head>div{display:grid;gap:2px}
+.thor-v089 .v101-term-head small{font-size:9px;font-weight:800;letter-spacing:.08em;color:#7650cb}
+.thor-v089 .v101-term-head strong{font-size:15px;color:#2d2938}
+.thor-v089 .v101-term-head p{margin:1px 0 0;font-size:10.5px;line-height:1.35;color:#797286}
+.thor-v089 .v101-gestao-badge{display:inline-flex;align-items:center;height:25px;padding:0 9px;border-radius:999px;background:#eee8fb;color:#6841c3;font-size:9.5px;font-weight:800;white-space:nowrap}
+
+.thor-v089 .v101-term-fields{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(150px,.65fr);gap:9px}
+.thor-v089 .v101-term-fields label{display:grid;gap:4px;font-size:10.5px;font-weight:700;color:#4a4555}
+.thor-v089 .v101-term-fields select{height:38px;border:1px solid #d9d3e5;border-radius:10px;background:#fff;color:#302c38;padding:0 10px;font:600 11px/1 Calibri,Arial,sans-serif;outline:none}
+.thor-v089 .v101-term-fields select:focus{border-color:#8055d7;box-shadow:0 0 0 3px rgba(128,85,215,.10)}
+.thor-v089 .v101-term-fields label small{font-size:9px;font-weight:600;color:#85808b}
+
+.thor-v089 .v101-rule-line{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.thor-v089 .v101-rule-line span{display:flex;align-items:center;justify-content:space-between;gap:7px;min-height:31px;padding:6px 8px;border-radius:9px;background:#f2eff8;color:#716a79;font-size:9.5px}
+.thor-v089 .v101-rule-line b{color:#443b52;font-size:10px}
+.thor-v089 .v101-term-alert{margin-top:6px;padding:7px 9px;border-radius:9px;border-left:3px solid #f09a35;background:#fff8ec;color:#805c31;font-size:9.5px;line-height:1.35}
+
+.thor-v089 .v101-term-empty{min-height:77px;border:1px dashed #d7d0e4;border-radius:12px;display:grid;place-items:center;padding:12px;text-align:center;color:#8a8490;font-size:10.5px;background:#fff}
+.thor-v089 .v101-term-empty.error{color:#a44242;border-color:#efcaca;background:#fff8f8}
+.thor-v089 .v101-term-preview{display:grid;gap:8px}
+.thor-v089 .v101-finance-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.thor-v089 .v101-finance-kpis span{display:grid;gap:2px;padding:8px 9px;border:1px solid #e4dfeb;border-radius:10px;background:#fff}
+.thor-v089 .v101-finance-kpis small{font-size:8.8px;color:#837c89}
+.thor-v089 .v101-finance-kpis b{font-size:13px;color:#342c42}
+.thor-v089 .v101-finance-kpis span:nth-child(2) b{color:#dc8125}
+.thor-v089 .v101-finance-kpis span:nth-child(3) b{color:#6841c3}
+
+.thor-v089 .v101-schedule-title{display:flex;justify-content:space-between;align-items:end;gap:10px;padding-top:1px}
+.thor-v089 .v101-schedule-title b{font-size:11.5px;color:#302b38}
+.thor-v089 .v101-schedule-title small{font-size:8.8px;color:#8a8390;text-align:right}
+.thor-v089 .v101-schedule-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-height:188px;overflow:auto;scrollbar-width:none}
+.thor-v089 .v101-schedule-grid::-webkit-scrollbar{display:none}
+.thor-v089 .v101-schedule-grid article{min-width:0;border:1px solid #e5e0eb;border-radius:10px;background:#fff;padding:7px 8px;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:2px 7px}
+.thor-v089 .v101-schedule-grid article span{grid-row:1/3;display:grid;place-items:center;min-width:30px;height:30px;border-radius:8px;background:#f0ebfb;color:#7044cf;font-size:9px;font-weight:800}
+.thor-v089 .v101-schedule-grid article b{font-size:9.7px;color:#4a4552;white-space:nowrap}
+.thor-v089 .v101-schedule-grid article strong{font-size:10.5px;color:#1e8c5b;white-space:nowrap}
+
+.thor-v089 .v101-term-actions{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px}
+.thor-v089 .v101-term-actions button{height:38px;border-radius:11px;font-size:11px;font-weight:700}
+.thor-v089 .v101-term-actions #v101TermConfirm{background:#18b96d!important;color:#fff!important;border:0!important}
+.thor-v089 .v101-term-actions #v101TermConfirm:disabled{background:#cfd6d3!important;color:#7c8581!important;opacity:1!important}
+.thor-v089 .v101-term-panel.confirmed{border-color:#bfe8d4;background:#fbfffd}
+
+@media(max-height:780px){
+  .thor-v089 .v101-term-panel{margin-top:7px;padding:9px;gap:7px}
+  .thor-v089 .v101-term-head p{display:none}
+  .thor-v089 .v101-term-fields select{height:33px}
+  .thor-v089 .v101-rule-line span{min-height:26px;padding:4px 7px}
+  .thor-v089 .v101-term-alert{padding:5px 7px;margin-top:4px}
+  .thor-v089 .v101-finance-kpis span{padding:6px 7px}
+  .thor-v089 .v101-schedule-grid{max-height:124px;gap:4px}
+  .thor-v089 .v101-schedule-grid article{padding:5px 6px}
+  .thor-v089 .v101-schedule-grid article span{height:26px;min-width:27px}
+  .thor-v089 .v101-term-actions button{height:33px}
+}
