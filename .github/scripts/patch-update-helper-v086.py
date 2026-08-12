@@ -66,7 +66,14 @@ exit /b 0
         raise SystemExit('updateHelperScript marker not found')
     text = text.replace(marker, utility + marker, 1)
 
-# 2) Make PowerShell boot failures observable before WPF/XAML is loaded.
+# 2) Add a self-test switch and make PowerShell boot failures observable before WPF/XAML is loaded.
+param_old = "  [Parameter(Mandatory=$true)][string]$TargetVersion\n)\n"
+param_new = "  [Parameter(Mandatory=$true)][string]$TargetVersion,\n  [switch]$SelfTest\n)\n"
+if param_old in text:
+    text = text.replace(param_old, param_new, 1)
+elif '[switch]$SelfTest' not in text:
+    raise SystemExit('PowerShell param marker not found')
+
 old = "$ErrorActionPreference = 'Stop'\nAdd-Type -AssemblyName PresentationFramework\nAdd-Type -AssemblyName PresentationCore\n\n[xml]$xaml = @\""
 new = r'''$ErrorActionPreference = 'Stop'
 
@@ -105,6 +112,12 @@ if old_xaml in text:
     text = text.replace(old_xaml, new_xaml, 1)
 elif "Falha ao abrir interface do Atualizador Thor" not in text:
     raise SystemExit('XAML loader marker not found')
+
+selftest_marker = "$versionText.Text = \"Versão alvo: v$TargetVersion\"\n"
+if "Self-test do helper concluído" not in text:
+    if selftest_marker not in text:
+        raise SystemExit('PowerShell self-test marker not found')
+    text = text.replace(selftest_marker, selftest_marker + "\nif ($SelfTest) {\n  Save-BootState 'helper_ready' 'Self-test do helper concluído.'\n  exit 0\n}\n", 1)
 
 # 3) Track a local helper diagnostic file.
 ctor = "    this.helperStatusPath = path.join(this.userDataDir, 'update-helper-status.json');\n"
@@ -229,6 +242,9 @@ if old_call in text:
 elif 'helperMode: helper?.mode' not in text:
     raise SystemExit('install helper call marker not found')
 
+if 'module.exports.__updateHelperScript' not in text:
+    text = text.replace('module.exports = { ThorUpdater, compareSemver };', 'module.exports = { ThorUpdater, compareSemver, __updateHelperScript: updateHelperScript, __fallbackCmdScript: fallbackCmdScript };')
+
 updater_path.write_text(text, encoding='utf-8')
 
 # 6) Make renderer strip Electron IPC wrapper and map new helper errors.
@@ -265,7 +281,7 @@ pkg_path.write_text(pkg, encoding='utf-8')
 
 # Guardrails.
 checks = {
-  'desktop-pdv/updater.js': ['launchCmdFallback', 'existingPowerShellCandidates', 'helper_fallback', 'update-helper.log'],
+  'desktop-pdv/updater.js': ['launchCmdFallback', 'existingPowerShellCandidates', 'helper_fallback', 'update-helper.log', '[switch]$SelfTest'],
   'desktop-pdv/renderer/update-center.js': ['normalizeUpdateErrorCode', 'update_helper_fallback_failed'],
   'desktop-pdv/package.json': ['"version": "0.8.6"'],
 }
