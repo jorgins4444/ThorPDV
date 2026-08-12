@@ -53,6 +53,12 @@ Ela cria a fundação multiempresa do ThorPDV e habilita RLS nas tabelas de neg�
 
 O projeto foi estruturado para deploy nativo na Vercel. Configure no projeto Vercel as mesmas variáveis do `.env.example` e conecte o repositório GitHub.
 
+## Distribuição do ThorPDV Desktop
+
+As versões do ThorPDV Desktop são publicadas como releases duráveis no GitHub e cadastradas no Update Center do ThorControl. A liberação para os terminais é explícita e pode ser feita em nível global, por cliente ou por PDV específico.
+
+A partir da versão 0.8.2, o Desktop possui atualização assistida com validação SHA-256, sincronização antes e depois da troca de versão, Atualizador Thor visual durante o reinício e notas de versão organizadas em mudanças, melhorias e correções. A política de atualização também pode apontar para uma versão anterior para realizar rollback controlado do aplicativo.
+
 ## Roadmap V1
 
 1. Fundação SaaS e autenticação
