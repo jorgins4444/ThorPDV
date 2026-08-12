@@ -1,3 +1,20 @@
+const CASH_SYNC_TIME_ZONE='America/Fortaleza';
+
+function syncBusinessDate(value=Date.now()){
+  const date=value instanceof Date?value:new Date(value);
+  if(Number.isNaN(date.getTime())) return '';
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:CASH_SYNC_TIME_ZONE,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+  const part=(type)=>parts.find((x)=>x.type===type)?.value||'';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function syncEventBusinessDate(event){
+  const payload=event?.payload||{};
+  const explicit=String(payload.business_date||'').trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(explicit)) return explicit;
+  return syncBusinessDate(payload.occurred_at||Date.now());
+}
+
 class SyncEngine {
   constructor({ store, apiBase, tokenProvider, onState, appVersion='0.3.0' }) {
     this.store=store;
@@ -57,6 +74,47 @@ class SyncEngine {
     return !this.running;
   }
 
+  applyPushResults(push){
+    for(const r of push?.results||[]){
+      if(r.status==='processed') this.store.markProcessed(r.id,r.result);
+      else this.store.markRejected(r.id,r.error);
+    }
+    this.store.set('last_push_at',new Date().toISOString());
+  }
+
+  async pushEvents(events){
+    if(!events?.length) return null;
+    const push=await this.request('/api/pdv/push',{events:events.map(({id,type,payload})=>({id,type,payload}))});
+    this.applyPushResults(push);
+    return push;
+  }
+
+  async flushPreviousBusinessDays(today){
+    // Events are persisted in creation order. We drain prior-day events before
+    // rollover so sales/movements genuinely performed yesterday can still reach
+    // yesterday's open session even if the terminal stayed offline overnight.
+    // Rollover only happens after the historical queue has been drained.
+    let batches=0;
+    while(batches<20){
+      const pending=this.store.pending(100);
+      const historical=pending.filter((event)=>{
+        const date=syncEventBusinessDate(event);
+        return Boolean(date&&date<today);
+      });
+      if(!historical.length) return {drained:true,batches};
+      await this.pushEvents(historical);
+      batches+=1;
+      if(historical.length<100){
+        const remaining=this.store.pending(100).some((event)=>{
+          const date=syncEventBusinessDate(event);
+          return Boolean(date&&date<today);
+        });
+        if(!remaining) return {drained:true,batches};
+      }
+    }
+    return {drained:false,batches};
+  }
+
   async run(force=false){
     if(!this.tokenProvider()) return {ok:false,error:'not_enrolled'};
     if(this.running){
@@ -69,19 +127,25 @@ class SyncEngine {
     this.running=true;
     this.onState({syncing:true});
     try{
-      // A virada diária acontece no servidor antes de enviar operações. Assim um
-      // cash_open novo nunca é anexado ao caixa de ontem quando o terminal ficou offline.
+      const today=syncBusinessDate();
+      const historical=await this.flushPreviousBusinessDays(today);
+      if(!historical.drained) throw new Error('historical_sync_queue_too_large');
+
+      // Only after all operations that truly happened on previous dates are on
+      // the server do we freeze those sessions as pending_close.
       await this.request('/api/pdv/cash/rollover',{});
 
+      // Current-day events can now safely open/use today's independent cash.
       const pending=this.store.pending(100);
-      if(pending.length){
-        const push=await this.request('/api/pdv/push',{events:pending.map(({id,type,payload})=>({id,type,payload}))});
-        for(const r of push.results||[]){
-          if(r.status==='processed') this.store.markProcessed(r.id,r.result);
-          else this.store.markRejected(r.id,r.error);
-        }
-        this.store.set('last_push_at',new Date().toISOString());
-      }
+      const current=pending.filter((event)=>{
+        const date=syncEventBusinessDate(event);
+        return !date||date>=today;
+      });
+      await this.pushEvents(current);
+
+      // Covers a fully-offline historical cash_open that was first uploaded in
+      // this run; if it was old, it is frozen only after its historical events.
+      await this.request('/api/pdv/cash/rollover',{});
 
       const pull=await this.request('/api/pdv/pull',{since:this.store.get('cursor')||null});
       this.store.applyPull(pull);
@@ -91,7 +155,7 @@ class SyncEngine {
 
       await this.request('/api/pdv/heartbeat',{
         appVersion:this.appVersion,
-        capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true,operatorSyncProgress:true,searchOnlySaleCatalog:true,fullProductCatalogScreen:true,dailyCashSessions:true,dynamicCashPaymentMethods:true,overdueCashClosing:true},
+        capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true,operatorSyncProgress:true,searchOnlySaleCatalog:true,fullProductCatalogScreen:true,dailyCashSessions:true,dynamicCashPaymentMethods:true,overdueCashClosing:true,historicalQueueBeforeRollover:true},
         metrics:{
           queue:this.store.queueStats(),
           operatorId:this.store.get('current_operator_id')||null,
@@ -122,4 +186,4 @@ class SyncEngine {
   }
 }
 
-module.exports={SyncEngine};
+module.exports={SyncEngine,syncBusinessDate,syncEventBusinessDate};
