@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 
 const PAYMENT_LABELS = {
-  cash: 'Dinheiro', pix: 'PIX', debit_card: 'Cartao de debito', credit_card: 'Cartao de credito', voucher: 'Voucher', store_credit: 'Credito em loja', other: 'Outros',
+  cash: 'Dinheiro', pix: 'PIX', debit_card: 'Cartao de debito', credit_card: 'Cartao de credito', voucher: 'Voucher', store_credit: 'Credito em loja', term_sale: 'Venda a Prazo', other: 'Outros',
 };
 
 function money(value) { return Number(value || 0); }
@@ -155,9 +155,9 @@ function installCashClosing(ThorAgent) {
     lines.push(`Vendas: ${Number(s.sales_count || 0)} | R$ ${money(s.sales_total).toFixed(2)}`);
     lines.push('FORMAS DE PAGAMENTO');
     if (Array.isArray(s.counted_payments) && s.counted_payments.length) {
-      for (const p of s.counted_payments) lines.push(`${PAYMENT_LABELS[p.method] || p.method}: Sist R$ ${money(p.expected).toFixed(2)} | Conf R$ ${money(p.counted).toFixed(2)} | Dif R$ ${money(p.difference).toFixed(2)}`);
+      for (const p of s.counted_payments) lines.push(`${p.name || PAYMENT_LABELS[p.method] || p.method}: Sist R$ ${money(p.expected).toFixed(2)} | Conf R$ ${money(p.counted).toFixed(2)} | Dif R$ ${money(p.difference).toFixed(2)}`);
     } else {
-      for (const p of s.payments || []) lines.push(`${PAYMENT_LABELS[p.method] || p.method}: R$ ${money(p.amount).toFixed(2)}`);
+      for (const p of s.payments || []) lines.push(`${p.name || PAYMENT_LABELS[p.method] || p.method}: R$ ${money(p.amount).toFixed(2)}`);
     }
     lines.push('MOVIMENTACOES DE CAIXA');
     lines.push(`Suprimentos: R$ ${money(s.supply).toFixed(2)}`);
