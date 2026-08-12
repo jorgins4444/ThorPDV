@@ -76,13 +76,61 @@ function installSyncPolicy(ThorAgent) {
     this.store.db.prepare("delete from queue where id=? and type='cash_open' and state='pending'").run(eventId);
   };
 
+  // A primeira venda não pode ultrapassar a abertura do caixa na fila.
+  // Se a abertura ainda estiver pendente, aguardamos o sync terminar e forçamos
+  // uma rodada exclusiva antes de enfileirar sale_completed. Em modo offline a
+  // venda continua permitida e será enviada depois, preservando o offline-first.
+  ThorAgent.prototype._ensureCashOpenReadyForSale = async function () {
+    const eventId = String(this.store.get('cash_open_event_id') || '');
+    if (!eventId) return { ok: false, error: 'cash_not_open' };
+
+    const getRow = () => this.store.db.prepare(
+      "select id,type,state,last_error from queue where id=? and type='cash_open' limit 1"
+    ).get(eventId);
+
+    let row = getRow();
+    if (!row || row.state === 'synced') return { ok: true, localOnly: !row };
+
+    // Uma rejeição anterior pode ter sido transitória. Reabre somente o cash_open
+    // para uma tentativa idempotente; uma rejeição persistente bloqueia a venda.
+    if (row.state === 'rejected') {
+      this.store.db.prepare(
+        "update queue set state='pending',last_error=null,updated_at=? where id=? and type='cash_open'"
+      ).run(new Date().toISOString(), eventId);
+      row = getRow();
+    }
+
+    const startedAt = Date.now();
+    while (this.sync.running && Date.now() - startedAt < 20000) await sleep(100);
+
+    const sync = await this.sync.run(true);
+    row = getRow();
+
+    if (!sync?.ok) {
+      // Sem comunicação: mantém a operação offline-first. Como cash_open foi
+      // criado antes da venda, a ordem da fila local será preservada no retry.
+      return { ok: true, offline: true, error: sync?.error || 'sync_unavailable' };
+    }
+
+    if (row?.state === 'rejected') {
+      const error = new Error(row.last_error || 'cash_open_sync_rejected');
+      error.code = 'cash_open_sync_rejected';
+      throw error;
+    }
+
+    return { ok: true, synced: row?.state === 'synced' };
+  };
+
   ThorAgent.prototype.finalizeSale = async function (payload = {}) {
     let implicit = null;
     if (!this.store.get('cash_open_event_id')) implicit = this._implicitCashOpen('sale');
     try {
+      await this._ensureCashOpenReadyForSale();
       return await originalFinalizeSale.call(this, payload);
     } catch (error) {
-      if (implicit?.created) this._rollbackImplicitCashOpen(implicit.eventId);
+      if (implicit?.created && error?.code === 'cash_open_sync_rejected') {
+        this._rollbackImplicitCashOpen(implicit.eventId);
+      }
       throw error;
     }
   };
@@ -127,6 +175,7 @@ function installSyncPolicy(ThorAgent) {
       syncAfterOperatorLogin: true,
       manualSyncForced: true,
       lazyCashOpening: true,
+      firstSaleWaitsForCashAck: true,
       askCashOpening: this.v3Settings().askCashOpening,
     };
   };
