@@ -21,7 +21,8 @@
     }
     err.classList.add('v102-visible-error');
     err.hidden=false;
-    err.style.display='block';
+    err.style.setProperty('display','block','important');
+    err.style.setProperty('visibility','visible','important');
     err.textContent=text||'';
   }
 
