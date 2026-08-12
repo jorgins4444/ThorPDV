@@ -3,6 +3,18 @@ from pathlib import Path
 updater_path = Path('desktop-pdv/updater.js')
 text = updater_path.read_text(encoding='utf-8')
 
+# 0) The original visual helper used x:Name without declaring xmlns:x.
+# Windows PowerShell therefore failed while parsing the XAML before helper_ready.
+xaml_root = '<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"\n'
+if 'xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"' not in text:
+    if xaml_root not in text:
+        raise SystemExit('XAML root marker not found')
+    text = text.replace(
+        xaml_root,
+        '<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"\n        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"\n',
+        1,
+    )
+
 # 1) Add low-level helper utilities before the PowerShell generator.
 marker = "function updateHelperScript() {\n"
 if 'function updateHelperLogLine(' not in text:
@@ -131,7 +143,8 @@ start = text.find('  async launchVisualHelper({ installer, targetVersion }) {')
 end = text.find('\n  async install() {', start)
 if start < 0 or end < 0:
     raise SystemExit('launchVisualHelper block not found')
-new_launch = r'''  async launchCmdFallback({ installer, targetVersion }) {
+if 'async launchCmdFallback' not in text:
+    new_launch = r'''  async launchCmdFallback({ installer, targetVersion }) {
     const helperPath = path.join(this.tempDir, `ThorPDV-Update-Fallback-${targetVersion}.cmd`);
     fs.writeFileSync(helperPath, fallbackCmdScript(), 'utf8');
     const cmd = String(process.env.ComSpec || path.join(String(process.env.SystemRoot || 'C:\\Windows'), 'System32', 'cmd.exe'));
@@ -232,7 +245,7 @@ new_launch = r'''  async launchCmdFallback({ installer, targetVersion }) {
     return this.launchCmdFallback({ installer, targetVersion });
   }
 '''
-text = text[:start] + new_launch + text[end:]
+    text = text[:start] + new_launch + text[end:]
 
 # 5) Include helper mode in successful handoff result/logging.
 old_call = "      await this.launchVisualHelper({ installer, targetVersion });\n      this.emit('helper_ready', { targetVersion, direction: info.direction });\n"
@@ -242,7 +255,7 @@ if old_call in text:
 elif 'helperMode: helper?.mode' not in text:
     raise SystemExit('install helper call marker not found')
 
-if 'module.exports.__updateHelperScript' not in text:
+if '__updateHelperScript: updateHelperScript' not in text:
     text = text.replace('module.exports = { ThorUpdater, compareSemver };', 'module.exports = { ThorUpdater, compareSemver, __updateHelperScript: updateHelperScript, __fallbackCmdScript: fallbackCmdScript };')
 
 updater_path.write_text(text, encoding='utf-8')
@@ -281,7 +294,7 @@ pkg_path.write_text(pkg, encoding='utf-8')
 
 # Guardrails.
 checks = {
-  'desktop-pdv/updater.js': ['launchCmdFallback', 'existingPowerShellCandidates', 'helper_fallback', 'update-helper.log', '[switch]$SelfTest'],
+  'desktop-pdv/updater.js': ['xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"', 'launchCmdFallback', 'existingPowerShellCandidates', 'helper_fallback', 'update-helper.log', '[switch]$SelfTest'],
   'desktop-pdv/renderer/update-center.js': ['normalizeUpdateErrorCode', 'update_helper_fallback_failed'],
   'desktop-pdv/package.json': ['"version": "0.8.6"'],
 }
