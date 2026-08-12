@@ -15,6 +15,7 @@ import './product-workspace.css';
 import './product-master.css';
 import './production.css';
 import './branch-config.css';
+import './branches-workspace.css';
 import { ModuleClient } from './module-client';
 import { AdvancedShell } from './advanced-shell';
 import { InventoryClient, ReportsClient, StockTransferClient } from './advanced-clients';
@@ -26,6 +27,8 @@ import { StockWorkspace } from './stock-workspace';
 import { HeadquartersWorkspace } from './headquarters-workspace';
 import { headquartersGet } from './headquarters-actions';
 import { BranchConfigWorkspace } from './branch-config-workspace';
+import { BranchesWorkspace } from './branches-workspace';
+import { erpLicenseGet } from './license-actions';
 import { SmartPosPairingPanel } from './smartpos-pairing-panel';
 import { FiscalWorkspace } from './fiscal-workspace';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
@@ -47,7 +50,7 @@ const resourceBySlug: Record<string, string> = {
   'estoque': 'stock', 'estoque/nova': 'stock', 'estoque/inventario': 'inventory_counts', 'estoque/ajustes': 'stock', 'estoque/transferencias': 'stock', 'estoque/producao':'products',
   'financeiro/receber': 'finance', 'financeiro/receber/novo': 'finance', 'financeiro/pagar': 'finance', 'financeiro/pagar/novo': 'finance',
   'financeiro/fluxo-caixa': 'report_finance', 'financeiro/conciliacao': 'finance',
-  'administrativo/empresas': 'companies', 'administrativo/pdvs': 'pos_registers', 'fiscal': 'fiscal_documents', 'fiscal/nfe':'fiscal_documents', 'fiscal/nfce':'fiscal_documents', 'integracoes': 'integrations', 'configuracoes': 'branches',
+  'administrativo/empresas': 'companies', 'administrativo/filiais': 'branches', 'administrativo/pdvs': 'pos_registers', 'fiscal': 'fiscal_documents', 'fiscal/nfe':'fiscal_documents', 'fiscal/nfce':'fiscal_documents', 'integracoes': 'integrations', 'configuracoes': 'branches',
   'relatorios/financeiro': 'report_finance', 'relatorios/vendas': 'report_sales', 'relatorios/estoque': 'report_stock', 'relatorios/listagens': 'products',
   'atendimento': 'tickets', 'atendimento/mensagens': 'tickets', 'atendimento/sla': 'tickets',
   'vendas': 'sales', 'vendas/nova': 'sales', 'pdv/caixa': 'pos_registers', 'ajuda': 'companies',
@@ -88,6 +91,10 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (slug === 'administrativo/empresas') {
     const matrix=await headquartersGet();
     return <AdvancedShell title="Matriz" subtitle="Cadastro mestre da empresa, do estabelecimento principal e do emitente fiscal utilizado pelo ThorPDV e ThorFiscal." activePath="/dashboard/administrativo/empresas"><HeadquartersWorkspace initial={matrix as Record<string,unknown>}/></AdvancedShell>;
+  }
+  if (slug === 'administrativo/filiais') {
+    const license=await erpLicenseGet();
+    return <AdvancedShell title="Lojas / Filiais" subtitle="Gerencie unidades adicionais conforme o limite contratado no ThorControl. A Matriz permanece como estabelecimento principal." activePath="/dashboard/administrativo/filiais"><BranchesWorkspace initialBranches={branches.data} license={license as unknown as Record<string,unknown>}/></AdvancedShell>;
   }
   if (slug === 'configuracoes') return <AdvancedShell title="Configurações da Operação" subtitle="Terminais, parâmetros do PDV, tributos operacionais, entrega, SmartPOS e integrações. Dados cadastrais do emitente ficam exclusivamente em Matriz." activePath="/dashboard/configuracoes"><div className="erp-org-grid">{branches.data.length?<><BranchConfigWorkspace branches={branches.data}/><SmartPosPairingPanel branches={branches.data}/></>:<section className="erp-module-card erp-advanced-panel"><h2>Nenhuma unidade cadastrada</h2><p>Configure a Matriz antes de habilitar a operação.</p></section>}</div></AdvancedShell>;
   if (slug === 'pdv/caixa') return <AdvancedShell title="Caixa / PDV" subtitle="Abertura, vendas vinculadas e fechamento com valor esperado e diferença por terminal." activePath="/dashboard/administrativo/pdvs"><CashWorkspace posRegisters={initial.data}/></AdvancedShell>;
