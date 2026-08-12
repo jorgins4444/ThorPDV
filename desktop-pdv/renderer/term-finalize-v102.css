@@ -1,4 +1,5 @@
 /* ThorPDV 0.8.22 — correção de finalização da Venda a Prazo */
+.thor-v089 .v101-checkout.v102-checkout .payment-entry.v101-term-mode>#payError.v102-visible-error,
 .thor-v089 .v102-checkout #payError.v102-visible-error{
   display:block!important;
   visibility:visible!important;
