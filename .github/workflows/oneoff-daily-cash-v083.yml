@@ -45,7 +45,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add desktop-pdv/main.js desktop-pdv/agent/cash-closing.js
+          git add desktop-pdv/main.js desktop-pdv/agent/cash-closing.js desktop-pdv/agent/daily-cash-v083.js
           if git diff --cached --quiet; then
             echo "No integration changes to commit"
           else
