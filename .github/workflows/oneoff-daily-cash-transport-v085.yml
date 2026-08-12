@@ -54,5 +54,7 @@ jobs:
             echo "No implementation changes"
           else
             git commit -m "fix: use deployed PDV push transport for daily cash"
+            git fetch origin fix/daily-cash-existing-transport-v085
+            git rebase origin/fix/daily-cash-existing-transport-v085
             git push origin HEAD:fix/daily-cash-existing-transport-v085
           fi
