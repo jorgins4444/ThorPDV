@@ -32,6 +32,61 @@ function sanitizeRelease(payload) {
   };
 }
 
+function updateHelperLogLine(file, message) {
+  try { fs.appendFileSync(file, `[${new Date().toISOString()}] ${message}\r\n`, 'utf8'); } catch {}
+}
+
+function existingPowerShellCandidates() {
+  const root = String(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows');
+  const candidates = [
+    path.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    path.join(root, 'Sysnative', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    'powershell.exe',
+  ];
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    const key = candidate.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return candidate === 'powershell.exe' || fs.existsSync(candidate);
+  });
+}
+
+function cmdQuote(value) {
+  return `"${String(value || '').replace(/%/g, '%%').replace(/"/g, '""')}"`;
+}
+
+function fallbackCmdScript() {
+  return String.raw`@echo off
+setlocal DisableDelayedExpansion
+set "INSTALLER=%~1"
+set "LAUNCH_EXE=%~2"
+set "PARENT_PID=%~3"
+set "LOG_PATH=%~4"
+set "TARGET_VERSION=%~5"
+
+>>"%LOG_PATH%" echo [%date% %time%] CMD fallback ready for v%TARGET_VERSION%.
+
+:WAIT_PARENT
+tasklist /FI "PID eq %PARENT_PID%" /NH 2^>nul | findstr /R /C:"[ ]%PARENT_PID%[ ]" ^>nul
+if not errorlevel 1 (
+  >nul 2>&1 ping 127.0.0.1 -n 2
+  goto WAIT_PARENT
+)
+
+>>"%LOG_PATH%" echo [%date% %time%] Parent exited. Starting installer.
+start "" /wait "%INSTALLER%" /S
+set "INSTALL_EXIT=%ERRORLEVEL%"
+>>"%LOG_PATH%" echo [%date% %time%] Installer exit code %INSTALL_EXIT%.
+if not "%INSTALL_EXIT%"=="0" exit /b %INSTALL_EXIT%
+
+>nul 2>&1 ping 127.0.0.1 -n 2
+>>"%LOG_PATH%" echo [%date% %time%] Restarting ThorPDV.
+start "" "%LAUNCH_EXE%" --thor-update-resume
+exit /b 0
+`;
+}
+
 function updateHelperScript() {
   return String.raw`param(
   [Parameter(Mandatory=$true)][string]$Installer,
@@ -39,15 +94,31 @@ function updateHelperScript() {
   [Parameter(Mandatory=$true)][int]$ParentPid,
   [Parameter(Mandatory=$true)][string]$StatusPath,
   [Parameter(Mandatory=$true)][string]$MarkerPath,
-  [Parameter(Mandatory=$true)][string]$TargetVersion
+  [Parameter(Mandatory=$true)][string]$TargetVersion,
+  [switch]$SelfTest
 )
 
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName PresentationFramework
-Add-Type -AssemblyName PresentationCore
+
+function Save-BootState([string]$Stage, [string]$Message = '') {
+  try {
+    $payload = @{ stage=$Stage; message=$Message; targetVersion=$TargetVersion; updatedAt=(Get-Date).ToString('o') }
+    $payload | ConvertTo-Json -Compress | Set-Content -LiteralPath $StatusPath -Encoding UTF8
+  } catch {}
+}
+
+Save-BootState 'helper_booting' 'Iniciando Atualizador Thor.'
+try {
+  Add-Type -AssemblyName PresentationFramework
+  Add-Type -AssemblyName PresentationCore
+} catch {
+  Save-BootState 'error' ("Falha ao carregar interface do Atualizador Thor: " + $_.Exception.Message)
+  exit 91
+}
 
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Atualização do ThorPDV" Height="430" Width="610"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         Background="#0E1713" Foreground="#F5FAF7" Topmost="True" ShowInTaskbar="True">
@@ -90,8 +161,13 @@ Add-Type -AssemblyName PresentationCore
 </Window>
 "@
 
-$reader = New-Object System.Xml.XmlNodeReader $xaml
-$window = [Windows.Markup.XamlReader]::Load($reader)
+try {
+  $reader = New-Object System.Xml.XmlNodeReader $xaml
+  $window = [Windows.Markup.XamlReader]::Load($reader)
+} catch {
+  Save-BootState 'error' ("Falha ao abrir interface do Atualizador Thor: " + $_.Exception.Message)
+  exit 92
+}
 $titleText = $window.FindName('TitleText')
 $messageText = $window.FindName('MessageText')
 $versionText = $window.FindName('VersionText')
@@ -104,6 +180,11 @@ $step5 = $window.FindName('Step5')
 $footer = $window.FindName('FooterText')
 $closeButton = $window.FindName('CloseButton')
 $versionText.Text = "Versão alvo: v$TargetVersion"
+
+if ($SelfTest) {
+  Save-BootState 'helper_ready' 'Self-test do helper concluído.'
+  exit 0
+}
 
 function Save-State([string]$Stage, [string]$Message = '') {
   try {
@@ -260,6 +341,7 @@ class ThorUpdater {
     this.state = { checking: false, installing: false, available: null, lastCheckAt: null, lastError: null };
     this.markerPath = path.join(this.userDataDir, 'pending-update.json');
     this.helperStatusPath = path.join(this.userDataDir, 'update-helper-status.json');
+    this.helperLogPath = path.join(this.userDataDir, 'update-helper.log');
   }
 
   updateInfo() {
@@ -431,36 +513,105 @@ class ThorUpdater {
     } catch { return null; }
   }
 
+  async launchCmdFallback({ installer, targetVersion }) {
+    const helperPath = path.join(this.tempDir, `ThorPDV-Update-Fallback-${targetVersion}.cmd`);
+    fs.writeFileSync(helperPath, fallbackCmdScript(), 'utf8');
+    const cmd = String(process.env.ComSpec || path.join(String(process.env.SystemRoot || 'C:\\Windows'), 'System32', 'cmd.exe'));
+    updateHelperLogLine(this.helperLogPath, `Starting CMD fallback: ${cmd}`);
+
+    const command = [helperPath, installer, process.execPath, String(process.pid), this.helperLogPath, String(targetVersion)]
+      .map(cmdQuote).join(' ');
+
+    const child = spawn(cmd, ['/d', '/q', '/s', '/c', command], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+
+    let spawnError = null;
+    let exited = false;
+    let exitCode = null;
+    child.once('error', (error) => { spawnError = error; });
+    child.once('exit', (code) => { exited = true; exitCode = code; });
+
+    await new Promise((resolve) => setTimeout(resolve, 850));
+    if (spawnError) {
+      updateHelperLogLine(this.helperLogPath, `CMD fallback spawn error: ${spawnError.message}`);
+      throw new Error('update_helper_fallback_failed');
+    }
+    if (exited) {
+      updateHelperLogLine(this.helperLogPath, `CMD fallback exited too early: ${exitCode}`);
+      throw new Error('update_helper_fallback_failed');
+    }
+
+    child.unref();
+    this.writeHelperStatus('helper_ready', 'Atualizador alternativo iniciado.', {
+      targetVersion: String(targetVersion), helperMode: 'cmd_fallback',
+    });
+    updateHelperLogLine(this.helperLogPath, 'CMD fallback accepted; application can quit safely.');
+    return { ok: true, mode: 'cmd_fallback' };
+  }
+
   async launchVisualHelper({ installer, targetVersion }) {
     if (process.platform !== 'win32') throw new Error('update_install_requires_windows');
     try { fs.unlinkSync(this.helperStatusPath); } catch {}
+    try { fs.unlinkSync(this.helperLogPath); } catch {}
 
     const helperPath = path.join(this.tempDir, `ThorPDV-Update-Helper-${targetVersion}.ps1`);
     fs.writeFileSync(helperPath, `\uFEFF${updateHelperScript()}`, 'utf8');
+    updateHelperLogLine(this.helperLogPath, `Preparing update ${this.appVersion} -> ${targetVersion}.`);
 
-    const child = spawn('powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy', 'Bypass',
-      '-WindowStyle', 'Hidden',
-      '-File', helperPath,
-      '-Installer', installer,
-      '-LaunchExe', process.execPath,
-      '-ParentPid', String(process.pid),
-      '-StatusPath', this.helperStatusPath,
-      '-MarkerPath', this.markerPath,
-      '-TargetVersion', String(targetVersion),
-    ], { detached: true, stdio: 'ignore', windowsHide: true });
-    child.unref();
+    let lastFailure = '';
+    for (const powerShell of existingPowerShellCandidates()) {
+      try {
+        updateHelperLogLine(this.helperLogPath, `Trying PowerShell helper: ${powerShell}`);
+        const child = spawn(powerShell, [
+          '-NoProfile',
+          '-ExecutionPolicy', 'Bypass',
+          '-WindowStyle', 'Hidden',
+          '-File', helperPath,
+          '-Installer', installer,
+          '-LaunchExe', process.execPath,
+          '-ParentPid', String(process.pid),
+          '-StatusPath', this.helperStatusPath,
+          '-MarkerPath', this.markerPath,
+          '-TargetVersion', String(targetVersion),
+        ], { detached: true, stdio: 'ignore', windowsHide: true });
 
-    const deadline = Date.now() + 7000;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      const status = this.readHelperStatus();
-      if (status?.stage === 'helper_ready') return true;
-      if (status?.stage === 'error') throw new Error(status.message || 'update_helper_start_failed');
+        let spawnError = null;
+        let exited = false;
+        let exitCode = null;
+        child.once('error', (error) => { spawnError = error; });
+        child.once('exit', (code) => { exited = true; exitCode = code; });
+
+        const deadline = Date.now() + 7000;
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 120));
+          if (spawnError) throw spawnError;
+          const status = this.readHelperStatus();
+          if (status?.stage === 'helper_ready') {
+            child.unref();
+            updateHelperLogLine(this.helperLogPath, `PowerShell helper ready: ${powerShell}`);
+            return { ok: true, mode: 'powershell' };
+          }
+          if (status?.stage === 'error') throw new Error(status.message || 'update_helper_powershell_failed');
+          if (exited) throw new Error(`powershell_helper_exit_${exitCode ?? 'unknown'}`);
+        }
+        throw new Error('powershell_helper_timeout');
+      } catch (error) {
+        lastFailure = String(error?.message || error);
+        updateHelperLogLine(this.helperLogPath, `PowerShell helper failed: ${lastFailure}`);
+        try { fs.unlinkSync(this.helperStatusPath); } catch {}
+      }
     }
-    throw new Error('update_helper_start_failed');
+
+    this.emit('helper_fallback', {
+      targetVersion,
+      message: 'A interface visual do atualizador não abriu. Usando modo alternativo seguro do Windows.',
+      helperError: lastFailure || 'powershell_unavailable',
+    });
+    await this.report('helper_fallback', targetVersion, { error: lastFailure || 'powershell_unavailable' });
+    return this.launchCmdFallback({ installer, targetVersion });
   }
 
   async install() {
@@ -523,8 +674,8 @@ class ThorUpdater {
         message: 'Transferindo a atualização para o Atualizador Thor.',
       });
 
-      await this.launchVisualHelper({ installer, targetVersion });
-      this.emit('helper_ready', { targetVersion, direction: info.direction });
+      const helper = await this.launchVisualHelper({ installer, targetVersion });
+      this.emit('helper_ready', { targetVersion, direction: info.direction, helperMode: helper?.mode || 'unknown' });
       setTimeout(() => this.quit(), 550);
       return { ok: true, targetVersion, direction: info.direction, restarting: true };
     } catch (error) {
@@ -610,4 +761,4 @@ class ThorUpdater {
   }
 }
 
-module.exports = { ThorUpdater, compareSemver };
+module.exports = { ThorUpdater, compareSemver, __updateHelperScript: updateHelperScript, __fallbackCmdScript: fallbackCmdScript };

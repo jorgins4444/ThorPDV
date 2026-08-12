@@ -3,7 +3,14 @@
   let currentModal = null;
 
   const escUpdate = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const updateError = (code) => ({
+  const normalizeUpdateErrorCode = (value) => {
+    const raw = String(value || '');
+    const match = raw.match(/(update_[a-z0-9_]+)/i);
+    return match ? match[1].toLowerCase() : raw;
+  };
+  const updateError = (value) => {
+    const code = normalizeUpdateErrorCode(value);
+    return ({
     update_device_not_enrolled: 'Este terminal ainda não está ativado.',
     update_not_available: 'Não há atualização liberada para este terminal.',
     update_pending_sync: 'Existem operações locais ainda não sincronizadas. Sincronize antes de atualizar.',
@@ -13,7 +20,10 @@
     update_already_installing: 'Uma atualização já está em andamento.',
     update_helper_start_failed: 'O Atualizador Thor não conseguiu abrir. A instalação foi interrompida antes de fechar o PDV.',
     update_sale_in_progress: 'Há uma venda em edição. Finalize ou limpe o carrinho antes de atualizar para não perder essa venda ainda não gravada.',
+    update_helper_powershell_failed: 'O helper visual do Windows falhou; o Thor tentará automaticamente o modo alternativo.',
+    update_helper_fallback_failed: 'Os dois modos do atualizador foram bloqueados pelo Windows. Use a instalação manual desta versão e consulte o log update-helper.log.',
   }[code] || code || 'Falha ao atualizar o ThorPDV.');
+  };
 
   function settingsButton() { return document.getElementById('settings'); }
 
