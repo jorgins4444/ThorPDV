@@ -1,0 +1,135 @@
+/* ThorPDV v0.8.17 — checkout corrigido, tipografia unificada e métodos de pagamento distintos */
+
+/* Fonte única em todo o PDV, inclusive descrições e metadados. */
+body.thor-v089,
+.thor-v089 *,
+.thor-v089 button,
+.thor-v089 input,
+.thor-v089 select,
+.thor-v089 textarea,
+.thor-v089 table,
+.thor-v089 th,
+.thor-v089 td,
+.thor-v089 label,
+.thor-v089 small,
+.thor-v089 span,
+.thor-v089 p,
+.thor-v089 kbd{
+  font-family:Calibri,Arial,sans-serif!important;
+}
+
+/* Total e líquido da tela principal mais visíveis. */
+.thor-v089 .v089-total-box span{font-size:13px!important;font-weight:700!important}
+.thor-v089 .v089-total-box b{font-size:25px!important;font-weight:700!important;line-height:1!important}
+@media(max-height:720px){
+  .thor-v089 .v089-total-box b{font-size:22px!important}
+}
+
+/* Modal de finalização: largura real e centralização. */
+.thor-v089 .modal.v089-payment-modal{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:12px 18px!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+}
+.thor-v089 .modal.v089-payment-modal>.modal-card.v089-payment-card,
+.thor-v089 .modal.v089-payment-modal>.modal-card.v090-payment-card,
+.thor-v089 .modal.v089-payment-modal>.modal-card{
+  width:min(920px,calc(100vw - 36px))!important;
+  min-width:min(760px,calc(100vw - 36px))!important;
+  max-width:920px!important;
+  height:min(700px,calc(100vh - 24px))!important;
+  max-height:calc(100vh - 24px)!important;
+  margin:0!important;
+  transform:none!important;
+  left:auto!important;
+  right:auto!important;
+  position:relative!important;
+  overflow:hidden!important;
+  border-radius:20px!important;
+  box-sizing:border-box!important;
+}
+.thor-v089 .v089-payment-layout{
+  grid-template-columns:minmax(0,1.38fr) minmax(260px,.78fr)!important;
+  width:100%!important;
+  min-width:0!important;
+  overflow:hidden!important;
+}
+.thor-v089 .v089-payment-left,
+.thor-v089 .v089-payment-right{min-width:0!important;overflow:hidden!important}
+.thor-v089 .v089-payment-right{padding-left:2px!important}
+
+/* Topo não estoura horizontalmente. */
+.thor-v089 .v089-payment-top{
+  grid-template-columns:minmax(210px,1fr) 145px 165px!important;
+  width:100%!important;
+  min-width:0!important;
+}
+.thor-v089 .v089-payment-top>*{min-width:0!important}
+
+/* Formas de pagamento: cores distintas por função, sem repetição visual. */
+.thor-v089 .v089-pay-methods button{
+  color:#fff!important;
+  border:0!important;
+  box-shadow:0 5px 12px rgba(32,29,53,.14)!important;
+  font-size:12px!important;
+  font-weight:700!important;
+  text-shadow:0 1px 1px rgba(0,0,0,.10)!important;
+}
+.thor-v089 .v089-pay-methods button i{
+  background:rgba(255,255,255,.18)!important;
+  color:#fff!important;
+  border:1px solid rgba(255,255,255,.2)!important;
+  display:grid!important;
+  place-items:center!important;
+}
+.thor-v089 .v089-pay-methods button i svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.thor-v089 .v089-pay-methods button[data-method="cash"]{background:linear-gradient(135deg,#16a765,#20c679)!important}
+.thor-v089 .v089-pay-methods button[data-method="pix"]{background:linear-gradient(135deg,#00a6c8,#0bc0df)!important}
+.thor-v089 .v089-pay-methods button[data-method="debit_card"]{background:linear-gradient(135deg,#3078d7,#4d93eb)!important}
+.thor-v089 .v089-pay-methods button[data-method="credit_card"]{background:linear-gradient(135deg,#7043cf,#8c5ce1)!important}
+.thor-v089 .v089-pay-methods button[data-method="voucher"],
+.thor-v089 .v089-pay-methods button[data-method="benefit"],
+.thor-v089 .v089-pay-methods button[data-method="beneficio"]{background:linear-gradient(135deg,#d36a28,#ed8a3c)!important}
+.thor-v089 .v089-pay-methods button[data-method="store_credit"]{background:linear-gradient(135deg,#c34d85,#dc6aa0)!important}
+.thor-v089 .v089-pay-methods button[data-method="cashback"]{background:linear-gradient(135deg,#15967b,#20b99a)!important}
+.thor-v089 .v089-pay-methods button[data-method="boleto"]{background:linear-gradient(135deg,#596477,#738096)!important}
+.thor-v089 .v089-pay-methods button[data-method="installment"],
+.thor-v089 .v089-pay-methods button[data-method="parcelamento"],
+.thor-v089 .v089-pay-methods button[data-method="term"],
+.thor-v089 .v089-pay-methods button[data-method="on_account"]{background:linear-gradient(135deg,#8b4cad,#aa66c6)!important}
+.thor-v089 .v089-pay-methods button[data-method="other"],
+.thor-v089 .v089-pay-methods button[data-method="others"]{background:linear-gradient(135deg,#626879,#7a8090)!important}
+.thor-v089 .v089-pay-methods button.active,
+.thor-v089 .v089-pay-methods button[aria-pressed="true"]{
+  outline:3px solid #fff!important;
+  outline-offset:-5px!important;
+  box-shadow:0 0 0 3px rgba(116,65,215,.25),0 7px 16px rgba(32,29,53,.19)!important;
+}
+
+/* Resumo do pagamento ganha leitura mais clara. */
+.thor-v089 .v089-pay-kpis small{font-size:13px!important;font-weight:700!important}
+.thor-v089 .v089-pay-kpis b{font-size:25px!important;font-weight:700!important}
+.thor-v089 .v089-pay-lines{font-size:12px!important;line-height:1.35!important}
+
+@media(max-height:780px){
+  .thor-v089 .modal.v089-payment-modal>.modal-card.v089-payment-card,
+  .thor-v089 .modal.v089-payment-modal>.modal-card.v090-payment-card,
+  .thor-v089 .modal.v089-payment-modal>.modal-card{
+    width:min(900px,calc(100vw - 28px))!important;
+    min-width:min(740px,calc(100vw - 28px))!important;
+    height:calc(100vh - 16px)!important;
+    max-height:calc(100vh - 16px)!important;
+  }
+}
+@media(max-width:900px){
+  .thor-v089 .modal.v089-payment-modal>.modal-card.v089-payment-card,
+  .thor-v089 .modal.v089-payment-modal>.modal-card.v090-payment-card,
+  .thor-v089 .modal.v089-payment-modal>.modal-card{
+    width:calc(100vw - 16px)!important;
+    min-width:0!important;
+    max-width:none!important;
+  }
+}
