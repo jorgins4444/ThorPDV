@@ -94,7 +94,9 @@ jobs:
             'renderer/redesign-v088-hotfix.js',
             'renderer/redesign-v089.js',
             'renderer/redesign-v089-fixes.js',
-            'renderer/redesign-v090.js'
+            'renderer/redesign-v090.js',
+            'renderer/redesign-v092.js',
+            'renderer/redesign-v093.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
