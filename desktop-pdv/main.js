@@ -59,21 +59,32 @@ function readPendingUpdateMarker(dataDir) {
   catch { return null; }
 }
 
-function isFreshUpdateResume(marker) {
-  if (!marker?.targetVersion || String(marker.targetVersion) !== DESKTOP_VERSION) return false;
-  const created = Date.parse(String(marker.createdAt || ''));
-  return Number.isFinite(created) && Date.now() - created < 30 * 60 * 1000;
+function validatedUpdateResume(marker, localCodec) {
+  try {
+    if (!marker?.targetVersion || String(marker.targetVersion) !== DESKTOP_VERSION) return null;
+    const created = Date.parse(String(marker.createdAt || ''));
+    if (!Number.isFinite(created) || Date.now() - created > 30 * 60 * 1000) return null;
+    const token = String(marker.resumeToken || '');
+    if (!token.startsWith('enc:')) return null;
+    const claim = JSON.parse(localCodec.decrypt(token) || '{}');
+    const issued = Date.parse(String(claim.issuedAt || ''));
+    if (!claim.operatorId || String(claim.targetVersion) !== DESKTOP_VERSION) return null;
+    if (!Number.isFinite(issued) || Date.now() - issued > 30 * 60 * 1000) return null;
+    return claim;
+  } catch { return null; }
 }
 
 async function createWindow() {
   const dataDir = app.getPath('userData');
   const pendingUpdate = readPendingUpdateMarker(dataDir);
-  const resumeUpdate = isFreshUpdateResume(pendingUpdate);
+  const localCodec = codec();
+  const resumeClaim = validatedUpdateResume(pendingUpdate, localCodec);
+  const resumeUpdate = Boolean(resumeClaim);
 
   agent = new ThorAgent({
     dataDir,
     apiBase: process.env.THORPDV_API_URL || 'https://thorpdv.vercel.app',
-    codec: codec(),
+    codec: localCodec,
   });
   agent.sync.appVersion = DESKTOP_VERSION;
 

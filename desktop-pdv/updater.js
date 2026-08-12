@@ -402,6 +402,35 @@ class ThorUpdater {
     } catch { return null; }
   }
 
+  createResumeToken(targetVersion) {
+    try {
+      const operator = this.agent.currentOperator?.() || null;
+      if (!operator?.id || !this.agent?.codec?.encrypt) return '';
+      const claim = JSON.stringify({
+        operatorId: String(operator.id),
+        targetVersion: String(targetVersion),
+        issuedAt: new Date().toISOString(),
+        nonce: crypto.randomUUID(),
+      });
+      const token = String(this.agent.codec.encrypt(claim) || '');
+      // Session resumption is only trusted when Windows safeStorage actually encrypted it.
+      return token.startsWith('enc:') ? token : '';
+    } catch { return ''; }
+  }
+
+  resumeClaim(marker) {
+    try {
+      const token = String(marker?.resumeToken || '');
+      if (!token.startsWith('enc:') || !this.agent?.codec?.decrypt) return null;
+      const raw = this.agent.codec.decrypt(token);
+      const claim = JSON.parse(raw || '{}');
+      const issued = Date.parse(String(claim.issuedAt || ''));
+      if (!claim.operatorId || String(claim.targetVersion) !== this.appVersion) return null;
+      if (!Number.isFinite(issued) || Date.now() - issued > 30 * 60 * 1000) return null;
+      return claim;
+    } catch { return null; }
+  }
+
   async launchVisualHelper({ installer, targetVersion }) {
     if (process.platform !== 'win32') throw new Error('update_install_requires_windows');
     try { fs.unlinkSync(this.helperStatusPath); } catch {}
@@ -467,7 +496,7 @@ class ThorUpdater {
       this.emit('verified', { targetVersion, sha256: digest });
       await this.report('verified', targetVersion, { sha256: digest });
 
-      const operator = this.agent.currentOperator?.() || null;
+      const resumeToken = this.createResumeToken(targetVersion);
       const marker = {
         fromVersion: this.appVersion,
         targetVersion,
@@ -476,7 +505,7 @@ class ThorUpdater {
         installer,
         sha256: digest,
         createdAt: new Date().toISOString(),
-        resumeOperatorId: operator?.id || null,
+        resumeToken,
         helperStatusPath: this.helperStatusPath,
         releaseNotes: release.release_notes || '',
       };
@@ -485,7 +514,7 @@ class ThorUpdater {
       await this.report('installing', targetVersion, {
         installer: path.basename(installer),
         direction: info.direction,
-        operator_resume: Boolean(marker.resumeOperatorId),
+        operator_resume: Boolean(marker.resumeToken),
       });
 
       this.emit('handoff', {
@@ -524,7 +553,8 @@ class ThorUpdater {
       return false;
     }
 
-    const expectedOperatorId = String(marker.resumeOperatorId || this.agent.currentOperator?.()?.id || '');
+    const resumeClaim = this.resumeClaim(marker);
+    const expectedOperatorId = String(resumeClaim?.operatorId || '');
     this.writeHelperStatus('validating', 'Validando a versão instalada.', { targetVersion: marker.targetVersion });
     this.emit('restart_validating', { targetVersion: marker.targetVersion });
 
