@@ -1,0 +1,54 @@
+name: One-off daily cash v083
+
+on:
+  push:
+    branches: [feat/daily-cash-dynamic-payments-v083]
+    paths:
+      - '.github/scripts/patch-daily-cash-v083.py'
+      - '.github/workflows/oneoff-daily-cash-v083.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/daily-cash-dynamic-payments-v083
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply integration patch
+        run: python .github/scripts/patch-daily-cash-v083.py
+      - name: Validate Desktop JavaScript
+        run: |
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/preload.js
+          node --check desktop-pdv/agent/daily-cash-v083.js
+          node --check desktop-pdv/agent/cash-closing.js
+          node --check desktop-pdv/agent/sync.js
+          node --check desktop-pdv/renderer/cash-daily-v083.js
+      - name: Validate Desktop version
+        run: node -e "const p=require('./desktop-pdv/package.json'); if(p.version!=='0.8.3') process.exit(1); console.log('Desktop',p.version)"
+      - name: Install web dependencies
+        run: npm install
+      - name: Typecheck web
+        run: npm run typecheck
+      - name: Build web
+        run: npm run build
+      - name: Lint web
+        run: npm run lint
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop-pdv/main.js desktop-pdv/agent/cash-closing.js
+          if git diff --cached --quiet; then
+            echo "No integration changes to commit"
+          else
+            git commit -m "feat: wire daily cash lifecycle into ThorPDV"
+            git push origin HEAD:feat/daily-cash-dynamic-payments-v083
+          fi
