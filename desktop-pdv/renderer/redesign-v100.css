@@ -1,0 +1,82 @@
+/* ThorPDV 0.8.20 — checkout mais equilibrado e atalhos visíveis */
+
+/* Total/Saldo continuam destacados, mas sem dominar o modal. */
+.thor-v089 .v100-checkout .v099-main-kpis article{
+  height:88px!important;
+  min-height:88px!important;
+  padding:12px 15px!important;
+}
+.thor-v089 .v100-checkout .v099-main-kpis article small{
+  font-size:13px!important;
+}
+.thor-v089 .v100-checkout .v099-main-kpis article b{
+  font-size:24px!important;
+  line-height:1!important;
+  letter-spacing:-.015em!important;
+}
+.thor-v089 .v100-checkout .v099-main-kpis article i{
+  width:38px!important;
+  height:38px!important;
+  font-size:19px!important;
+}
+
+/* Ajustes financeiros com valores proporcionais ao restante do resumo. */
+.thor-v089 .v100-checkout .v099-adjustment-kpis>span{
+  min-height:46px!important;
+  padding:8px 11px!important;
+  font-size:12.5px!important;
+}
+.thor-v089 .v100-checkout .v099-adjustment-kpis>span b{
+  font-size:15px!important;
+}
+
+/* Nome + tecla configurada abaixo, sem poluir os cards. */
+.thor-v089 .v100-checkout .v089-pay-methods button{
+  min-height:72px!important;
+  padding:8px 7px 7px!important;
+  display:grid!important;
+  grid-template-rows:auto auto auto!important;
+  place-items:center!important;
+  align-content:center!important;
+  row-gap:3px!important;
+}
+.thor-v089 .v100-checkout .v089-pay-methods button>span{
+  line-height:1.05!important;
+  text-align:center!important;
+}
+.thor-v089 .v100-checkout .v100-method-shortcut{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-width:28px!important;
+  height:17px!important;
+  padding:0 5px!important;
+  margin:1px 0 0!important;
+  border:1px solid rgba(255,255,255,.34)!important;
+  border-radius:5px!important;
+  background:rgba(255,255,255,.15)!important;
+  color:#fff!important;
+  font:700 10px/1 Calibri,Arial,sans-serif!important;
+  letter-spacing:.02em!important;
+  box-shadow:none!important;
+}
+.thor-v089 .v100-checkout .v100-method-shortcut[hidden]{display:none!important}
+
+/* Método selecionado fica inequívoco também pelo teclado. */
+.thor-v089 .v100-checkout .v089-pay-methods button:focus-visible{
+  outline:3px solid rgba(255,255,255,.95)!important;
+  outline-offset:-5px!important;
+}
+
+/* Mais respiro para Pago/Restante/Troco. */
+.thor-v089 .v100-checkout .v099-payment-footer>div:first-child{
+  font-size:12.5px!important;
+  line-height:1.45!important;
+}
+
+@media(max-height:780px){
+  .thor-v089 .v100-checkout .v099-main-kpis article{height:76px!important;min-height:76px!important;padding:10px 13px!important}
+  .thor-v089 .v100-checkout .v099-main-kpis article b{font-size:21px!important}
+  .thor-v089 .v100-checkout .v089-pay-methods button{min-height:65px!important;padding:6px!important}
+  .thor-v089 .v100-checkout .v100-method-shortcut{height:15px!important;font-size:9px!important}
+}
