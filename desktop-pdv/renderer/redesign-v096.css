@@ -1,0 +1,204 @@
+/* ThorPDV v0.8.16 — checkout sem barras, centralização real e tipografia Calibri/Arial */
+
+/* Tipografia: visual mais clássico e limpo no Windows. */
+body.thor-v089,
+.thor-v089 button,
+.thor-v089 input,
+.thor-v089 select,
+.thor-v089 textarea,
+.thor-v089 table{
+  font-family:Calibri,Arial,sans-serif!important;
+  -webkit-font-smoothing:antialiased!important;
+  text-rendering:geometricPrecision!important;
+  font-kerning:normal!important;
+}
+.thor-v089 button{letter-spacing:0!important}
+.thor-v089 button b,.thor-v089 strong,.thor-v089 th{font-weight:700!important}
+
+/* Finalização: janela realmente centralizada e sem barras externas. */
+.thor-v089 .v089-payment-modal{
+  display:grid!important;
+  place-items:center!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:18px 28px!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+}
+.thor-v089 .v089-payment-card,
+.thor-v089 .v090-payment-card{
+  width:min(860px,calc(100vw - 56px))!important;
+  height:min(700px,calc(100vh - 36px))!important;
+  max-width:860px!important;
+  max-height:calc(100vh - 36px)!important;
+  margin:auto!important;
+  padding:0 16px 14px!important;
+  border-radius:20px!important;
+  overflow:hidden!important;
+  overscroll-behavior:none!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  flex-direction:column!important;
+}
+
+/* Remove visualmente qualquer scrollbar residual dentro do checkout. */
+.thor-v089 .v089-payment-card *,
+.thor-v089 .v090-payment-card *{scrollbar-width:none!important}
+.thor-v089 .v089-payment-card *::-webkit-scrollbar,
+.thor-v089 .v090-payment-card *::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}
+
+/* Cabeçalho e topo mais compactos para sobrar espaço útil. */
+.thor-v089 .v089-payment-card>.payment-head{
+  position:relative!important;
+  top:auto!important;
+  height:50px!important;
+  min-height:50px!important;
+  flex:0 0 50px!important;
+  padding:0 2px!important;
+}
+.thor-v089 .v089-payment-card>.payment-head h3{font-size:20px!important;line-height:1!important}
+.thor-v089 .v089-payment-top{
+  grid-template-columns:minmax(250px,1fr) 150px 150px!important;
+  gap:9px!important;
+  margin:0 2px 9px!important;
+  flex:0 0 auto!important;
+}
+.thor-v089 .v089-pay-search,.thor-v089 .v089-payment-top>button{height:36px!important;font-size:12px!important}
+
+/* Conteúdo em duas colunas, sem crescimento que force rolagem. */
+.thor-v089 .v089-payment-layout{
+  grid-template-columns:minmax(370px,1.08fr) minmax(275px,.92fr)!important;
+  gap:14px!important;
+  min-height:0!important;
+  flex:1 1 auto!important;
+  overflow:hidden!important;
+  align-items:start!important;
+}
+.thor-v089 .v089-payment-left,
+.thor-v089 .v089-payment-right{
+  min-height:0!important;
+  max-height:100%!important;
+  overflow:hidden!important;
+}
+.thor-v089 .v089-payment-left{padding-right:13px!important}
+
+/* Formas de pagamento: mais compactas para caber sem scroll. */
+.thor-v089 .v089-pay-methods{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:7px!important;
+  margin:0 0 8px!important;
+}
+.thor-v089 .v089-pay-methods button{
+  height:76px!important;
+  min-height:76px!important;
+  border-radius:13px!important;
+  gap:5px!important;
+  padding:5px!important;
+  font-size:12px!important;
+  line-height:1.05!important;
+}
+.thor-v089 .v089-pay-methods button i{
+  width:27px!important;
+  height:27px!important;
+  font-size:19px!important;
+}
+
+/* Valor e campos reduzidos na altura, mantendo leitura. */
+.thor-v089 .v089-pay-amount{margin:7px 0!important}
+.thor-v089 .v089-pay-amount input{
+  height:58px!important;
+  font-size:33px!important;
+  line-height:1!important;
+}
+.thor-v089 .v089-payment-left #cashTenderWrap,
+.thor-v089 .v089-payment-left .s71-card-grid{padding:7px!important}
+.thor-v089 .v089-payment-left .field{margin-bottom:6px!important}
+.thor-v089 .v089-payment-left .field label{font-size:11px!important}
+.thor-v089 .v089-payment-left .field input,
+.thor-v089 .v089-payment-left .field select{height:34px!important;font-size:12px!important}
+
+.thor-v089 .v089-payment-customer{margin-top:8px!important;gap:5px!important}
+.thor-v089 .v089-payment-customer>label{font-size:12px!important}
+.thor-v089 .v089-payment-customer>div{grid-template-columns:minmax(0,1fr) 36px 36px!important;gap:6px!important}
+.thor-v089 .v089-payment-customer button{height:36px!important;font-size:12px!important}
+.thor-v089 .v089-payment-left .payment-entry-actions{margin-top:7px!important}
+.thor-v089 .v089-add-payment,.thor-v089 .v089-integrated{height:36px!important;font-size:12px!important}
+
+/* Lista de pagamentos pode crescer um pouco, mas sem barra visível. */
+.thor-v089 .v089-payment-left #payList{
+  max-height:62px!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  margin:0 0 6px!important;
+}
+.thor-v089 .v089-payment-left .pay-line{font-size:11px!important;min-height:24px!important}
+
+/* Resumo da direita mais compacto e equilibrado. */
+.thor-v089 .v089-pay-kpis{gap:7px!important}
+.thor-v089 .v089-pay-kpis article{
+  height:78px!important;
+  padding:10px 11px!important;
+}
+.thor-v089 .v089-pay-kpis small{font-size:12px!important}
+.thor-v089 .v089-pay-kpis b{font-size:23px!important}
+.thor-v089 .v089-pay-kpis i{width:33px!important;height:33px!important;font-size:18px!important}
+.thor-v089 .v089-pay-lines{
+  gap:8px 14px!important;
+  padding:12px 6px!important;
+  font-size:12px!important;
+}
+
+/* Rodapé deixa de ser sticky e fica contido no card. */
+.thor-v089 .v089-payment-footer,
+.thor-v089 .v090-payment-footer{
+  position:relative!important;
+  bottom:auto!important;
+  margin-top:7px!important;
+  padding:8px 0 0!important;
+  flex:0 0 auto!important;
+  box-shadow:none!important;
+  background:#fbfaff!important;
+}
+.thor-v089 .v089-payment-footer>div:first-child{font-size:11px!important}
+.thor-v089 .v089-payment-footer button{height:38px!important;font-size:12px!important}
+.thor-v089 .v090-payment-footer #finishCheckout{min-height:38px!important;height:38px!important;font-size:13px!important}
+
+/* 1366x768 e telas menores: reduz verticalmente sem criar barra. */
+@media(max-height:780px){
+  .thor-v089 .v089-payment-modal{padding:8px 18px!important}
+  .thor-v089 .v089-payment-card,.thor-v089 .v090-payment-card{
+    width:min(840px,calc(100vw - 36px))!important;
+    height:calc(100vh - 16px)!important;
+    max-height:calc(100vh - 16px)!important;
+    border-radius:17px!important;
+    padding:0 13px 10px!important;
+  }
+  .thor-v089 .v089-payment-card>.payment-head{height:44px!important;min-height:44px!important;flex-basis:44px!important}
+  .thor-v089 .v089-payment-card>.payment-head h3{font-size:18px!important}
+  .thor-v089 .v089-payment-top{margin-bottom:6px!important}
+  .thor-v089 .v089-pay-methods button{height:68px!important;min-height:68px!important;font-size:11px!important}
+  .thor-v089 .v089-pay-methods button i{width:24px!important;height:24px!important;font-size:17px!important}
+  .thor-v089 .v089-pay-amount input{height:50px!important;font-size:29px!important}
+  .thor-v089 .v089-payment-customer{margin-top:5px!important}
+  .thor-v089 .v089-payment-customer button,.thor-v089 .v089-add-payment,.thor-v089 .v089-integrated{height:32px!important}
+  .thor-v089 .v089-pay-kpis article{height:68px!important}
+  .thor-v089 .v089-pay-kpis b{font-size:20px!important}
+  .thor-v089 .v089-pay-lines{padding:8px 5px!important;font-size:11px!important;gap:6px 12px!important}
+  .thor-v089 .v089-payment-footer,.thor-v089 .v090-payment-footer{margin-top:5px!important;padding-top:6px!important}
+  .thor-v089 .v089-payment-footer button,.thor-v089 .v090-payment-footer #finishCheckout{height:34px!important;min-height:34px!important}
+}
+
+@media(max-width:900px){
+  .thor-v089 .v089-payment-modal{padding:8px!important}
+  .thor-v089 .v089-payment-card,.thor-v089 .v090-payment-card{
+    width:calc(100vw - 16px)!important;
+    max-width:none!important;
+    height:calc(100vh - 16px)!important;
+    max-height:calc(100vh - 16px)!important;
+  }
+  .thor-v089 .v089-payment-top{grid-template-columns:1fr 128px!important}
+  .thor-v089 .v089-payment-top>*:last-child{display:none!important}
+  .thor-v089 .v089-payment-layout{grid-template-columns:1fr!important}
+  .thor-v089 .v089-payment-right{display:none!important}
+  .thor-v089 .v089-payment-left{border-right:0!important;padding-right:0!important}
+}
