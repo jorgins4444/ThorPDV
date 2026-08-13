@@ -50,5 +50,5 @@ function v44Parse(value){
   const tech=[`Código: ${code}`,r.channel?`Origem: ${r.channel}`:'',`Versão: ${state?.status?.appVersion||'—'}`,`Filial: ${state?.status?.context?.branch_name||'—'}`,`PDV: ${state?.status?.context?.pos_name||'—'}`,parts.length?`Parâmetros: ${parts.join(' | ')}`:'',`Mensagem original: ${r.original}`].filter(Boolean).join('\n');
   return {code,message,technical:tech};
 }
-friendlyError=function(value){const r=v44Parse(value);v44LastError={...r,at:Date.now()};console.error('[ThorPDV]\n'+r.technical);return r.message||v44FriendlyBase(value);};
+friendlyError=function(value){const r=v44Parse(value);v44LastError={...r,at:Date.now()};console.error('[ThorPDV]\n'+r.technical);return `${r.message}\n\nCódigo técnico: ${r.code}`||v44FriendlyBase(value);};
 window.ThorErrorCenter={parse:v44Parse,last:()=>v44LastError};
