@@ -46,6 +46,9 @@ const groups = [
 
 export default function ReportsHub(){
   return <AdvancedShell title="Central de Relatórios" subtitle="Relatórios integrados de caixa, estoque, vendas, rentabilidade, financeiro e fiscal." activePath="/dashboard/relatorios">
-    <div className="reports-hub">{groups.map(([group,items])=><section className="erp-module-card reports-group" key={group}><div className="reports-group-head"><h2>{group}</h2><span>{items.length} relatório(s)</span></div><div className="reports-grid">{items.map(([title,href,desc])=><Link href={href} className="report-card" key={href}><div className="report-card-icon">▦</div><div><strong>{title}</strong><p>{desc}</p></div><span className="report-card-arrow">→</span></Link>)}</div></section>)}</div>
+    <div className="reports-hub">
+      <Link href="/dashboard/relatorios/studio" className="report-studio-entry"><div className="report-studio-entry-icon">✦</div><div><span>THOR BI · NOVO</span><strong>Report Studio</strong><p>Combine relatórios no mesmo workbook, compare períodos e fontes, crie gráficos, filtros cruzados e layouts pessoais.</p><div className="report-studio-tags"><i>Multi-relatório</i><i>Comparativos</i><i>Cross-filter</i><i>18 visuais</i><i>Workbooks pessoais</i></div></div><b>Abrir Studio →</b></Link>
+      {groups.map(([group,items])=><section className="erp-module-card reports-group" key={group}><div className="reports-group-head"><h2>{group}</h2><span>{items.length} relatório(s)</span></div><div className="reports-grid">{items.map(([title,href,desc])=><Link href={href} className="report-card" key={href}><div className="report-card-icon">▦</div><div><strong>{title}</strong><p>{desc}</p></div><span className="report-card-arrow">→</span></Link>)}</div></section>)}
+    </div>
   </AdvancedShell>;
 }
