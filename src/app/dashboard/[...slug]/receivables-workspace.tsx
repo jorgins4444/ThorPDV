@@ -60,10 +60,10 @@ export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods}
   const totals=useMemo(()=>rows.reduce<{amount:number;paid:number}>((acc,row)=>{if(String(row.status)==='cancelled')return acc;acc.amount+=Number(row.amount||0);acc.paid+=Number(row.paid_amount||0);return acc;},{amount:0,paid:0}),[rows]);
   const destinationAccounts=method==='cash'?activeAccounts:bankOnly;
 
-  const detailTitle=((detail?.title as Row)|null)??{};
-  const detailOperation=((detail?.operation as Row)|null)??{};
-  const detailNfce=((detail?.nfce as Row)|null)??{};
-  const detailReceipt=((detail?.receipt_summary as Row)|null)??{};
+  const detailTitle=(detail?.title as Row|undefined)??{};
+  const detailOperation=(detail?.operation as Row|undefined)??{};
+  const detailNfce=(detail?.nfce as Row|undefined)??{};
+  const detailReceipt=(detail?.receipt_summary as Row|undefined)??{};
   const detailProducts=Array.isArray(detail?.products)?detail.products as Row[]:[];
   const detailReceipts=Array.isArray(detail?.receipts)?detail.receipts as Row[]:[];
 
