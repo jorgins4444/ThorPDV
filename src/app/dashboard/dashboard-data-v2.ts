@@ -22,6 +22,11 @@ export function pointsFor(id:TileId,data:Data):Point[]{
  if(id==='fiscal')return [{label:'Autorizadas',value:n(fiscal.authorized),format:'number'},{label:'Rejeitadas',value:n(fiscal.rejected),format:'number'},{label:'Canceladas',value:n(fiscal.cancelled),format:'number'},{label:'Pendentes',value:n(fiscal.pending),format:'number'}];
  if(id==='system')return [{label:'Clientes',value:n(people.customers),format:'number'},{label:'Fornecedores',value:n(people.suppliers),format:'number'},{label:'Usuários PDV',value:n(people.users_pdv),format:'number'},{label:'Usuários ADM',value:n(people.users_adm),format:'number'},{label:'PDVs ativos',value:n(equipment.pdvs),format:'number'},{label:'Caixas abertos',value:n(equipment.cash_open),format:'number'}];
  if(id==='alerts')return [{label:'Fiscal com erro',value:n(alerts.fiscal_open),format:'number'},{label:'Estoque baixo',value:n(alerts.stock_low),format:'number'},{label:'Financeiro vencido',value:n(alerts.finance_overdue),format:'number'},{label:'Tickets abertos',value:n(alerts.tickets_open),format:'number'}];
- const metric=metricInfo(id,data);if(metric?.value!==null){const pts:Point[]=[{label:'Período atual',value:metric.value,format:metric.format,detail:metric.text}];if(metric.previous!==null)pts.unshift({label:'Período anterior',value:metric.previous,format:metric.format,detail:fmt(metric.previous,metric.format)});return pts}
+ const metric=metricInfo(id,data);
+ if(metric&&metric.value!==null){
+  const pts:Point[]=[{label:'Período atual',value:metric.value,format:metric.format,detail:metric.text}];
+  if(metric.previous!==null)pts.unshift({label:'Período anterior',value:metric.previous,format:metric.format,detail:fmt(metric.previous,metric.format)});
+  return pts;
+ }
  return [];
 }
