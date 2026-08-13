@@ -33,3 +33,19 @@ export async function erpSettleReceivable(entryId:string,payload:Record<string,u
   if(error)return {ok:false,error:error.message};
   return (data??{ok:false}) as Record<string,unknown>;
 }
+
+export async function erpReceivableDetail(entryId:string){
+  const pToken=await token();
+  const supabase=await createClient();
+  const {data,error}=await supabase.rpc('erp_term_receivable_detail',{p_token:pToken,p_entry_id:entryId});
+  if(error)return {ok:false,error:error.message};
+  return (data??{ok:false}) as Record<string,unknown>;
+}
+
+export async function erpReverseReceivable(entryId:string,reason:string){
+  const pToken=await token();
+  const supabase=await createClient();
+  const {data,error}=await supabase.rpc('erp_term_receivable_reverse',{p_token:pToken,p_entry_id:entryId,p_reason:reason});
+  if(error)return {ok:false,error:error.message};
+  return (data??{ok:false}) as Record<string,unknown>;
+}
