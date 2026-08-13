@@ -40,5 +40,8 @@ export async function inventoryPolicySave(allowNegativeStock:boolean){
 export async function inventoryPolicySaveForm(formData:FormData){
   const allow=String(formData.get('allow_negative_stock')??'')==='on';
   const result=await inventoryPolicySave(allow);
-  if(result.ok)revalidatePath('/dashboard/estoque');
+  if(result.ok){
+    revalidatePath('/dashboard/estoque');
+    revalidatePath('/dashboard/estoque/locais');
+  }
 }
