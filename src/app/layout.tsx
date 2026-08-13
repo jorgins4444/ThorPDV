@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import './form-contrast.css';
+import './dashboard/[...slug]/product-studio-feedback.css';
 
 export const metadata: Metadata = {
   title: 'ThorPDV',
