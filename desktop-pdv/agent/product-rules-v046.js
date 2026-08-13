@@ -1,7 +1,22 @@
 const { installCustomerCreditRules } = require('./customer-credit-v050');
 const { installScaleLabelRules } = require('./scale-label-v060');
 
+function normalizedWeighableQuantity(product, value) {
+  const quantity = Number(value || 0);
+  if (!Number.isFinite(quantity) || quantity <= 0) return quantity;
+  const unit = String(product?.unit || '').trim().toUpperCase();
+  const weighable = Boolean(product?.is_weighable) || Boolean(product?.fractioned) || Boolean(product?.label_scale);
+  const stock = Math.max(Number(product?.quantity || 0), 0);
+  const kilograms = Math.round((quantity / 1000) * 1000) / 1000;
+  if (weighable && unit === 'KG' && Number.isInteger(quantity) && quantity >= 50 && stock > 0 && quantity > stock + 0.0001 && kilograms > 0 && kilograms <= stock + 0.0001) {
+    return kilograms;
+  }
+  return quantity;
+}
+
 function installProductRules(ThorAgent, Store) {
+  if (ThorAgent.prototype.__productRulesV046) return;
+  ThorAgent.prototype.__productRulesV046 = true;
   installCustomerCreditRules(ThorAgent, Store);
   installScaleLabelRules(ThorAgent, Store);
   const originalMigrate = Store.prototype.migrate;
@@ -53,11 +68,11 @@ function installProductRules(ThorAgent, Store) {
   };
 
   ThorAgent.prototype.quoteSale = function (items = [], discount = 0) {
-    for (const item of Array.isArray(items) ? items : []) {
+    const normalized = (Array.isArray(items) ? items : []).map((item) => {
       const product = this.store.product(item.productId);
-      if (!product || !product.active) continue;
-      const quantity = Number(item.quantity || 0);
-      if (quantity <= 0) continue;
+      if (!product || !product.active) return item;
+      const quantity = normalizedWeighableQuantity(product, item.quantity);
+      if (quantity <= 0) return item;
       const allowsFraction = Boolean(product.is_weighable) || Boolean(product.fractioned);
       if (!allowsFraction && Math.abs(quantity - Math.round(quantity)) > 0.000001) {
         throw new Error('fractional_quantity_not_allowed');
@@ -65,9 +80,10 @@ function installProductRules(ThorAgent, Store) {
       if (Number(item.discount || 0) > 0 && product.allow_discount === false) {
         throw new Error('product_discount_not_allowed');
       }
-    }
-    return originalQuoteSale.call(this, items, discount);
+      return quantity === Number(item.quantity || 0) ? item : { ...item, quantity };
+    });
+    return originalQuoteSale.call(this, normalized, discount);
   };
 }
 
-module.exports = { installProductRules };
+module.exports = { installProductRules, normalizedWeighableQuantity };
