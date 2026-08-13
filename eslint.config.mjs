@@ -20,7 +20,10 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/app/dashboard/dashboard-studio.tsx'],
+    files: [
+      'src/app/dashboard/dashboard-studio.tsx',
+      'src/app/dashboard/relatorios/studio/report-studio-client.tsx',
+    ],
     rules: {
       // Donut stops are built with a render-local cumulative cursor. The variable is not state,
       // is recreated on every render and never escapes the pure chart formatting function.
