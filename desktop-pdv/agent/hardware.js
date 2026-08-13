@@ -74,7 +74,7 @@ async function openDrawer(printerName) {
   return true;
 }
 
-async function readScale(portName, baudRate=9600, timeoutMs=1500) {
+async function readScaleDetailed(portName, baudRate=9600, timeoutMs=1500) {
   if (process.platform !== 'win32') throw new Error('scale_requires_windows');
   if (!portName) throw new Error('scale_port_not_configured');
   const q=(s)=>String(s).replace(/'/g,"''");
@@ -82,12 +82,17 @@ async function readScale(portName, baudRate=9600, timeoutMs=1500) {
   const timeout=Math.max(300,Number(timeoutMs)||1500);
   const script=`$p=New-Object System.IO.Ports.SerialPort '${q(portName)}',${baud},'None',8,'One'; $p.ReadTimeout=${timeout}; try{$p.Open(); $line=$p.ReadLine(); Write-Output $line} finally{if($p.IsOpen){$p.Close()}}`;
   const out=await powershell(script);
-  const normalized=String(out||'').replace(',','.');
+  const raw=String(out||'').trim();
+  const normalized=raw.replace(',','.');
   const match=normalized.match(/-?\d+(?:\.\d+)?/);
   if(!match) throw new Error('scale_weight_not_detected');
   const value=Number(match[0]);
   if(!Number.isFinite(value)) throw new Error('scale_invalid_weight');
-  return value;
+  return { value, raw, token:match[0], hasDecimal:/[.,]\d+/.test(raw) };
 }
 
-module.exports={ machineId,listPrinters,listSerialPorts,printText,openDrawer,readScale };
+async function readScale(portName, baudRate=9600, timeoutMs=1500) {
+  return (await readScaleDetailed(portName,baudRate,timeoutMs)).value;
+}
+
+module.exports={ machineId,listPrinters,listSerialPorts,printText,openDrawer,readScale,readScaleDetailed };
