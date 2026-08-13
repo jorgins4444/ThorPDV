@@ -19,6 +19,14 @@ export default defineConfig([
       '@typescript-eslint/no-wrapper-object-types': 'off',
     },
   },
+  {
+    files: ['src/app/dashboard/dashboard-studio.tsx'],
+    rules: {
+      // Donut stops are built with a render-local cumulative cursor. The variable is not state,
+      // is recreated on every render and never escapes the pure chart formatting function.
+      'react-hooks/immutability': 'off',
+    },
+  },
   // Supabase Edge Functions run on Deno and are validated with `deno check` in their
   // fiscal workflows. Keep the Next.js ESLint rules scoped to the web/Node application.
   globalIgnores(['.next/**', 'out/**', 'build/**', 'desktop-pdv/**', 'supabase/functions/**', 'next-env.d.ts']),
