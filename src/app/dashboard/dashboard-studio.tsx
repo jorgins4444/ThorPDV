@@ -1,16 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react';
 import { dashboardLoad, dashboardPreferencesLoad, dashboardPreferencesSave, logout } from './actions';
 
 type Row=Record<string,unknown>;
 type Data=Record<string,unknown>;
 type Size='s'|'m'|'l'|'wide';
-type ChartType='kpi'|'bar'|'line'|'area'|'donut'|'table';
+type ChartType='kpi'|'bar'|'column'|'line'|'area'|'donut'|'pie'|'table'|'gauge'|'radial'|'funnel'|'treemap'|'heatmap'|'waterfall'|'combo'|'scatter'|'radar'|'spark';
 type TileId='netSales'|'grossProfit'|'netProfit'|'avgTicket'|'salesCount'|'grossMargin'|'trend'|'payments'|'topProducts'|'minute'|'hourly'|'branchSales'|'finance'|'stock';
 type TileConfig={id:TileId;title:string;size:Size;color:string;chart:ChartType;visible:boolean};
 type Point={label:string;value:number;detail?:string};
+type MetricInfo={value:number|null;previous:number|null;text:string;caption:string;delta:number|null;available:boolean};
 
 const money=(v:unknown)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v??0));
 const number=(v:unknown)=>new Intl.NumberFormat('pt-BR',{maximumFractionDigits:2}).format(Number(v??0));
@@ -18,6 +19,7 @@ const pct=(v:unknown)=>`${new Intl.NumberFormat('pt-BR',{maximumFractionDigits:1
 const n=(o:Data|undefined,k:string)=>Number(o?.[k]??0);
 const asData=(v:unknown)=>(v&&typeof v==='object'&&!Array.isArray(v)?v as Data:{});
 const asRows=(v:unknown)=>(Array.isArray(v)?v as Row[]:[]);
+const isMetric=(id:TileId)=>['netSales','grossProfit','netProfit','avgTicket','salesCount','grossMargin'].includes(id);
 
 const menu=[
  ['Dashboard','/dashboard','▣'],['Pessoas','/dashboard/clientes','●'],['Vendas','/dashboard/vendas','▰'],
@@ -40,176 +42,128 @@ const defaultTiles:TileConfig[]=[
  {id:'payments',title:'Vendas por forma de pagamento',size:'l',color:'#0ea5e9',chart:'donut',visible:true},
  {id:'topProducts',title:'Produtos mais vendidos',size:'l',color:'#10b981',chart:'bar',visible:true},
  {id:'minute',title:'Vendas por minuto · últimos 60 min',size:'wide',color:'#2563eb',chart:'area',visible:true},
- {id:'hourly',title:'Vendas por hora',size:'l',color:'#8b5cf6',chart:'bar',visible:true},
+ {id:'hourly',title:'Vendas por hora',size:'l',color:'#8b5cf6',chart:'column',visible:true},
  {id:'branchSales',title:'Vendas por filial',size:'l',color:'#f59e0b',chart:'bar',visible:true},
- {id:'finance',title:'Posição financeira',size:'m',color:'#ef4444',chart:'bar',visible:true},
+ {id:'finance',title:'Posição financeira',size:'m',color:'#ef4444',chart:'waterfall',visible:true},
  {id:'stock',title:'Situação do estoque',size:'m',color:'#64748b',chart:'donut',visible:true},
 ];
 
-const chartOptions:Record<TileId,ChartType[]>={
- netSales:['kpi'],grossProfit:['kpi'],netProfit:['kpi'],avgTicket:['kpi'],salesCount:['kpi'],grossMargin:['kpi'],
- trend:['line','area','bar','table'],payments:['donut','bar','table'],topProducts:['bar','donut','table'],
- minute:['area','line','bar','table'],hourly:['bar','line','area','table'],branchSales:['bar','donut','table'],
- finance:['bar','donut','table'],stock:['donut','bar','table']
-};
-
+const allCharts:ChartType[]=['kpi','bar','column','line','area','donut','pie','table','gauge','radial','funnel','treemap','heatmap','waterfall','combo','scatter','radar','spark'];
+const chartOptions:Record<TileId,ChartType[]> = Object.fromEntries(defaultTiles.map(t=>[t.id,allCharts])) as Record<TileId,ChartType[]>;
 const sizeLabels:Record<Size,string>={s:'Pequeno',m:'Médio',l:'Grande',wide:'Largura total'};
-const chartLabels:Record<ChartType,string>={kpi:'Indicador',bar:'Barras',line:'Linha',area:'Área',donut:'Rosca',table:'Tabela'};
+const chartLabels:Record<ChartType,string>={kpi:'Indicador',bar:'Barras horizontais',column:'Colunas',line:'Linha',area:'Área',donut:'Rosca',pie:'Pizza',table:'Tabela',gauge:'Velocímetro',radial:'Radial',funnel:'Funil',treemap:'Mapa de árvore',heatmap:'Mapa de calor',waterfall:'Cascata',combo:'Combinado',scatter:'Dispersão',radar:'Radar',spark:'Sparkline'};
 const refreshOptions=[[0,'Manual'],[15,'15 segundos'],[30,'30 segundos'],[60,'1 minuto'],[300,'5 minutos'],[900,'15 minutos'],[3600,'1 hora']] as const;
+const paletteExtras=['#22c55e','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#ef4444','#64748b','#14b8a6','#f97316','#3b82f6','#a855f7'];
 
 function isoDate(d:Date){const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
 function today(){return isoDate(new Date())}
 function generatedAt(value:unknown){if(!value)return 'agora';const d=new Date(String(value));return Number.isNaN(d.getTime())?'agora':d.toLocaleString('pt-BR',{timeZone:'America/Fortaleza',hour:'2-digit',minute:'2-digit',second:'2-digit'})}
 function shortDate(value:unknown){const raw=String(value??'');if(!raw)return '—';const [y,m,d]=raw.slice(0,10).split('-');return y&&m&&d?`${d}/${m}`:raw}
 function minuteLabel(value:unknown){const d=new Date(String(value??''));return Number.isNaN(d.getTime())?'—':d.toLocaleTimeString('pt-BR',{timeZone:'America/Fortaleza',hour:'2-digit',minute:'2-digit'})}
-
 function hexToRgba(hex:string,alpha:number){const clean=hex.replace('#','');const value=clean.length===3?clean.split('').map(x=>x+x).join(''):clean;const num=parseInt(value,16);if(!Number.isFinite(num))return `rgba(109,40,217,${alpha})`;return `rgba(${(num>>16)&255},${(num>>8)&255},${num&255},${alpha})`}
+function colorAt(color:string,i:number){return i===0?color:paletteExtras[(i-1)%paletteExtras.length]}
+function clamp(v:number,min:number,max:number){return Math.min(max,Math.max(min,v))}
+function displayPoint(p:Point){return p.detail??money(p.value)}
 
-function LineVisual({points,color,area=false}:{points:Point[];color:string;area?:boolean}){
- const values=points.map(p=>Math.max(0,p.value));const max=Math.max(1,...values);const width=640,height=220,pad=18;
- const coords=values.map((v,i)=>{const x=points.length<=1?pad:pad+(i*(width-pad*2)/(points.length-1));const y=height-pad-(v/max)*(height-pad*2);return [x,y] as const});
- const poly=coords.map(([x,y])=>`${x},${y}`).join(' ');
- const areaPath=coords.length?`M ${coords[0][0]} ${height-pad} L ${coords.map(([x,y])=>`${x} ${y}`).join(' L ')} L ${coords[coords.length-1][0]} ${height-pad} Z`:'';
+function metricInfo(id:TileId,sales:Data,comparison:Data):MetricInfo{
+ const prev=asData(comparison.previous);
+ if(id==='netSales'){const value=Number(sales.net??sales.gross??0);return {value,previous:Number(prev.net??0),text:money(value),caption:'Vendas válidas menos devoluções',delta:comparison.net_pct==null?null:Number(comparison.net_pct),available:true}}
+ if(id==='grossProfit'){const value=Number(sales.gross_profit??0);return {value,previous:Number(prev.gross_profit??0),text:money(value),caption:`Receita líquida − CMV (${money(sales.cmv)})`,delta:comparison.gross_profit_pct==null?null:Number(comparison.gross_profit_pct),available:true}}
+ if(id==='netProfit'){const available=Boolean(sales.net_profit_available);const value=available?Number(sales.net_profit??0):null;return {value,previous:null,text:available?money(value):'N/D',caption:available?'Resultado líquido do período':'Aguardando DRE completa: impostos, taxas, comissões e despesas por competência',delta:null,available}}
+ if(id==='avgTicket'){const value=Number(sales.avg_ticket??0);return {value,previous:Number(prev.avg_ticket??0),text:money(value),caption:'Valor médio por venda',delta:comparison.ticket_pct==null?null:Number(comparison.ticket_pct),available:true}}
+ if(id==='salesCount'){const value=Number(sales.count??0);return {value,previous:Number(prev.count??0),text:number(value),caption:'Vendas concluídas',delta:comparison.count_pct==null?null:Number(comparison.count_pct),available:true}}
+ if(id==='grossMargin'){const value=Number(sales.gross_margin??0);return {value,previous:Number(prev.gross_margin??0),text:pct(value),caption:'Lucro bruto ÷ receita líquida',delta:null,available:true}}
+ return {value:null,previous:null,text:'—',caption:'',delta:null,available:false};
+}
+
+function Kpi({tile,info}:{tile:TileConfig;info:MetricInfo}){
+ const d=info.delta;
+ return <div className="studio-kpi"><div className="studio-kpi-label"><span>{tile.title}</span><i style={{background:tile.color}}/></div><strong className={!info.available?'is-muted':''}>{info.text}</strong>{d!==null&&Number.isFinite(d)?<em className={d>=0?'up':'down'}>{d>=0?'↑':'↓'} {Math.abs(d).toLocaleString('pt-BR',{maximumFractionDigits:1})}% vs. período anterior</em>:null}<p>{info.caption}</p></div>;
+}
+
+function GenericKpi({points,color}:{points:Point[];color:string}){
+ const total=points.reduce((s,p)=>s+p.value,0);const top=[...points].sort((a,b)=>b.value-a.value)[0];
  if(!points.length)return <div className="studio-empty">Sem dados neste período.</div>;
- return <div className="studio-line-wrap"><svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Gráfico">
-   <defs><linearGradient id={`g-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".32"/><stop offset="1" stopColor={color} stopOpacity=".02"/></linearGradient></defs>
-   {[.25,.5,.75,1].map(k=><line key={k} x1={pad} x2={width-pad} y1={height-pad-(height-pad*2)*k} y2={height-pad-(height-pad*2)*k} className="studio-grid-line"/>)}
-   {area&&areaPath?<path d={areaPath} fill={`url(#g-${color.replace('#','')})`}/>:null}
-   <polyline fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" points={poly}/>
- </svg><div className="studio-axis-labels"><span>{points[0]?.label}</span><span>{points[Math.floor(points.length/2)]?.label}</span><span>{points[points.length-1]?.label}</span></div></div>;
+ return <div className="studio-kpi studio-generic-kpi"><div className="studio-kpi-label"><span>Total consolidado</span><i style={{background:color}}/></div><strong>{money(total)}</strong><em className="up">{points.length} categoria(s)</em><p>{top?`Maior participação: ${top.label} · ${displayPoint(top)}`:'Sem dados'}</p></div>;
 }
 
-function BarVisual({points,color}:{points:Point[];color:string}){
- const max=Math.max(1,...points.map(p=>Math.abs(p.value)));
+function LineVisual({points,color,area=false,compact=false}:{points:Point[];color:string;area?:boolean;compact?:boolean}){
+ const values=points.map(p=>p.value);const max=Math.max(1,...values.map(v=>Math.abs(v)));const width=640,height=compact?95:220,pad=compact?8:18;
+ const coords=values.map((v,i)=>{const x=points.length<=1?pad:pad+(i*(width-pad*2)/(points.length-1));const y=height-pad-(Math.abs(v)/max)*(height-pad*2);return [x,y] as const});
+ const poly=coords.map(([x,y])=>`${x},${y}`).join(' ');const areaPath=coords.length?`M ${coords[0][0]} ${height-pad} L ${coords.map(([x,y])=>`${x} ${y}`).join(' L ')} L ${coords[coords.length-1][0]} ${height-pad} Z`:'';
  if(!points.length)return <div className="studio-empty">Sem dados neste período.</div>;
- return <div className="studio-bars">{points.slice(0,12).map((p,i)=><div className="studio-bar-row" key={`${p.label}-${i}`}><div className="studio-bar-copy"><span>{p.label}</span><b>{p.detail??money(p.value)}</b></div><div className="studio-bar-track"><i style={{width:`${Math.max(2,Math.abs(p.value)/max*100)}%`,background:color}}/></div></div>)}</div>;
+ const gid=`g-${color.replace('#','')}-${points.length}-${compact?'s':'n'}`;
+ return <div className={`studio-line-wrap ${compact?'compact':''}`}><svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Gráfico">
+   <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".32"/><stop offset="1" stopColor={color} stopOpacity=".02"/></linearGradient></defs>
+   {!compact&&[.25,.5,.75,1].map(k=><line key={k} x1={pad} x2={width-pad} y1={height-pad-(height-pad*2)*k} y2={height-pad-(height-pad*2)*k} className="studio-grid-line"/>)}
+   {area&&areaPath?<path d={areaPath} fill={`url(#${gid})`}/>:null}<polyline fill="none" stroke={color} strokeWidth={compact?5:4} strokeLinecap="round" strokeLinejoin="round" points={poly}/>
+   {coords.map(([x,y],i)=><circle key={i} cx={x} cy={y} r={compact?2.5:3} fill={color}/>)}</svg>{!compact?<div className="studio-axis-labels"><span>{points[0]?.label}</span><span>{points[Math.floor(points.length/2)]?.label}</span><span>{points[points.length-1]?.label}</span></div>:null}</div>;
 }
 
-function DonutVisual({points,color}:{points:Point[];color:string}){
- const usable=points.filter(p=>p.value>0).slice(0,8);const total=usable.reduce((s,p)=>s+p.value,0);
- if(!total)return <div className="studio-empty">Sem dados neste período.</div>;
- const palette=[color,'#22c55e','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#ef4444','#64748b'];let cursor=0;
- const stops=usable.map((p,i)=>{const start=cursor;cursor+=p.value/total*100;return `${palette[i%palette.length]} ${start}% ${cursor}%`}).join(',');
- return <div className="studio-donut-layout"><div className="studio-donut" style={{background:`conic-gradient(${stops})`}}><div><strong>{money(total)}</strong><span>Total</span></div></div><div className="studio-donut-legend">{usable.map((p,i)=><div key={`${p.label}-${i}`}><i style={{background:palette[i%palette.length]}}/><span>{p.label}</span><b>{p.detail??money(p.value)}</b></div>)}</div></div>;
-}
+function BarVisual({points,color}:{points:Point[];color:string}){const max=Math.max(1,...points.map(p=>Math.abs(p.value)));if(!points.length)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-bars">{points.slice(0,12).map((p,i)=><div className="studio-bar-row" key={`${p.label}-${i}`}><div className="studio-bar-copy"><span>{p.label}</span><b>{displayPoint(p)}</b></div><div className="studio-bar-track"><i style={{width:`${Math.max(2,Math.abs(p.value)/max*100)}%`,background:colorAt(color,i)}}/></div></div>)}</div>}
 
-function TableVisual({points}:{points:Point[]}){if(!points.length)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-mini-table">{points.slice(0,12).map((p,i)=><div key={`${p.label}-${i}`}><span>{p.label}</span><b>{p.detail??money(p.value)}</b></div>)}</div>}
+function ColumnVisual({points,color}:{points:Point[];color:string}){const list=points.slice(-16);const max=Math.max(1,...list.map(p=>Math.abs(p.value)));if(!list.length)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-columns">{list.map((p,i)=><div className="studio-column-item" key={`${p.label}-${i}`} title={`${p.label} · ${displayPoint(p)}`}><div className="studio-column-track"><i style={{height:`${Math.max(3,Math.abs(p.value)/max*100)}%`,background:colorAt(color,i)}}/></div><span>{p.label}</span></div>)}</div>}
 
-function MultiTrend({rows,color,chart}:{rows:Row[];color:string;chart:ChartType}){
- if(chart==='table')return <TableVisual points={rows.map(r=>({label:shortDate(r.report_day),value:Number(r.net_revenue??0),detail:`Receita ${money(r.net_revenue)} · Lucro ${money(r.gross_profit)}`}))}/>;
- if(chart==='bar')return <div className="studio-multi-bars">{rows.slice(-14).map((r,i)=><div className="studio-multi-day" key={`${String(r.report_day)}-${i}`}><div><i style={{height:`${Math.max(2,Math.abs(Number(r.net_revenue??0))/Math.max(1,...rows.map(x=>Math.abs(Number(x.net_revenue??0))))*100)}%`,background:color}}/><i style={{height:`${Math.max(2,Math.abs(Number(r.gross_profit??0))/Math.max(1,...rows.map(x=>Math.abs(Number(x.net_revenue??0))))*100)}%`,background:'#10b981'}}/></div><span>{shortDate(r.report_day)}</span></div>)}</div>;
- const net=rows.map(r=>({label:shortDate(r.report_day),value:Number(r.net_revenue??0)}));
- return <div className="studio-trend-stack"><div className="studio-legend"><span><i style={{background:color}}/>Receita líquida</span><span><i style={{background:'#10b981'}}/>Lucro bruto</span><span><i style={{background:'#cbd5e1'}}/>CMV</span></div><LineVisual points={net} color={color} area={chart==='area'}/><div className="studio-trend-totals"><span>Receita <b>{money(rows.reduce((s,r)=>s+Number(r.net_revenue??0),0))}</b></span><span>CMV <b>{money(rows.reduce((s,r)=>s+Number(r.cmv??0),0))}</b></span><span>Lucro bruto <b>{money(rows.reduce((s,r)=>s+Number(r.gross_profit??0),0))}</b></span></div></div>;
-}
+function CircularVisual({points,color,hole}:{points:Point[];color:string;hole:boolean}){const usable=points.filter(p=>p.value>0).slice(0,10);const total=usable.reduce((s,p)=>s+p.value,0);if(!total)return <div className="studio-empty">Sem dados neste período.</div>;const stops=usable.map((p,i)=>{const start=usable.slice(0,i).reduce((s,x)=>s+x.value,0)/total*100;const end=start+p.value/total*100;return `${colorAt(color,i)} ${start}% ${end}%`}).join(',');return <div className="studio-donut-layout"><div className={`studio-donut ${hole?'':'is-pie'}`} style={{background:`conic-gradient(${stops})`}}>{hole?<div><strong>{money(total)}</strong><span>Total</span></div>:null}</div><div className="studio-donut-legend">{usable.map((p,i)=><div key={`${p.label}-${i}`}><i style={{background:colorAt(color,i)}}/><span>{p.label}</span><b>{displayPoint(p)}</b></div>)}</div></div>}
 
-function Kpi({tile,sales,comparison}:{tile:TileConfig;sales:Data;comparison:Data}){
- let value='—',caption='',delta:unknown=null;
- if(tile.id==='netSales'){value=money(sales.net??sales.gross);caption='Vendas válidas menos devoluções';delta=comparison.net_pct}
- if(tile.id==='grossProfit'){value=money(sales.gross_profit);caption=`Receita líquida − CMV (${money(sales.cmv)})`;delta=comparison.gross_profit_pct}
- if(tile.id==='netProfit'){value=sales.net_profit_available?money(sales.net_profit):'N/D';caption=sales.net_profit_available?'Resultado líquido do período':'Aguardando DRE completa: impostos, taxas, comissões e despesas por competência'}
- if(tile.id==='avgTicket'){value=money(sales.avg_ticket);caption='Valor médio por venda';delta=comparison.ticket_pct}
- if(tile.id==='salesCount'){value=number(sales.count);caption='Vendas concluídas';delta=comparison.count_pct}
- if(tile.id==='grossMargin'){value=pct(sales.gross_margin);caption='Lucro bruto ÷ receita líquida'}
- const d=delta===null||delta===undefined?null:Number(delta);
- return <div className="studio-kpi"><div className="studio-kpi-label"><span>{tile.title}</span><i style={{background:tile.color}}/></div><strong className={tile.id==='netProfit'&&!sales.net_profit_available?'is-muted':''}>{value}</strong>{d!==null&&Number.isFinite(d)?<em className={d>=0?'up':'down'}>{d>=0?'↑':'↓'} {Math.abs(d).toLocaleString('pt-BR',{maximumFractionDigits:1})}% vs. período anterior</em>:null}<p>{caption}</p></div>;
-}
+function TableVisual({points}:{points:Point[]}){if(!points.length)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-mini-table">{points.slice(0,16).map((p,i)=><div key={`${p.label}-${i}`}><span>{p.label}</span><b>{displayPoint(p)}</b></div>)}</div>}
+
+function GaugeVisual({points,color,info}:{points:Point[];color:string;info?:MetricInfo}){const value=info?.value??points.reduce((s,p)=>s+p.value,0);if(value===null)return <div className="studio-empty">Indicador indisponível.</div>;const base=info?.previous&&info.previous>0?info.previous:Math.max(1,...points.map(p=>Math.abs(p.value)),Math.abs(value));const ratio=clamp(Math.abs(value)/Math.max(1,Math.abs(base)),0,1);return <div className="studio-gauge-wrap"><div className="studio-gauge" style={{background:`conic-gradient(from 270deg,${color} 0deg ${ratio*180}deg,#e9edf3 ${ratio*180}deg 180deg,transparent 180deg 360deg)`}}><div><strong>{info?.text??money(value)}</strong><span>{Math.round(ratio*100)}% da referência</span></div></div><small>{info?.caption??'Comparação relativa ao maior valor do conjunto'}</small></div>}
+
+function RadialVisual({points,color,info}:{points:Point[];color:string;info?:MetricInfo}){if(info){if(info.value===null)return <div className="studio-empty">Indicador indisponível.</div>;const base=Math.max(Math.abs(info.previous??0),Math.abs(info.value),1);const ratio=clamp(Math.abs(info.value)/base,0,1);return <div className="studio-radial-single"><div className="studio-radial" style={{background:`conic-gradient(${color} ${ratio*360}deg,#edf0f4 0)`}}><div><strong>{info.text}</strong><span>{Math.round(ratio*100)}%</span></div></div><p>{info.caption}</p></div>};const usable=points.filter(p=>p.value>=0).slice(0,5);const max=Math.max(1,...usable.map(p=>p.value));if(!usable.length)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-radial-grid">{usable.map((p,i)=>{const ratio=clamp(p.value/max,0,1);return <div key={`${p.label}-${i}`}><div className="studio-radial small" style={{background:`conic-gradient(${colorAt(color,i)} ${ratio*360}deg,#edf0f4 0)`}}><div><strong>{Math.round(ratio*100)}%</strong></div></div><span>{p.label}</span><b>{displayPoint(p)}</b></div>})}</div>}
+
+function FunnelVisual({points,color}:{points:Point[];color:string}){const list=[...points].filter(p=>p.value>=0).sort((a,b)=>b.value-a.value).slice(0,8);const max=Math.max(1,...list.map(p=>p.value));if(!list.length)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-funnel">{list.map((p,i)=><div key={`${p.label}-${i}`} style={{width:`${Math.max(28,p.value/max*100)}%`,background:colorAt(color,i)}}><span>{p.label}</span><b>{displayPoint(p)}</b></div>)}</div>}
+
+function TreemapVisual({points,color}:{points:Point[];color:string}){const list=points.filter(p=>p.value>0).slice(0,10);const total=list.reduce((s,p)=>s+p.value,0);if(!total)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-treemap">{list.map((p,i)=><div key={`${p.label}-${i}`} style={{flexGrow:Math.max(1,p.value/total*100),background:colorAt(color,i)}}><strong>{p.label}</strong><span>{displayPoint(p)}</span></div>)}</div>}
+
+function HeatmapVisual({points,color}:{points:Point[];color:string}){const list=points.slice(-60);const max=Math.max(1,...list.map(p=>Math.abs(p.value)));if(!list.length)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-heatmap">{list.map((p,i)=>{const intensity=clamp(Math.abs(p.value)/max,.08,1);return <div key={`${p.label}-${i}`} title={`${p.label} · ${displayPoint(p)}`} style={{background:hexToRgba(color,intensity)}}><span>{p.label}</span><b>{p.value?number(p.value):'0'}</b></div>})}</div>}
+
+function WaterfallVisual({points,color}:{points:Point[];color:string}){const list=points.slice(0,12);if(!list.length)return <div className="studio-empty">Sem dados neste período.</div>;const cumulative=list.reduce<number[]>((acc,p)=>[...acc,(acc.at(-1)??0)+p.value],[0]);const min=Math.min(0,...cumulative),max=Math.max(1,...cumulative);const span=Math.max(1,max-min);return <div className="studio-waterfall">{list.map((p,i)=>{const start=cumulative[i],end=cumulative[i+1];const left=(Math.min(start,end)-min)/span*100;const width=Math.max(2,Math.abs(end-start)/span*100);return <div className="studio-waterfall-row" key={`${p.label}-${i}`}><span>{p.label}</span><div><i style={{left:`${left}%`,width:`${width}%`,background:p.value>=0?color:'#ef4444'}}/></div><b>{displayPoint(p)}</b></div>})}</div>}
+
+function ComboVisual({points,color}:{points:Point[];color:string}){const list=points.slice(-18);const max=Math.max(1,...list.map(p=>Math.abs(p.value)));if(!list.length)return <div className="studio-empty">Sem dados neste período.</div>;const width=640,height=220,pad=20;const step=(width-pad*2)/Math.max(1,list.length);const coords=list.map((p,i)=>[pad+i*step+step/2,height-pad-(Math.abs(p.value)/max)*(height-pad*2)] as const);return <div className="studio-combo"><svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">{list.map((p,i)=>{const h=Math.max(3,Math.abs(p.value)/max*(height-pad*2));return <rect key={i} x={pad+i*step+step*.16} y={height-pad-h} width={step*.68} height={h} rx="5" fill={hexToRgba(color,.28)}/>})}<polyline points={coords.map(([x,y])=>`${x},${y}`).join(' ')} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{coords.map(([x,y],i)=><circle key={`p${i}`} cx={x} cy={y} r="4" fill={color}/>)}</svg><div className="studio-axis-labels"><span>{list[0]?.label}</span><span>{list[Math.floor(list.length/2)]?.label}</span><span>{list.at(-1)?.label}</span></div></div>}
+
+function ScatterVisual({points,color}:{points:Point[];color:string}){const list=points.slice(0,30);const max=Math.max(1,...list.map(p=>Math.abs(p.value)));if(!list.length)return <div className="studio-empty">Sem dados neste período.</div>;return <div className="studio-scatter"><svg viewBox="0 0 640 220" preserveAspectRatio="none">{[.25,.5,.75,1].map(k=><line key={k} x1="18" x2="622" y1={202-184*k} y2={202-184*k} className="studio-grid-line"/>)}{list.map((p,i)=>{const x=18+(i/Math.max(1,list.length-1))*604;const y=202-(Math.abs(p.value)/max)*184;return <circle key={`${p.label}-${i}`} cx={x} cy={y} r={4+Math.min(8,Math.abs(p.value)/max*8)} fill={hexToRgba(color,.68)} stroke={color} strokeWidth="1"/>})}</svg><div className="studio-axis-labels"><span>{list[0]?.label}</span><span>{list[Math.floor(list.length/2)]?.label}</span><span>{list.at(-1)?.label}</span></div></div>}
+
+function RadarVisual({points,color}:{points:Point[];color:string}){const list=points.filter(p=>p.value>=0).slice(0,8);if(list.length<3)return <BarVisual points={points} color={color}/>;const max=Math.max(1,...list.map(p=>p.value));const cx=150,cy=135,r=105;const angle=(i:number)=>-Math.PI/2+i*Math.PI*2/list.length;const outer=list.map((_,i)=>[cx+Math.cos(angle(i))*r,cy+Math.sin(angle(i))*r] as const);const inner=list.map((p,i)=>{const rr=r*(p.value/max);return [cx+Math.cos(angle(i))*rr,cy+Math.sin(angle(i))*rr] as const});return <div className="studio-radar"><svg viewBox="0 0 300 280">{[.25,.5,.75,1].map(level=><polygon key={level} points={outer.map(([x,y])=>`${cx+(x-cx)*level},${cy+(y-cy)*level}`).join(' ')} fill="none" stroke="#e8ebef"/>)}{outer.map(([x,y],i)=><line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#eef1f4"/>)}<polygon points={inner.map(([x,y])=>`${x},${y}`).join(' ')} fill={hexToRgba(color,.18)} stroke={color} strokeWidth="3"/>{inner.map(([x,y],i)=><circle key={i} cx={x} cy={y} r="4" fill={color}/>)}</svg><div className="studio-radar-legend">{list.map((p,i)=><span key={i}>{p.label}</span>)}</div></div>}
+
+function metricPoints(id:TileId,info:MetricInfo):Point[]{if(info.value===null)return [];const formatter=id==='grossMargin'?pct:id==='salesCount'?number:money;const rows:Point[]=[];if(info.previous!==null&&Number.isFinite(info.previous))rows.push({label:'Período anterior',value:info.previous,detail:formatter(info.previous)});rows.push({label:'Período atual',value:info.value,detail:info.text});return rows}
 
 export function DashboardStudio({identity,initial}:{identity:string;initial:Data}){
- const [data,setData]=useState(initial);
- const [tiles,setTiles]=useState<TileConfig[]>(defaultTiles);
- const [start,setStart]=useState(String(initial.start??today()));
- const [end,setEnd]=useState(String(initial.end??today()));
- const [branch,setBranch]=useState('');
- const [loading,setLoading]=useState(false);
- const [collapsed,setCollapsed]=useState(false);
- const [editing,setEditing]=useState(false);
- const [selectedTile,setSelectedTile]=useState<TileId>('trend');
- const [refreshSeconds,setRefreshSeconds]=useState(60);
- const [message,setMessage]=useState('');
- const [saving,setSaving]=useState(false);
- const [prefsLoaded,setPrefsLoaded]=useState(false);
- const dragged=useRef<TileId|null>(null);
+ const [data,setData]=useState(initial);const [tiles,setTiles]=useState<TileConfig[]>(defaultTiles);const [start,setStart]=useState(String(initial.start??today()));const [end,setEnd]=useState(String(initial.end??today()));const [branch,setBranch]=useState('');const [loading,setLoading]=useState(false);const [collapsed,setCollapsed]=useState(false);const [editing,setEditing]=useState(false);const [selectedTile,setSelectedTile]=useState<TileId>('trend');const [refreshSeconds,setRefreshSeconds]=useState(60);const [message,setMessage]=useState('');const [saving,setSaving]=useState(false);const [prefsLoaded,setPrefsLoaded]=useState(false);const dragged=useRef<TileId|null>(null);
+ const sales=asData(data.sales),comparison=asData(data.comparison),fin=asData(data.finance),stock=asData(data.stock);const branches=asRows(data.branches),payments=asRows(data.payments),top=asRows(data.top_products),hourly=asRows(data.hourly),minute=asRows(data.minute),branchSales=asRows(data.branch_sales),trend=asRows(data.trend);
 
- const sales=asData(data.sales);const comparison=asData(data.comparison);const fin=asData(data.finance);const stock=asData(data.stock);
- const branches=asRows(data.branches);const payments=asRows(data.payments);const top=asRows(data.top_products);const hourly=asRows(data.hourly);const minute=asRows(data.minute);const branchSales=asRows(data.branch_sales);const trend=asRows(data.trend);
-
- const load=useCallback(async(s=start,e=end,b=branch,announce=false)=>{
-   setLoading(true);const r=await dashboardLoad(s,e,b||undefined);setLoading(false);
-   if(r.ok){setData(r);if(announce)setMessage('Dashboard atualizado.');}
-   else setMessage(String(r.error??'Falha ao atualizar o dashboard.'));
- },[start,end,branch]);
-
- useEffect(()=>{let alive=true;void dashboardPreferencesLoad().then(r=>{if(!alive)return;const stored=Array.isArray(r.layout)?r.layout as Row[]:[];if(stored.length){const known=new Map(defaultTiles.map(t=>[t.id,t]));const restored=stored.map(raw=>{const id=String(raw.id) as TileId;const base=known.get(id);if(!base)return null;return {...base,title:String(raw.title??base.title),size:(['s','m','l','wide'].includes(String(raw.size))?String(raw.size):base.size) as Size,color:String(raw.color??base.color),chart:(chartOptions[id].includes(String(raw.chart) as ChartType)?String(raw.chart):base.chart) as ChartType,visible:raw.visible!==false}}).filter(Boolean) as TileConfig[];const missing=defaultTiles.filter(t=>!restored.some(r0=>r0.id===t.id));setTiles([...restored,...missing]);}
-   const settings=asData(r.settings);const refresh=Number(settings.refresh_seconds??60);if(refreshOptions.some(([v])=>v===refresh))setRefreshSeconds(refresh);setPrefsLoaded(true);
- });return()=>{alive=false}},[]);
-
+ const load=useCallback(async(s=start,e=end,b=branch,announce=false)=>{setLoading(true);const r=await dashboardLoad(s,e,b||undefined);setLoading(false);if(r.ok){setData(r);if(announce)setMessage('Dashboard atualizado.')}else setMessage(String(r.error??'Falha ao atualizar o dashboard.'))},[start,end,branch]);
+ useEffect(()=>{let alive=true;void dashboardPreferencesLoad().then(r=>{if(!alive)return;const stored=Array.isArray(r.layout)?r.layout as Row[]:[];if(stored.length){const known=new Map(defaultTiles.map(t=>[t.id,t]));const restored=stored.map(raw=>{const id=String(raw.id) as TileId;const base=known.get(id);if(!base)return null;const rawChart=String(raw.chart) as ChartType;return {...base,title:String(raw.title??base.title),size:(['s','m','l','wide'].includes(String(raw.size))?String(raw.size):base.size) as Size,color:String(raw.color??base.color),chart:(allCharts.includes(rawChart)?rawChart:base.chart),visible:raw.visible!==false}}).filter(Boolean) as TileConfig[];const missing=defaultTiles.filter(t=>!restored.some(r=>r.id===t.id));setTiles([...restored,...missing])}const settings=asData(r.settings);const refresh=Number(settings.refresh_seconds??60);if(refreshOptions.some(([v])=>v===refresh))setRefreshSeconds(refresh);setPrefsLoaded(true)});return()=>{alive=false}},[]);
  useEffect(()=>{if(!prefsLoaded||refreshSeconds<=0)return;const timer=window.setInterval(()=>{if(document.visibilityState==='visible')void load(start,end,branch,false)},refreshSeconds*1000);return()=>window.clearInterval(timer)},[prefsLoaded,refreshSeconds,start,end,branch,load]);
 
- const pointsFor=useCallback((id:TileId):Point[]=>{
-   if(id==='payments')return payments.map(r=>({label:paymentLabels[String(r.method)]??String(r.method??'Outros'),value:Number(r.total??0),detail:`${number(r.quantity)} trans. · ${money(r.total)}`}));
-   if(id==='topProducts')return top.map(r=>({label:String(r.product??'Produto'),value:Number(r.revenue??0),detail:`${number(r.quantity)} un. · ${money(r.revenue)}`}));
-   if(id==='hourly')return hourly.map(r=>({label:`${String(r.report_hour??0).padStart(2,'0')}:00`,value:Number(r.total??0),detail:`${number(r.quantity)} vendas · ${money(r.total)}`}));
-   if(id==='minute')return minute.map(r=>({label:minuteLabel(r.report_minute),value:Number(r.total??0),detail:`${number(r.quantity)} venda(s) · ${money(r.total)}`}));
-   if(id==='branchSales')return branchSales.map(r=>({label:String(r.branch??'Filial'),value:Number(r.total??0),detail:`${number(r.quantity)} vendas · ${money(r.total)}`}));
-   if(id==='finance')return [{label:'A receber hoje',value:n(fin,'receivable_today')},{label:'A pagar hoje',value:n(fin,'payable_today')},{label:'Receber em aberto',value:n(fin,'receivable_open')},{label:'Pagar em aberto',value:n(fin,'payable_open')},{label:'Vencido',value:n(fin,'overdue')}];
-   if(id==='stock')return [{label:'Estoque baixo',value:n(stock,'low'),detail:`${number(stock.low)} produtos`},{label:'Sem estoque',value:n(stock,'zero'),detail:`${number(stock.zero)} produtos`},{label:'Produtos ativos',value:n(stock,'products'),detail:`${number(stock.products)} produtos`}];
-   return [];
- },[payments,top,hourly,minute,branchSales,fin,stock]);
+ const pointsFor=useCallback((id:TileId):Point[]=>{if(isMetric(id))return metricPoints(id,metricInfo(id,sales,comparison));if(id==='trend')return trend.map(r=>({label:shortDate(r.report_day),value:Number(r.net_revenue??0),detail:`Receita ${money(r.net_revenue)} · CMV ${money(r.cmv)} · Lucro ${money(r.gross_profit)}`}));if(id==='payments')return payments.map(r=>({label:paymentLabels[String(r.method)]??String(r.method??'Outros'),value:Number(r.total??0),detail:`${number(r.quantity)} trans. · ${money(r.total)}`}));if(id==='topProducts')return top.map(r=>({label:String(r.product??'Produto'),value:Number(r.revenue??0),detail:`${number(r.quantity)} un. · ${money(r.revenue)}`}));if(id==='hourly')return hourly.map(r=>({label:`${String(r.report_hour??0).padStart(2,'0')}:00`,value:Number(r.total??0),detail:`${number(r.quantity)} vendas · ${money(r.total)}`}));if(id==='minute')return minute.map(r=>({label:minuteLabel(r.report_minute),value:Number(r.total??0),detail:`${number(r.quantity)} venda(s) · ${money(r.total)}`}));if(id==='branchSales')return branchSales.map(r=>({label:String(r.branch??'Filial'),value:Number(r.total??0),detail:`${number(r.quantity)} vendas · ${money(r.total)}`}));if(id==='finance')return [{label:'A receber hoje',value:n(fin,'receivable_today'),detail:money(fin.receivable_today)},{label:'A pagar hoje',value:-n(fin,'payable_today'),detail:money(fin.payable_today)},{label:'Receber em aberto',value:n(fin,'receivable_open'),detail:money(fin.receivable_open)},{label:'Pagar em aberto',value:-n(fin,'payable_open'),detail:money(fin.payable_open)},{label:'Vencido',value:n(fin,'overdue'),detail:money(fin.overdue)}];if(id==='stock')return [{label:'Estoque baixo',value:n(stock,'low'),detail:`${number(stock.low)} produtos`},{label:'Sem estoque',value:n(stock,'zero'),detail:`${number(stock.zero)} produtos`},{label:'Produtos ativos',value:n(stock,'products'),detail:`${number(stock.products)} produtos`}];return []},[sales,comparison,trend,payments,top,hourly,minute,branchSales,fin,stock]);
 
- function renderTile(tile:TileConfig){
-   if(chartOptions[tile.id].length===1)return <Kpi tile={tile} sales={sales} comparison={comparison}/>;
-   if(tile.id==='trend')return <MultiTrend rows={trend} color={tile.color} chart={tile.chart}/>;
-   const points=pointsFor(tile.id);
-   if(tile.chart==='donut')return <DonutVisual points={points} color={tile.color}/>;
-   if(tile.chart==='bar')return <BarVisual points={points} color={tile.color}/>;
-   if(tile.chart==='line')return <LineVisual points={points} color={tile.color}/>;
-   if(tile.chart==='area')return <LineVisual points={points} color={tile.color} area/>;
-   return <TableVisual points={points}/>;
- }
+ function renderTile(tile:TileConfig){const info=isMetric(tile.id)?metricInfo(tile.id,sales,comparison):undefined;const points=pointsFor(tile.id);if(tile.chart==='kpi')return info?<Kpi tile={tile} info={info}/>:<GenericKpi points={points} color={tile.color}/>;if(info&&!info.available)return <div className="studio-empty">{info.caption}</div>;if(tile.chart==='bar')return <BarVisual points={points} color={tile.color}/>;if(tile.chart==='column')return <ColumnVisual points={points} color={tile.color}/>;if(tile.chart==='line')return <LineVisual points={points} color={tile.color}/>;if(tile.chart==='area')return <LineVisual points={points} color={tile.color} area/>;if(tile.chart==='donut')return <CircularVisual points={points} color={tile.color} hole/>;if(tile.chart==='pie')return <CircularVisual points={points} color={tile.color} hole={false}/>;if(tile.chart==='table')return <TableVisual points={points}/>;if(tile.chart==='gauge')return <GaugeVisual points={points} color={tile.color} info={info}/>;if(tile.chart==='radial')return <RadialVisual points={points} color={tile.color} info={info}/>;if(tile.chart==='funnel')return <FunnelVisual points={points} color={tile.color}/>;if(tile.chart==='treemap')return <TreemapVisual points={points} color={tile.color}/>;if(tile.chart==='heatmap')return <HeatmapVisual points={points} color={tile.color}/>;if(tile.chart==='waterfall')return <WaterfallVisual points={points} color={tile.color}/>;if(tile.chart==='combo')return <ComboVisual points={points} color={tile.color}/>;if(tile.chart==='scatter')return <ScatterVisual points={points} color={tile.color}/>;if(tile.chart==='radar')return <RadarVisual points={points} color={tile.color}/>;return <div className="studio-spark-wrap">{info?<div className="studio-spark-value"><strong>{info.text}</strong><span>{info.caption}</span></div>:null}<LineVisual points={points} color={tile.color} compact/></div>}
 
- function preset(kind:'today'|'7d'|'30d'|'month'){
-   const e=new Date();let s=new Date(e);if(kind==='7d')s.setDate(e.getDate()-6);if(kind==='30d')s.setDate(e.getDate()-29);if(kind==='month')s=new Date(e.getFullYear(),e.getMonth(),1);
-   const si=isoDate(s),ei=isoDate(e);setStart(si);setEnd(ei);void load(si,ei,branch,true);
- }
+ function preset(kind:'today'|'7d'|'30d'|'month'){const e=new Date();let s=new Date(e);if(kind==='7d')s.setDate(e.getDate()-6);if(kind==='30d')s.setDate(e.getDate()-29);if(kind==='month')s=new Date(e.getFullYear(),e.getMonth(),1);const si=isoDate(s),ei=isoDate(e);setStart(si);setEnd(ei);void load(si,ei,branch,true)}
  function updateTile(id:TileId,patch:Partial<TileConfig>){setTiles(current=>current.map(t=>t.id===id?{...t,...patch}:t))}
  function dropOn(target:TileId){const source=dragged.current;if(!source||source===target)return;setTiles(current=>{const from=current.findIndex(t=>t.id===source),to=current.findIndex(t=>t.id===target);if(from<0||to<0)return current;const copy=[...current];const [item]=copy.splice(from,1);copy.splice(to,0,item);return copy});dragged.current=null}
  async function savePreferences(){setSaving(true);const r=await dashboardPreferencesSave(tiles,{refresh_seconds:refreshSeconds});setSaving(false);setMessage(r.ok?'Layout pessoal salvo no ThorGestão.':String(r.error??'Não foi possível salvar o layout.'))}
  function resetLayout(){setTiles(defaultTiles.map(t=>({...t})));setRefreshSeconds(60);setSelectedTile('trend')}
-
- const selected=tiles.find(t=>t.id===selectedTile)??tiles[0];
- const visible=tiles.filter(t=>t.visible);
- const liveText=refreshSeconds?`Atualização automática · ${refreshOptions.find(([v])=>v===refreshSeconds)?.[1]??`${refreshSeconds}s`}`:'Atualização manual';
+ const selected=tiles.find(t=>t.id===selectedTile)??tiles[0],visible=tiles.filter(t=>t.visible),liveText=refreshSeconds?`Atualização automática · ${refreshOptions.find(([v])=>v===refreshSeconds)?.[1]??`${refreshSeconds}s`}`:'Atualização manual';
 
  return <main className={`erp-shell ${collapsed?'erp-collapsed':''}`}>
+  <style>{extraCss}</style>
   <header className="erp-header"><div className="erp-brand-wrap"><Link href="/dashboard" className="erp-logo"><span className="erp-bolt">ϟ</span><span>THOR<b>PDV</b></span></Link><button className="erp-icon-btn erp-menu-toggle" onClick={()=>setCollapsed(!collapsed)}>☰</button></div><div className="erp-account"><span className="erp-avatar">SA</span><div className="erp-account-copy"><strong>THORPDV</strong><span>{identity}</span></div><form action={logout}><button className="erp-logout">Sair</button></form></div></header>
   <aside className="erp-sidebar"><nav className="erp-nav">{menu.map(([label,href,icon],i)=><Link key={href} href={href} className={`erp-nav-item ${i===0?'is-active':''}`}><span className="erp-nav-icon">{icon}</span><span className="erp-nav-label">{label}</span></Link>)}</nav><div className="erp-store-card"><span className="erp-nav-icon">▦</span><div className="erp-store-copy"><small>Loja atual</small><strong>{branch?String(branches.find(b=>String(b.id)===branch)?.name??'FILIAL'):'TODAS'}</strong></div></div></aside>
-
-  <section className="erp-main studio-main">
-   <div className="studio-heading"><div><p className="erp-eyebrow">Business Intelligence · Visão do Dono</p><h1>Dashboard Executivo</h1><p>Monte seu painel, mova os cards, troque gráficos, cores e acompanhe a operação em atualização contínua.</p></div><div className="studio-live-badge"><i className={loading?'loading':''}/><div><strong>{loading?'Atualizando...':'Dados ao vivo'}</strong><span>{liveText}</span><small>Último: {generatedAt(data.generated_at)} · Fortaleza</small></div></div></div>
-
-   <section className="studio-toolbar">
-    <div className="studio-presets"><button onClick={()=>preset('today')}>Hoje</button><button onClick={()=>preset('7d')}>7 dias</button><button onClick={()=>preset('30d')}>30 dias</button><button onClick={()=>preset('month')}>Este mês</button></div>
-    <label><span>Início</span><input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label>
-    <label><span>Fim</span><input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label>
-    <label><span>Filial</span><select value={branch} onChange={e=>{setBranch(e.target.value);void load(start,end,e.target.value,true)}}><option value="">Todas</option>{branches.map(b=><option key={String(b.id)} value={String(b.id)}>{String(b.name??'Filial')}</option>)}</select></label>
-    <label><span>Atualização</span><select value={refreshSeconds} onChange={e=>setRefreshSeconds(Number(e.target.value))}>{refreshOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
-    <button className="studio-refresh" disabled={loading} onClick={()=>void load(start,end,branch,true)}>↻ Atualizar</button>
-    <button className={`studio-customize ${editing?'active':''}`} onClick={()=>setEditing(v=>!v)}>⚙ Personalizar</button>
-   </section>
-
-   {message?<div className="erp-live-message">{message}</div>:null}
-
-   <div className={`studio-canvas ${editing?'is-editing':''}`}>
-    {visible.map(tile=>{const style={'--tile-color':tile.color,'--tile-soft':hexToRgba(tile.color,.09)} as CSSProperties;return <article key={tile.id} className={`studio-card size-${tile.size}`} style={style} draggable={editing} onDragStart={()=>{dragged.current=tile.id}} onDragOver={(e:DragEvent<HTMLElement>)=>{if(editing)e.preventDefault()}} onDrop={()=>dropOn(tile.id)}>
-      <header className="studio-card-head"><div><span className="studio-card-kicker">{chartLabels[tile.chart]}</span><h2>{tile.title}</h2></div>{editing?<div className="studio-card-tools"><button title="Mover" className="drag">⠿</button><button title="Editar card" onClick={()=>setSelectedTile(tile.id)}>⚙</button><button title="Ocultar card" onClick={()=>updateTile(tile.id,{visible:false})}>×</button></div>:<span className="studio-card-dot"/>}</header>
-      <div className="studio-card-body">{renderTile(tile)}</div>
-    </article>})}
-   </div>
-
-   {editing?<aside className="studio-editor"><div className="studio-editor-head"><div><span>PERSONALIZAÇÃO</span><h3>Meu dashboard</h3></div><button onClick={()=>setEditing(false)}>×</button></div><div className="studio-editor-actions"><button onClick={resetLayout}>Restaurar padrão</button><button className="primary" disabled={saving} onClick={()=>void savePreferences()}>{saving?'Salvando...':'Salvar layout'}</button></div>
-    <div className="studio-editor-list"><h4>Cards</h4>{tiles.map(t=><label className={`studio-editor-tile ${t.id===selectedTile?'selected':''}`} key={t.id}><input type="checkbox" checked={t.visible} onChange={e=>updateTile(t.id,{visible:e.target.checked})}/><button type="button" onClick={()=>setSelectedTile(t.id)}>{t.title}</button></label>)}</div>
-    {selected?<div className="studio-editor-properties"><h4>Configurar card</h4><label>Título<input value={selected.title} onChange={e=>updateTile(selected.id,{title:e.target.value})}/></label><label>Tamanho<select value={selected.size} onChange={e=>updateTile(selected.id,{size:e.target.value as Size})}>{(Object.keys(sizeLabels) as Size[]).map(s=><option key={s} value={s}>{sizeLabels[s]}</option>)}</select></label><label>Visual<select value={selected.chart} onChange={e=>updateTile(selected.id,{chart:e.target.value as ChartType})}>{chartOptions[selected.id].map(c=><option key={c} value={c}>{chartLabels[c]}</option>)}</select></label><label>Cor<div className="studio-color-field"><input type="color" value={selected.color} onChange={e=>updateTile(selected.id,{color:e.target.value})}/><span>{selected.color.toUpperCase()}</span></div></label><p>Arraste qualquer card pelo painel para alterar a posição. O layout fica salvo por usuário.</p></div>:null}
-   </aside>:null}
+  <section className="erp-main studio-main"><div className="studio-heading"><div><p className="erp-eyebrow">Business Intelligence · Visão do Dono</p><h1>Dashboard Executivo</h1><p>Todos os indicadores agora podem trocar entre os principais modelos de visualização do painel.</p></div><div className="studio-live-badge"><i className={loading?'loading':''}/><div><strong>{loading?'Atualizando...':'Dados ao vivo'}</strong><span>{liveText}</span><small>Último: {generatedAt(data.generated_at)} · Fortaleza</small></div></div></div>
+  <section className="studio-toolbar"><div className="studio-presets"><button onClick={()=>preset('today')}>Hoje</button><button onClick={()=>preset('7d')}>7 dias</button><button onClick={()=>preset('30d')}>30 dias</button><button onClick={()=>preset('month')}>Este mês</button></div><label><span>Início</span><input type="date" value={start} onChange={e=>setStart(e.target.value)}/></label><label><span>Fim</span><input type="date" value={end} onChange={e=>setEnd(e.target.value)}/></label><label><span>Filial</span><select value={branch} onChange={e=>{setBranch(e.target.value);void load(start,end,e.target.value,true)}}><option value="">Todas</option>{branches.map(b=><option key={String(b.id)} value={String(b.id)}>{String(b.name??'Filial')}</option>)}</select></label><label><span>Atualização</span><select value={refreshSeconds} onChange={e=>setRefreshSeconds(Number(e.target.value))}>{refreshOptions.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label><button className="studio-refresh" disabled={loading} onClick={()=>void load(start,end,branch,true)}>↻ Atualizar</button><button className={`studio-customize ${editing?'active':''}`} onClick={()=>setEditing(v=>!v)}>⚙ Personalizar</button></section>
+  {message?<div className="erp-live-message">{message}</div>:null}
+  <div className={`studio-canvas ${editing?'is-editing':''}`}>{visible.map(tile=>{const style={'--tile-color':tile.color,'--tile-soft':hexToRgba(tile.color,.09)} as CSSProperties;return <article key={tile.id} className={`studio-card size-${tile.size}`} style={style} draggable={editing} onDragStart={()=>{dragged.current=tile.id}} onDragOver={(e:DragEvent<HTMLElement>)=>{if(editing)e.preventDefault()}} onDrop={()=>dropOn(tile.id)}><header className="studio-card-head"><div><span className="studio-card-kicker">{chartLabels[tile.chart]}</span><h2>{tile.title}</h2></div>{editing?<div className="studio-card-tools"><button title="Mover" className="drag">⠿</button><button title="Editar card" onClick={()=>setSelectedTile(tile.id)}>⚙</button><button title="Ocultar card" onClick={()=>updateTile(tile.id,{visible:false})}>×</button></div>:<span className="studio-card-dot"/>}</header><div className="studio-card-body">{renderTile(tile)}</div></article>})}</div>
+  {editing?<aside className="studio-editor"><div className="studio-editor-head"><div><span>PERSONALIZAÇÃO</span><h3>Meu dashboard</h3></div><button onClick={()=>setEditing(false)}>×</button></div><div className="studio-editor-actions"><button onClick={resetLayout}>Restaurar padrão</button><button className="primary" disabled={saving} onClick={()=>void savePreferences()}>{saving?'Salvando...':'Salvar layout'}</button></div><div className="studio-editor-list"><h4>Cards</h4>{tiles.map(t=><label className={`studio-editor-tile ${t.id===selectedTile?'selected':''}`} key={t.id}><input type="checkbox" checked={t.visible} onChange={e=>updateTile(t.id,{visible:e.target.checked})}/><button type="button" onClick={()=>setSelectedTile(t.id)}>{t.title}</button></label>)}</div>{selected?<div className="studio-editor-properties"><h4>Configurar card</h4><label>Título<input value={selected.title} onChange={e=>updateTile(selected.id,{title:e.target.value})}/></label><label>Tamanho<select value={selected.size} onChange={e=>updateTile(selected.id,{size:e.target.value as Size})}>{(Object.keys(sizeLabels) as Size[]).map(s=><option key={s} value={s}>{sizeLabels[s]}</option>)}</select></label><label>Visual<select value={selected.chart} onChange={e=>updateTile(selected.id,{chart:e.target.value as ChartType})}>{chartOptions[selected.id].map(c=><option key={c} value={c}>{chartLabels[c]}</option>)}</select></label><label>Cor<div className="studio-color-field"><input type="color" value={selected.color} onChange={e=>updateTile(selected.id,{color:e.target.value})}/><span>{selected.color.toUpperCase()}</span></div></label><p>Agora todos os cards possuem a biblioteca completa de visuais. Em indicadores de valor único, os gráficos usam o período atual versus o período anterior quando essa referência existe.</p></div>:null}</aside>:null}
   </section>
  </main>;
 }
+
+const extraCss=`
+.studio-columns{height:230px;display:flex;align-items:flex-end;gap:7px;padding:8px 2px 0;border-bottom:1px solid #e8ebef}.studio-column-item{height:100%;min-width:25px;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px}.studio-column-track{height:190px;width:100%;display:flex;align-items:flex-end;justify-content:center}.studio-column-track i{display:block;width:min(28px,72%);min-width:5px;border-radius:7px 7px 2px 2px;box-shadow:0 4px 12px rgba(16,24,40,.08)}.studio-column-item>span{font-size:8px;color:#98a2b3;white-space:nowrap;max-width:58px;overflow:hidden;text-overflow:ellipsis}.studio-donut.is-pie:after{display:none}.studio-donut.is-pie{box-shadow:0 10px 24px rgba(16,24,40,.08)}
+.studio-gauge-wrap{height:100%;display:grid;place-items:center;align-content:center;gap:10px}.studio-gauge{width:min(250px,90%);aspect-ratio:2/1;border-radius:250px 250px 0 0;position:relative;overflow:hidden}.studio-gauge:after{content:"";position:absolute;left:18%;right:18%;top:36%;bottom:-35%;background:#fff;border-radius:200px 200px 0 0}.studio-gauge>div{position:absolute;z-index:2;left:0;right:0;bottom:2px;display:grid;text-align:center}.studio-gauge strong{font-size:21px;color:#101828}.studio-gauge span,.studio-gauge-wrap small{font-size:9px;color:#7d8794}.studio-radial-single{display:grid;place-items:center;gap:8px}.studio-radial{width:170px;aspect-ratio:1;border-radius:50%;display:grid;place-items:center;position:relative}.studio-radial:after{content:"";position:absolute;width:72%;aspect-ratio:1;border-radius:50%;background:#fff}.studio-radial>div{position:relative;z-index:1;display:grid;text-align:center}.studio-radial strong{font-size:18px;color:#1d2939}.studio-radial span{font-size:9px;color:#98a2b3}.studio-radial-single p{margin:0;color:#667085;font-size:10px;text-align:center}.studio-radial-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:12px;align-items:start}.studio-radial-grid>div{display:grid;justify-items:center;gap:4px;text-align:center}.studio-radial.small{width:76px}.studio-radial-grid span{font-size:9px;color:#667085}.studio-radial-grid b{font-size:9px;color:#344054}
+.studio-funnel{display:flex;flex-direction:column;align-items:center;gap:5px;padding:5px 0}.studio-funnel>div{min-height:30px;color:#fff;border-radius:7px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;box-sizing:border-box;box-shadow:0 4px 12px rgba(16,24,40,.08)}.studio-funnel span{font-size:9px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.studio-funnel b{font-size:9px;white-space:nowrap}.studio-treemap{display:flex;flex-wrap:wrap;gap:5px;min-height:220px}.studio-treemap>div{min-width:95px;min-height:78px;border-radius:10px;padding:10px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}.studio-treemap strong{font-size:10px}.studio-treemap span{font-size:9px;opacity:.9;margin-top:3px}.studio-heatmap{display:grid;grid-template-columns:repeat(auto-fit,minmax(48px,1fr));gap:4px}.studio-heatmap>div{min-height:48px;border-radius:7px;padding:5px;display:flex;flex-direction:column;justify-content:space-between;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}.studio-heatmap span{font-size:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.studio-heatmap b{font-size:9px}
+.studio-waterfall{display:grid;gap:8px;padding-top:4px}.studio-waterfall-row{display:grid;grid-template-columns:minmax(84px,.8fr) minmax(120px,2fr) auto;gap:9px;align-items:center}.studio-waterfall-row>span{font-size:9px;color:#667085;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.studio-waterfall-row>div{height:18px;background:#f4f6f8;border-radius:5px;position:relative;overflow:hidden}.studio-waterfall-row i{position:absolute;top:2px;bottom:2px;border-radius:4px}.studio-waterfall-row b{font-size:9px;color:#344054;white-space:nowrap}.studio-combo svg,.studio-scatter svg{width:100%;height:220px}.studio-radar{display:grid;grid-template-columns:minmax(220px,300px) minmax(100px,1fr);gap:16px;align-items:center}.studio-radar svg{width:100%;max-height:260px}.studio-radar-legend{display:grid;gap:6px}.studio-radar-legend span{font-size:9px;color:#667085}.studio-line-wrap.compact svg{height:95px}.studio-spark-wrap{display:grid;gap:10px}.studio-spark-value{display:flex;align-items:end;justify-content:space-between;gap:12px}.studio-spark-value strong{font-size:25px;color:#101828}.studio-spark-value span{font-size:9px;color:#7d8794;text-align:right;max-width:55%}.studio-generic-kpi>strong{font-size:28px}
+@media(max-width:760px){.studio-radar{grid-template-columns:1fr}.studio-radar-legend{grid-template-columns:repeat(2,1fr)}.studio-waterfall-row{grid-template-columns:75px 1fr}.studio-waterfall-row b{grid-column:2}.studio-heatmap{grid-template-columns:repeat(5,1fr)}}
+`;
