@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 
 const SESSION_COOKIE='thorpdv_test_session';
@@ -34,4 +35,10 @@ export async function inventoryPolicySave(allowNegativeStock:boolean){
   if(!branch.ok)return {ok:false,error:branch.error};
   const next={...branch.parameters,allow_negative_stock:Boolean(allowNegativeStock)};
   return rpc('erp_branch_configuration_save',{p_token:pToken,p_branch:branch.branchId,p_section:'parameters',p_payload:next});
+}
+
+export async function inventoryPolicySaveForm(formData:FormData){
+  const allow=String(formData.get('allow_negative_stock')??'')==='on';
+  const result=await inventoryPolicySave(allow);
+  if(result.ok)revalidatePath('/dashboard/configuracoes/opcoes-vendas');
 }
