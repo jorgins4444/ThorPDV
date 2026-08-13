@@ -52,13 +52,21 @@
     }
 
     function cardData(){
-      if(selected==='credit_card')return {metadata:{card_installments:selectedInstallment}};
+      if(selected==='credit_card'){
+        const brand=selectedBrand||val(brands()[0]?.code||'');
+        const acquirer=selectedAcquirer||val(preferredAcquirer()?.cnpj||'');
+        return {provider:acquirer||null,metadata:{card_brand_code:brand,card_acquirer_cnpj:acquirer,card_installments:selectedInstallment}};
+      }
       if(selected==='debit_card')return {provider:selectedAcquirer,metadata:{card_brand_code:selectedBrand,card_acquirer_cnpj:selectedAcquirer,card_installments:1}};
       return {};
     }
 
     function validateCard(){
-      if(selected==='credit_card')return installments().some(x=>Number(x.installments)===selectedInstallment)?'':'Parcelamento não habilitado.';
+      if(selected==='credit_card'){
+        if(!brands().length)return 'Nenhuma bandeira de cartão está habilitada no ThorGestão.';
+        if(!acquirers().length)return 'Nenhuma credenciadora está habilitada no ThorGestão.';
+        return installments().some(x=>Number(x.installments)===selectedInstallment)?'':'Parcelamento não habilitado.';
+      }
       if(selected==='debit_card'){
         if(!selectedBrand)return 'Selecione a bandeira do cartão.';
         if(!selectedAcquirer)return 'Selecione a credenciadora do cartão.';
