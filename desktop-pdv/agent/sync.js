@@ -35,7 +35,6 @@ class SyncEngine {
     return { 'content-type':'application/json', ...(token?{authorization:`Bearer ${token}`}:{}) };
   }
 
-
   async control(type,payload={}){
     const id=crypto.randomUUID();
     const response=await this.request('/api/pdv/push',{events:[{id,type,payload}]});
@@ -65,6 +64,11 @@ class SyncEngine {
 
   start(){
     if(this.timer) return;
+    // v0.8.27+: one authoritative pull repairs legacy local inventory drift.
+    if(this.store.get('stock_authoritative_pull_v105')!=='1'){
+      this.store.set('cursor','');
+      this.store.set('stock_authoritative_pull_v105','1');
+    }
     this.timer=setInterval(()=>this.run(false).catch(()=>{}),this.intervalMs);
     this.run(false).catch(()=>{});
   }
@@ -87,10 +91,19 @@ class SyncEngine {
   }
 
   applyPushResults(push){
+    let rejectedSale=false;
     for(const r of push?.results||[]){
-      if(r.status==='processed') this.store.markProcessed(r.id,r.result);
-      else this.store.markRejected(r.id,r.error);
+      if(r.status==='processed'){
+        this.store.markProcessed(r.id,r.result);
+      }else{
+        const local=this.store.db.prepare('select type from queue where id=?').get(r.id);
+        if(local?.type==='sale_completed') rejectedSale=true;
+        this.store.markRejected(r.id,r.error||r.result?.error);
+      }
     }
+    // A rejected sale was already reserved/debited in the offline cache. Force
+    // the next pull in this same run to overwrite inventory with server truth.
+    if(rejectedSale) this.store.set('cursor','');
     this.store.set('last_push_at',new Date().toISOString());
   }
 
@@ -143,11 +156,8 @@ class SyncEngine {
       const historical=await this.flushPreviousBusinessDays(today);
       if(!historical.drained) throw new Error('historical_sync_queue_too_large');
 
-      // Only after all operations that truly happened on previous dates are on
-      // the server do we freeze those sessions as pending_close.
       await this.control('cash_rollover',{});
 
-      // Current-day events can now safely open/use today's independent cash.
       const pending=this.store.pending(100);
       const current=pending.filter((event)=>{
         const date=syncEventBusinessDate(event);
@@ -155,8 +165,6 @@ class SyncEngine {
       });
       await this.pushEvents(current);
 
-      // Covers a fully-offline historical cash_open that was first uploaded in
-      // this run; if it was old, it is frozen only after its historical events.
       await this.control('cash_rollover',{});
 
       const pull=await this.request('/api/pdv/pull',{since:this.store.get('cursor')||null});
@@ -167,7 +175,7 @@ class SyncEngine {
 
       await this.request('/api/pdv/heartbeat',{
         appVersion:this.appVersion,
-        capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true,operatorSyncProgress:true,searchOnlySaleCatalog:true,fullProductCatalogScreen:true,dailyCashSessions:true,dynamicCashPaymentMethods:true,overdueCashClosing:true,historicalQueueBeforeRollover:true},
+        capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true,operatorSyncProgress:true,searchOnlySaleCatalog:true,fullProductCatalogScreen:true,dailyCashSessions:true,dynamicCashPaymentMethods:true,overdueCashClosing:true,historicalQueueBeforeRollover:true,authoritativeStockAfterReject:true},
         metrics:{
           queue:this.store.queueStats(),
           operatorId:this.store.get('current_operator_id')||null,
