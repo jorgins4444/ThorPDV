@@ -15,30 +15,34 @@ function installSyncRecovery(ThorAgent) {
     };
   };
 
-  ThorAgent.prototype.recoverSync = async function () {
+  ThorAgent.prototype.recoverSync = async function (eventId = null) {
     const token = this.deviceToken();
     if (!token) throw new Error('not_enrolled');
+    const selected = String(eventId || '').replace(/^local:/, '').trim();
+    const body = selected ? { event_ids: [selected] } : {};
     const response = await fetch(`${this.apiBase.replace(/\/$/,'')}/api/pdv/recover`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: '{}',
+      body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) throw new Error(data.error || `http_${response.status}`);
 
     const now = new Date().toISOString();
-    const reset = this.store.db.prepare(`
-      update queue
-      set state='pending',last_error=null,updated_at=?
-      where state='rejected'
-    `).run(now);
+    const reset = selected
+      ? this.store.db.prepare(`update queue set state='pending',last_error=null,updated_at=? where state='rejected' and id=?`).run(now, selected)
+      : this.store.db.prepare(`update queue set state='pending',last_error=null,updated_at=? where state='rejected'`).run(now);
     this.store.set('last_sync_error', '');
-    const sync = await this.sync.run();
+    const sync = await this.sync.run(true);
+    const diagnostics = this.syncDiagnostics();
+    const failed = selected ? diagnostics.events.find((event) => String(event.id) === selected && event.state === 'rejected') : null;
     return {
-      ok: Boolean(sync?.ok),
+      ok: Boolean(sync?.ok) && !failed,
+      error: failed?.last_error || (!sync?.ok ? sync?.error : null),
       resetLocalEvents: Number(reset.changes || 0),
       clearedServerRejections: Number(data.cleared_server_rejections || 0),
-      diagnostics: this.syncDiagnostics(),
+      selectedEventId: selected || null,
+      diagnostics,
       sync,
     };
   };
