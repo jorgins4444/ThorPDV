@@ -1,0 +1,1 @@
+.studio-message{position:fixed;top:78px;right:24px;z-index:250;max-width:460px;margin:0;padding:12px 15px;border:1px solid #cdb8ef;border-radius:12px;background:#fff;color:#5f35a8;box-shadow:0 16px 42px rgba(49,36,86,.18);font-weight:750;line-height:1.4}@media(max-width:720px){.studio-message{top:68px;left:16px;right:16px;max-width:none}}
