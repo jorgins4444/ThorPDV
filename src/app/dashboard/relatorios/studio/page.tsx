@@ -3,7 +3,7 @@ import { erpLoad } from '../../[...slug]/actions';
 import '../../[...slug]/module.css';
 import '../../[...slug]/management-shell.css';
 import './report-studio.css';
-import { ReportStudio } from './report-studio';
+import { ReportStudio } from './report-studio-client';
 
 export default async function ReportStudioPage(){
  const branches=await erpLoad('branches');
