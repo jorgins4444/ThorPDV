@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { erpStockLocationDelete, erpStockLocationSave } from './stock-location-actions';
 
 type Row=Record<string,unknown>;
@@ -17,6 +18,8 @@ function friendlyError(error:unknown){
 }
 
 export function StockLocationsWorkspace({locations,branches}:{locations:Row[];branches:Row[]}){
+  const router=useRouter();
+  const [rows,setRows]=useState<Row[]>(locations);
   const [showNew,setShowNew]=useState(false);
   const [name,setName]=useState('');
   const [code,setCode]=useState('');
@@ -27,54 +30,68 @@ export function StockLocationsWorkspace({locations,branches}:{locations:Row[];br
   const [saving,setSaving]=useState(false);
   const [busyId,setBusyId]=useState('');
 
+  useEffect(()=>{setRows(locations)},[locations]);
+
   function resetNew(){setName('');setCode('');setMakeDefault(false);setAllowNegative(false);}
 
   async function create(e:FormEvent){
     e.preventDefault();setSaving(true);setMessage('');
     const r=await erpStockLocationSave({name,code:code||null,branch_id:branchId,is_default:makeDefault,active:true,allow_negative_stock:allowNegative});
     setSaving(false);
-    if(r.ok){resetNew();setShowNew(false);window.location.reload();}
+    if(r.ok){resetNew();setShowNew(false);router.refresh();}
     else setMessage(`Não foi possível criar o estoque: ${friendlyError(r.error)}`);
   }
 
   async function saveRow(row:Row,changes:{isDefault?:boolean;active?:boolean;allowNegative?:boolean}){
     const id=String(row.id);setBusyId(id);setMessage('');
+    const nextDefault=changes.isDefault??Boolean(row.is_default);
+    const nextActive=changes.active??row.active!==false;
+    const nextAllowNegative=changes.allowNegative??Boolean(row.allow_negative_stock);
     const r=await erpStockLocationSave({
       id:row.id,
       name:row.name,
       code:row.code??null,
       branch_id:row.branch_id,
-      is_default:changes.isDefault??Boolean(row.is_default),
-      active:changes.active??row.active!==false,
-      allow_negative_stock:changes.allowNegative??Boolean(row.allow_negative_stock)
+      is_default:nextDefault,
+      active:nextActive,
+      allow_negative_stock:nextAllowNegative
     });
     setBusyId('');
-    if(r.ok)window.location.reload();else setMessage(`Não foi possível alterar o estoque: ${friendlyError(r.error)}`);
+    if(r.ok){
+      setRows(current=>current.map(item=>{
+        if(String(item.id)===id)return {...item,is_default:nextDefault,active:nextActive,allow_negative_stock:nextAllowNegative};
+        if(changes.isDefault===true&&String(item.branch_id)===String(row.branch_id))return {...item,is_default:false};
+        return item;
+      }));
+      router.refresh();
+    }else setMessage(`Não foi possível alterar o estoque: ${friendlyError(r.error)}`);
   }
 
   async function deleteRow(row:Row){
-    const name=String(row.name??'estoque');
-    if(!window.confirm(`Excluir o estoque "${name}"? Esta ação só será permitida se nunca tiver existido movimentação de produtos neste estoque.`))return;
+    const rowName=String(row.name??'estoque');
+    if(!window.confirm(`Excluir o estoque "${rowName}"? Esta ação só será permitida se nunca tiver existido movimentação de produtos neste estoque.`))return;
     const id=String(row.id);setBusyId(id);setMessage('');
     const r=await erpStockLocationDelete(id);
     setBusyId('');
-    if(r.ok)window.location.reload();else setMessage(`Não foi possível excluir: ${friendlyError(r.error)}`);
+    if(r.ok){setRows(current=>current.filter(item=>String(item.id)!==id));router.refresh();}
+    else setMessage(`Não foi possível excluir: ${friendlyError(r.error)}`);
   }
 
   return <div className="erp-stock-location-page">
-    <section className="erp-module-card">
-      <div className="erp-advanced-head" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:16}}>
+    <section className="erp-module-card erp-stock-location-section">
+      <div className="erp-stock-location-head">
         <div><h2>Estoques cadastrados</h2><p>Cadastre estoques físicos por filial e defina a política de saldo individualmente para cada um.</p></div>
-        <button className="erp-primary" type="button" onClick={()=>{setMessage('');setShowNew(true)}}>+ Novo Estoque</button>
+        <button className="erp-primary erp-stock-new-button" type="button" onClick={()=>{setMessage('');setShowNew(true)}}>+ Novo Estoque</button>
       </div>
       {message&&<p className="erp-message">{message}</p>}
-      <div className="erp-stock-location-grid">{locations.map(row=>{
-        const hasOtherActive=locations.some(other=>String(other.id)!==String(row.id)&&String(other.branch_id)===String(row.branch_id)&&other.active!==false);
+      <div className="erp-stock-location-grid">{rows.map(row=>{
+        const hasOtherActive=rows.some(other=>String(other.id)!==String(row.id)&&String(other.branch_id)===String(row.branch_id)&&other.active!==false);
         const canDelete=Boolean(row.can_delete)&&(!Boolean(row.is_default)||hasOtherActive);
         const movementCount=num(row.movement_count);
         const isBusy=busyId===String(row.id);
+        const negativeAllowed=Boolean(row.allow_negative_stock);
         return <article className={`erp-stock-location-card ${row.active===false?'disabled':''}`} key={String(row.id)}>
-          <div>
+          <div className="erp-stock-location-copy">
             <small>{String(row.branch_name??'')}</small>
             <h3>{String(row.name)}</h3>
             <p>{Boolean(row.code)?`Código ${String(row.code)}`:'Sem código'} · {movementCount.toLocaleString('pt-BR')} movimentação(ões)</p>
@@ -83,13 +100,13 @@ export function StockLocationsWorkspace({locations,branches}:{locations:Row[];br
             {Boolean(row.is_default)&&<span className="erp-pill">Padrão</span>}
             <span>{num(row.total_quantity).toLocaleString('pt-BR',{maximumFractionDigits:3})} un. líquidas</span>
           </div>
-          <div className="erp-payment-method-card" style={{marginTop:12}}>
+          <div className="erp-stock-policy-card">
             <div>
-              <strong>{Boolean(row.allow_negative_stock)?'Permitir estoque negativo':'Bloquear estoque negativo'}</strong>
-              <small>{Boolean(row.allow_negative_stock)?'Vendas vinculadas a este estoque podem deixar o saldo abaixo de zero.':'Vendas vinculadas a este estoque são bloqueadas quando o saldo for insuficiente.'}</small>
+              <strong>{negativeAllowed?'Permitir estoque negativo':'Bloquear estoque negativo'}</strong>
+              <small>{negativeAllowed?'Vendas vinculadas a este estoque podem deixar o saldo abaixo de zero.':'Vendas vinculadas a este estoque são bloqueadas quando o saldo for insuficiente.'}</small>
             </div>
-            <label className="erp-switch" title="Permitir estoque negativo">
-              <input type="checkbox" checked={Boolean(row.allow_negative_stock)} disabled={isBusy||row.active===false} onChange={e=>saveRow(row,{allowNegative:e.target.checked})}/>
+            <label className="erp-stock-switch" title="Permitir estoque negativo">
+              <input type="checkbox" checked={negativeAllowed} disabled={isBusy||row.active===false} onChange={e=>saveRow(row,{allowNegative:e.target.checked})}/>
               <span/>
             </label>
           </div>
@@ -98,16 +115,16 @@ export function StockLocationsWorkspace({locations,branches}:{locations:Row[];br
             {!Boolean(row.is_default)&&<button className="erp-ghost" disabled={isBusy} type="button" onClick={()=>saveRow(row,{active:row.active===false})}>{row.active===false?'Ativar':'Desativar'}</button>}
             {canDelete&&<button className="erp-ghost" disabled={isBusy} type="button" onClick={()=>deleteRow(row)}>Excluir estoque</button>}
           </div>
-          {!canDelete&&<small style={{display:'block',marginTop:10,opacity:.72}}>Exclusão protegida para preservar histórico, saldos e integridade das movimentações.</small>}
+          <div className="erp-stock-location-integrity-note">{!canDelete&&<small>Exclusão protegida para preservar histórico, saldos e integridade das movimentações.</small>}</div>
         </article>;
       })}</div>
     </section>
 
-    {showNew&&<div className="erp-modal-backdrop" onMouseDown={()=>!saving&&setShowNew(false)}>
-      <div className="erp-modal" onMouseDown={e=>e.stopPropagation()}>
-        <div className="erp-modal-head"><div><h2>Novo Estoque</h2><p>Crie um estoque físico e configure sua política de saldo.</p></div><button type="button" onClick={()=>!saving&&setShowNew(false)}>×</button></div>
+    {showNew&&<div className="erp-modal-backdrop erp-stock-modal-backdrop" onMouseDown={()=>!saving&&setShowNew(false)}>
+      <div className="erp-modal erp-stock-modal" role="dialog" aria-modal="true" aria-labelledby="erp-new-stock-title" onMouseDown={e=>e.stopPropagation()}>
+        <div className="erp-modal-head"><div><h2 id="erp-new-stock-title">Novo Estoque</h2><p>Crie um estoque físico e configure sua política de saldo.</p></div><button type="button" aria-label="Fechar" onClick={()=>!saving&&setShowNew(false)}>×</button></div>
         <form onSubmit={create}>
-          <div className="erp-form-grid">
+          <div className="erp-form-grid erp-stock-modal-grid">
             <label>Nome<input required minLength={2} maxLength={80} value={name} onChange={e=>setName(e.target.value)} placeholder="Ex.: Depósito, Loja 2, Câmara Fria"/></label>
             <label>Código<input maxLength={30} value={code} onChange={e=>setCode(e.target.value.toUpperCase())} placeholder="Opcional"/></label>
             <label>Filial vinculada<select required value={branchId} onChange={e=>setBranchId(e.target.value)}>{branches.map(b=><option key={String(b.id)} value={String(b.id)}>{String(b.name)}{Boolean(b.is_headquarters)?' — Matriz':''}</option>)}</select></label>
