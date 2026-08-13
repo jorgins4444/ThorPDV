@@ -1,27 +1,14 @@
 'use client';
 
-import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
-import { logout } from '../actions';
 import { erpCreateSale, erpLoad, erpSave } from './actions';
+import { AdvancedShell } from './advanced-shell';
 
 type Row = Record<string, unknown>;
 type LookupMap = Record<string, Row[]>;
 type Field = { key: string; label: string; type?: 'text'|'number'|'date'|'datetime-local'|'textarea'|'checkbox'|'select'; required?: boolean; lookup?: string; optionLabel?: string; options?: [string,string][]; placeholder?: string };
 type Column = { key: string; label: string; format?: 'currency'|'date'|'datetime'|'boolean'|'status' };
 type ModuleConfig = { title: string; subtitle: string; addLabel?: string; fields: Field[]; columns: Column[]; readOnly?: boolean; kind?: 'report'|'regular' };
-
-const menu = [
-  ['Dashboard','/dashboard'],
-  ['Pessoas', [['Clientes','/dashboard/clientes'],['Fornecedores','/dashboard/fornecedores'],['Perfil Usuário PDV','/dashboard/perfis-pdv'],['Usuários PDV','/dashboard/usuarios-pdv'],['Perfil Usuário ADM','/dashboard/perfis-adm'],['Usuários ADM','/dashboard/usuarios-adm']]],
-  ['Produtos', [['Produtos','/dashboard/produtos'],['Grupos','/dashboard/grupos'],['Classes','/dashboard/classes'],['Modificadores','/dashboard/modificadores']]],
-  ['Tabela de Preços', [['Tabela de Preços','/dashboard/tabelas-precos'],['Copiar','/dashboard/tabelas-precos/copiar'],['Ajustes Programados','/dashboard/tabelas-precos/ajustes'],['Promoções','/dashboard/promocoes']]],
-  ['Estoque', [['Movimentações','/dashboard/estoque'],['Inventário','/dashboard/estoque/inventario'],['Ajustes','/dashboard/estoque/ajustes'],['Transferências','/dashboard/estoque/transferencias']]],
-  ['Financeiro', [['Contas a Receber','/dashboard/financeiro/receber'],['Contas a Pagar','/dashboard/financeiro/pagar'],['Fluxo de Caixa','/dashboard/financeiro/fluxo-caixa'],['Conciliação','/dashboard/financeiro/conciliacao']]],
-  ['Administrativo', [['Empresas e Filiais','/dashboard/administrativo/empresas'],['Caixas e PDVs','/dashboard/administrativo/pdvs'],['Fiscal','/dashboard/fiscal'],['Integrações','/dashboard/integracoes'],['Configurações','/dashboard/configuracoes']]],
-  ['Relatórios', [['Financeiro','/dashboard/relatorios/financeiro'],['Vendas PDV','/dashboard/relatorios/vendas'],['Estoque','/dashboard/relatorios/estoque'],['Listagens','/dashboard/relatorios/listagens']]],
-  ['Atendimento', [['Chamados','/dashboard/atendimento'],['Mensagens','/dashboard/atendimento/mensagens'],['SLA','/dashboard/atendimento/sla']]],
-];
 
 const yesNo: [string,string][] = [['true','Ativo'],['false','Inativo']];
 const statusFinance: [string,string][] = [['open','Em aberto'],['paid','Pago'],['partial','Parcial'],['overdue','Vencido'],['cancelled','Cancelado']];
@@ -83,19 +70,6 @@ function formatValue(value: unknown, format?: Column['format']) {
   return String(value);
 }
 
-function MenuSidebar({ slug }: { slug: string }) {
-  const [open, setOpen] = useState<string[]>(menu.map((item)=>String(item[0])));
-  return <aside className="erp-module-sidebar">
-    <Link href="/dashboard" className="erp-module-logo"><span>ϟ</span> THOR<b>PDV</b></Link>
-    <nav>{menu.map(([label,target])=>{
-      if (typeof target==='string') return <Link className={target==='/dashboard' && !slug?'active':''} href={target} key={String(label)}>{String(label)}</Link>;
-      const items=target as string[][]; const expanded=open.includes(String(label));
-      return <div className="erp-module-group" key={String(label)}><button type="button" onClick={()=>setOpen(v=>expanded?v.filter(x=>x!==label):[...v,String(label)])}><span>{String(label)}</span><span>{expanded?'⌄':'›'}</span></button>{expanded&&<div className="erp-module-submenu">{items.map(([sub,href])=><Link href={href} className={('/dashboard/'+slug)===href?'active':''} key={href}>{sub}</Link>)}</div>}</div>;
-    })}</nav>
-    <div className="erp-module-branch"><small>Loja atual</small><strong>MATRIZ</strong><span>Teresina / PI</span></div>
-  </aside>;
-}
-
 function SaleScreen({ lookups }: { lookups: LookupMap }) {
   const products=lookups.products??[]; const customers=lookups.customers??[];
   const [customer,setCustomer]=useState(''); const [productId,setProductId]=useState(''); const [qty,setQty]=useState(1); const [method,setMethod]=useState('pix');
@@ -117,7 +91,9 @@ export function ModuleClient({ slug, resource, initialData, lookups }: { slug:st
   const doSearch=async(e:FormEvent)=>{e.preventDefault();await refresh(search);};
   const exportCsv=()=>{const cols=config.columns;const lines=[cols.map(c=>`"${c.label}"`).join(';'),...filtered.map(r=>cols.map(c=>`"${formatValue(r[c.key],c.format).replaceAll('"','""')}"`).join(';'))];const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`thorpdv-${slug.replaceAll('/','-')}.csv`;a.click();URL.revokeObjectURL(url);};
 
-  return <main className="erp-module-shell"><MenuSidebar slug={slug}/><section className="erp-module-main"><header className="erp-module-header"><div><Link href="/dashboard" className="erp-back">← Dashboard</Link><h1>{slug==='vendas/nova'?'Nova Venda PDV':config.title}</h1><p>{slug==='vendas/nova'?'Venda integrada a estoque, pagamentos e financeiro.':config.subtitle}</p></div><div className="erp-module-user"><div className="erp-user-dot">SA</div><span><strong>ThorPDV</strong><small>Administrador</small></span><form action={logout}><button type="submit" className="erp-ghost">Sair</button></form></div></header>
+  const title=slug==='vendas/nova'?'Nova Venda PDV':config.title;
+  const subtitle=slug==='vendas/nova'?'Venda integrada a estoque, pagamentos e financeiro.':config.subtitle;
+  return <AdvancedShell title={title} subtitle={subtitle} activePath={`/dashboard/${slug}`}>
     {slug==='vendas/nova'?<SaleScreen lookups={lookups}/>:<>
       <div className="erp-module-kpis"><article><span>Registros</span><strong>{filtered.length}</strong><small>no módulo atual</small></article><article><span>Ativos / válidos</span><strong>{filtered.filter(r=>r.active!==false&&r.status!=='cancelled').length}</strong><small>registros disponíveis</small></article><article><span>Valor consolidado</span><strong>{formatValue(totalValue,'currency')}</strong><small>quando aplicável</small></article><article><span>Integração</span><strong>Online</strong><small>Supabase conectado</small></article></div>
       <section className="erp-module-card"><div className="erp-module-toolbar"><form onSubmit={doSearch} className="erp-search"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar neste módulo..."/><button type="submit">Buscar</button></form><div className="erp-toolbar-actions">{config.kind==='report'&&<button className="erp-ghost" onClick={()=>window.print()}>Imprimir / PDF</button>}<button className="erp-ghost" onClick={exportCsv}>Exportar CSV</button>{!config.readOnly&&config.addLabel&&<button className="erp-primary" onClick={openNew}>+ {config.addLabel}</button>}</div></div>
@@ -127,5 +103,5 @@ export function ModuleClient({ slug, resource, initialData, lookups }: { slug:st
       </section>
     </>}
     {modal&&<div className="erp-modal-backdrop" onMouseDown={()=>setModal(false)}><div className="erp-modal" onMouseDown={e=>e.stopPropagation()}><div className="erp-modal-head"><div><h2>{editing?'Editar registro':config.addLabel??'Novo registro'}</h2><p>{config.subtitle}</p></div><button onClick={()=>setModal(false)}>×</button></div><form onSubmit={submit}><div className="erp-form-grid">{config.fields.map(field=>{const value=editing?.[field.key]??(field.key==='active'?'true':'');const options=field.options??(field.lookup?(lookups[field.lookup]??[]).map(r=>[String(r.id),String(r[field.optionLabel??'name'])] as [string,string]):undefined);return <label key={field.key} className={field.type==='textarea'?'wide':''}>{field.label}{field.type==='textarea'?<textarea name={field.key} defaultValue={field.key==='permissions_text'&&editing?.permissions?Object.keys(editing.permissions as Record<string,unknown>).join(', '):String(value??'')} placeholder={field.placeholder}/>:field.type==='select'?<select name={field.key} defaultValue={String(value??'')} required={field.required}><option value="">Selecione...</option>{options?.map(([v,l])=><option value={v} key={v}>{l}</option>)}</select>:<input name={field.key} type={field.type??'text'} step={field.type==='number'?'0.01':undefined} defaultValue={String(value??'')} placeholder={field.placeholder} required={field.required}/>}</label>})}</div><div className="erp-modal-actions"><button type="button" className="erp-ghost" onClick={()=>setModal(false)}>Cancelar</button><button className="erp-primary" disabled={saving}>{saving?'Salvando...':'Salvar'}</button></div></form></div></div>}
-  </section></main>;
+  </AdvancedShell>;
 }
