@@ -6,12 +6,16 @@ import { createClient } from '@/lib/supabase/server';
 
 const SESSION_COOKIE = 'thorpdv_test_session';
 
+async function sessionToken(){
+  const cookieStore=await cookies();
+  return cookieStore.get(SESSION_COOKIE)?.value??'';
+}
+
 export async function dashboardLoad(start?: string, end?: string, branchId?: string) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token=await sessionToken();
   if (!token) return { ok: false, error: 'temporary_session_required' };
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('erp_dashboard', {
+  const { data, error } = await supabase.rpc('erp_dashboard_studio', {
     p_token: token,
     p_start: start || null,
     p_end: end || null,
@@ -19,6 +23,28 @@ export async function dashboardLoad(start?: string, end?: string, branchId?: str
   });
   if (error) return { ok: false, error: error.message };
   return (data ?? { ok: false }) as Record<string, unknown>;
+}
+
+export async function dashboardPreferencesLoad(){
+  const token=await sessionToken();
+  if(!token)return {ok:false,error:'temporary_session_required'};
+  const supabase=await createClient();
+  const {data,error}=await supabase.rpc('erp_dashboard_preferences_get',{p_token:token});
+  if(error)return {ok:false,error:error.message};
+  return (data??{ok:false}) as Record<string,unknown>;
+}
+
+export async function dashboardPreferencesSave(layout:unknown[],settings:Record<string,unknown>){
+  const token=await sessionToken();
+  if(!token)return {ok:false,error:'temporary_session_required'};
+  const supabase=await createClient();
+  const {data,error}=await supabase.rpc('erp_dashboard_preferences_save',{
+    p_token:token,
+    p_layout:layout,
+    p_settings:settings,
+  });
+  if(error)return {ok:false,error:error.message};
+  return (data??{ok:false}) as Record<string,unknown>;
 }
 
 export async function logout() {
