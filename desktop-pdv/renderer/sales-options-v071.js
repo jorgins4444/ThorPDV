@@ -8,7 +8,6 @@
   function acquirers(){return (options().card_acquirers||[]).filter(x=>x.active!==false);}
   function installments(){const rows=(options().credit_installments||[]).filter(x=>x.active!==false).sort((a,b)=>Number(a.installments)-Number(b.installments));return rows.length?rows:Array.from({length:12},(_,i)=>({installments:i+1,interest_percent:0}));}
   function label(code){return val(methods().find(x=>x.code===code)?.name)||({cash:'Dinheiro',pix:'PIX',debit_card:'Débito',credit_card:'Crédito',voucher:'Voucher',store_credit:'Crédito loja',other:'Outro'})[code]||code;}
-  function isCard(code){return code==='credit_card'||code==='debit_card';}
   function preferredAcquirer(){return acquirers().find(x=>x.preferred)||acquirers()[0]||null;}
 
   const previousHydrate=v3Hydrate;
@@ -33,18 +32,47 @@
     const methodButtons=()=>available.map(x=>`<button data-method="${esc(x.code)}" class="${x.code===selected?'active':''}">${esc(x.name)}</button>`).join('');
     const m=modal(`<div class="payment-head"><div><small>FECHAMENTO</small><h3>Formas de pagamento</h3></div><strong>${money(v3Total())}</strong></div><div id="payList" class="pay-list"></div><div class="payment-entry"><div class="payment-method-grid">${methodButtons()}</div><div class="field"><label>Valor desta forma</label><input id="payAmount" type="number" min="0.01" step="0.01" value="${v3Remaining().toFixed(2)}"></div><div class="field" id="cashTenderWrap"><label>Valor entregue pelo cliente</label><input id="cashTender" type="number" min="0.01" step="0.01" value="${v3Remaining().toFixed(2)}"></div><div id="s71CardFields"></div><div class="payment-entry-actions"><button class="secondary" id="integratedPay">Autorizar TEF/PIX</button><button class="primary" id="addPayment">Adicionar pagamento</button></div><div id="payError" class="settings-error"></div></div><div class="payment-footer"><div><span>Pago</span><b id="modalPaid"></b><span>Restante</span><b id="modalRemaining"></b><span>Troco</span><b id="modalChange"></b></div><div class="actions"><button class="secondary" id="payBack">Voltar</button><button class="primary" id="finishCheckout">Concluir venda</button></div></div>`,'wide');
     const amount=m.querySelector('#payAmount'),tender=m.querySelector('#cashTender'),err=m.querySelector('#payError'),cardHolder=m.querySelector('#s71CardFields');
+
     function renderCard(){
       m.querySelector('#cashTenderWrap').style.display=selected==='cash'?'':'none';
-      if(!isCard(selected)){cardHolder.innerHTML='';return;}
-      const bs=brands(),acs=acquirers(),ins=installments();
-      cardHolder.innerHTML=`<div class="s71-card-grid"><div class="field"><label>Bandeira</label><select id="s71Brand"><option value="">Selecione...</option>${bs.map(x=>`<option value="${esc(x.code)}" ${x.code===selectedBrand?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="field"><label>Credenciadora</label><select id="s71Acquirer"><option value="">Selecione...</option>${acs.map(x=>`<option value="${esc(x.cnpj)}" ${x.cnpj===selectedAcquirer?'selected':''}>${esc(x.name)} — ${esc(x.cnpj)}</option>`).join('')}</select></div>${selected==='credit_card'?`<div class="field"><label>Parcelas</label><select id="s71Installments">${ins.map(x=>`<option value="${Number(x.installments)}" ${Number(x.installments)===selectedInstallment?'selected':''}>${Number(x.installments)}x${number(x.interest_percent)>0?` • taxa ${number(x.interest_percent).toLocaleString('pt-BR')}%`:''}</option>`).join('')}</select></div>`:''}</div>${!acs.length?'<div class="settings-error">Nenhuma credenciadora habilitada. Configure em Gestão → Administrativo → Configurações → Opções de Vendas.</div>':''}`;
-      cardHolder.querySelector('#s71Brand')?.addEventListener('change',e=>selectedBrand=e.target.value);
-      cardHolder.querySelector('#s71Acquirer')?.addEventListener('change',e=>selectedAcquirer=e.target.value);
-      cardHolder.querySelector('#s71Installments')?.addEventListener('change',e=>selectedInstallment=Math.max(Number(e.target.value||1),1));
+      if(selected==='credit_card'){
+        const ins=installments();
+        cardHolder.innerHTML=`<div class="s71-card-grid s71-credit-installments-only"><div class="field"><label>Parcelas</label><select id="s71Installments">${ins.map(x=>`<option value="${Number(x.installments)}" ${Number(x.installments)===selectedInstallment?'selected':''}>${Number(x.installments)}x${number(x.interest_percent)>0?` • taxa ${number(x.interest_percent).toLocaleString('pt-BR')}%`:''}</option>`).join('')}</select></div></div>`;
+        cardHolder.querySelector('#s71Installments')?.addEventListener('change',e=>selectedInstallment=Math.max(Number(e.target.value||1),1));
+        return;
+      }
+      if(selected==='debit_card'){
+        const bs=brands(),acs=acquirers();
+        cardHolder.innerHTML=`<div class="s71-card-grid"><div class="field"><label>Bandeira</label><select id="s71Brand"><option value="">Selecione...</option>${bs.map(x=>`<option value="${esc(x.code)}" ${x.code===selectedBrand?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="field"><label>Credenciadora</label><select id="s71Acquirer"><option value="">Selecione...</option>${acs.map(x=>`<option value="${esc(x.cnpj)}" ${x.cnpj===selectedAcquirer?'selected':''}>${esc(x.name)} — ${esc(x.cnpj)}</option>`).join('')}</select></div></div>${!acs.length?'<div class="settings-error">Nenhuma credenciadora habilitada. Configure em Gestão → Administrativo → Configurações → Opções de Vendas.</div>':''}`;
+        cardHolder.querySelector('#s71Brand')?.addEventListener('change',e=>selectedBrand=e.target.value);
+        cardHolder.querySelector('#s71Acquirer')?.addEventListener('change',e=>selectedAcquirer=e.target.value);
+        return;
+      }
+      cardHolder.innerHTML='';
     }
-    function cardData(){if(!isCard(selected))return {};return {provider:selectedAcquirer,metadata:{card_brand_code:selectedBrand,card_acquirer_cnpj:selectedAcquirer,card_installments:selected==='credit_card'?selectedInstallment:1}};}
-    function validateCard(){if(!isCard(selected))return '';if(!selectedBrand)return 'Selecione a bandeira do cartão.';if(!selectedAcquirer)return 'Selecione a credenciadora do cartão.';if(selected==='credit_card'&&!installments().some(x=>Number(x.installments)===selectedInstallment))return 'Parcelamento não habilitado.';return '';}
-    const refresh=()=>{const list=m.querySelector('#payList');list.innerHTML=v.payments.length?v.payments.map((p,i)=>`<div class="pay-line"><span>${esc(label(p.method))}${p.integrated?' <small>integrado</small>':''}${p.metadata?.card_brand_code?` <small>${esc(p.metadata.card_brand_code)}${p.metadata.card_installments?` • ${p.metadata.card_installments}x`:''}</small>`:''}</span><b>${money(p.amount)}</b>${Number(p.changeAmount||0)>0?`<em>Troco ${money(p.changeAmount)}</em>`:''}<button data-pay-remove="${i}">Remover</button></div>`).join(''):'<div class="empty small">Nenhum pagamento adicionado.</div>';list.querySelectorAll('[data-pay-remove]').forEach(b=>b.onclick=()=>{v.payments.splice(Number(b.dataset.payRemove),1);amount.value=v3Remaining().toFixed(2);tender.value=amount.value;refresh();v3RenderCart();});m.querySelector('#modalPaid').textContent=money(v3Paid());m.querySelector('#modalRemaining').textContent=money(v3Remaining());m.querySelector('#modalChange').textContent=money(v3Change());};
+
+    function cardData(){
+      if(selected==='credit_card')return {metadata:{card_installments:selectedInstallment}};
+      if(selected==='debit_card')return {provider:selectedAcquirer,metadata:{card_brand_code:selectedBrand,card_acquirer_cnpj:selectedAcquirer,card_installments:1}};
+      return {};
+    }
+
+    function validateCard(){
+      if(selected==='credit_card')return installments().some(x=>Number(x.installments)===selectedInstallment)?'':'Parcelamento não habilitado.';
+      if(selected==='debit_card'){
+        if(!selectedBrand)return 'Selecione a bandeira do cartão.';
+        if(!selectedAcquirer)return 'Selecione a credenciadora do cartão.';
+      }
+      return '';
+    }
+
+    const paymentDetail=(p)=>{
+      const parts=[];
+      if(p.metadata?.card_brand_code)parts.push(esc(p.metadata.card_brand_code));
+      if(p.method==='credit_card'&&p.metadata?.card_installments)parts.push(`${Number(p.metadata.card_installments)}x`);
+      return parts.length?` <small>${parts.join(' • ')}</small>`:'';
+    };
+    const refresh=()=>{const list=m.querySelector('#payList');list.innerHTML=v.payments.length?v.payments.map((p,i)=>`<div class="pay-line"><span>${esc(label(p.method))}${p.integrated?' <small>integrado</small>':''}${paymentDetail(p)}</span><b>${money(p.amount)}</b>${Number(p.changeAmount||0)>0?`<em>Troco ${money(p.changeAmount)}</em>`:''}<button data-pay-remove="${i}">Remover</button></div>`).join(''):'<div class="empty small">Nenhum pagamento adicionado.</div>';list.querySelectorAll('[data-pay-remove]').forEach(b=>b.onclick=()=>{v.payments.splice(Number(b.dataset.payRemove),1);amount.value=v3Remaining().toFixed(2);tender.value=amount.value;refresh();v3RenderCart();});m.querySelector('#modalPaid').textContent=money(v3Paid());m.querySelector('#modalRemaining').textContent=money(v3Remaining());m.querySelector('#modalChange').textContent=money(v3Change());};
     m.querySelectorAll('[data-method]').forEach(b=>b.onclick=()=>{selected=b.dataset.method;m.querySelectorAll('[data-method]').forEach(x=>x.classList.toggle('active',x.dataset.method===selected));amount.value=v3Remaining().toFixed(2);tender.value=amount.value;err.textContent='';renderCard();});
     const addManual=()=>{const cardError=validateCard();if(cardError)return err.textContent=cardError;const remaining=v3Remaining();const requested=Math.max(Number(amount.value||0),0);if(requested<=0)return err.textContent='Informe um valor.';const applied=Math.min(requested,remaining);if(selected==='cash'){const delivered=Math.max(Number(tender.value||0),0);if(delivered+0.001<applied)return err.textContent='Valor entregue é menor que o valor aplicado.';v.payments.push({method:'cash',amount:applied,tenderedAmount:delivered,changeAmount:Math.max(delivered-applied,0)});}else v.payments.push({method:selected,amount:applied,...cardData()});amount.value=v3Remaining().toFixed(2);tender.value=amount.value;refresh();v3RenderCart();};
     m.querySelector('#addPayment').onclick=addManual;
