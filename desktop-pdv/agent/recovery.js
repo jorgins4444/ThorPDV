@@ -41,12 +41,14 @@ function installSyncRecovery(ThorAgent) {
       ? this.store.db.prepare(`update queue set state='pending',last_error=null,updated_at=? where state='rejected' and id=?`).run(now, selected)
       : this.store.db.prepare(`update queue set state='pending',last_error=null,updated_at=? where state='rejected'`).run(now);
     this.store.set('last_sync_error', '');
-    const sync = await this.sync.run(true);
+    const rawSync = await this.sync.run(true);
     const diagnostics = this.syncDiagnostics();
     const failed = selected ? diagnostics.events.find((event) => String(event.id) === selected && event.state === 'rejected') : null;
+    const actualError = failed?.last_error || (!rawSync?.ok ? rawSync?.error : null) || null;
+    const sync = { ...(rawSync || {}), error: actualError || rawSync?.error || null };
     return {
-      ok: Boolean(sync?.ok) && !failed,
-      error: failed?.last_error || (!sync?.ok ? sync?.error : null),
+      ok: Boolean(rawSync?.ok) && !failed,
+      error: actualError,
       resetLocalEvents: Number(reset.changes || 0),
       clearedServerRejections: Number(data.cleared_server_rejections || 0),
       selectedEventId: selected || null,
