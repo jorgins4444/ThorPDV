@@ -9,6 +9,15 @@
     return fallback;
   }
   function w46Qty(value) { return w46Number(value).toFixed(3).replace(/\.000$/, '').replace(/(\.\d*[1-9])0+$/, '$1'); }
+  function w46ScaleWeight(value) {
+    const raw = w46Number(value);
+    if (raw <= 0) throw new Error('scale_invalid_weight');
+    const grams = Number.isInteger(raw) && raw >= 50;
+    const weight = grams ? raw / 1000 : raw;
+    const normalized = Math.round(weight * 1000) / 1000;
+    if (normalized <= 0) throw new Error('scale_invalid_weight');
+    return { raw, weight: normalized, grams };
+  }
   function w46ProductFlags(product) {
     return {
       isWeighable: Boolean(product?.is_weighable),
@@ -75,10 +84,11 @@
           scale.disabled = true;
           status.textContent = 'Lendo balança...';
           const result = await window.thor.readScale();
-          const weight = w46Number(result?.weight);
-          if (weight <= 0) throw new Error('scale_invalid_weight');
-          input.value = w46Qty(weight);
-          status.textContent = `Peso recebido: ${w46Qty(weight)} ${flags.unit}. Confirme em ${options.replace ? 'Atualizar' : 'Adicionar'}.`;
+          const reading = w46ScaleWeight(result?.weight);
+          input.value = w46Qty(reading.weight);
+          status.textContent = reading.grams
+            ? `Leitura recebida: ${reading.raw} g = ${w46Qty(reading.weight)} ${flags.unit}. Confirme em ${options.replace ? 'Atualizar' : 'Adicionar'}.`
+            : `Peso recebido: ${w46Qty(reading.weight)} ${flags.unit}. Confirme em ${options.replace ? 'Atualizar' : 'Adicionar'}.`;
           input.focus();
         } catch (error) {
           status.textContent = friendlyError(error?.message);
@@ -177,12 +187,13 @@
     if (!w46Allowed('hardware.scale', true)) return infoModal('Balança', 'O perfil deste operador não possui permissão para usar a balança.');
     try {
       const result = await window.thor.readScale();
-      const weight = w46Number(result?.weight);
-      if (weight <= 0) throw new Error('scale_invalid_weight');
-      item.quantity = weight;
+      const reading = w46ScaleWeight(result?.weight);
+      item.quantity = reading.weight;
       v.supervisorAuthorization = null;
       await v3Reprice();
-      showToast(`Peso atualizado: ${w46Qty(weight)} ${item.unit || 'KG'}.`);
+      showToast(reading.grams
+        ? `Balança: ${reading.raw} g convertidos para ${w46Qty(reading.weight)} ${item.unit || 'KG'}.`
+        : `Peso atualizado: ${w46Qty(reading.weight)} ${item.unit || 'KG'}.`);
     } catch (error) {
       infoModal('Balança', friendlyError(error?.message));
     }
