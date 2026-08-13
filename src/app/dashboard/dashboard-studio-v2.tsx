@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type DragEvent } from 'react';
+import { useCallback,useEffect,useRef,useState,type CSSProperties,type DragEvent } from 'react';
 import { dashboardLoad,dashboardPreferencesLoad,dashboardPreferencesSave } from './actions';
 import { Visual,type ChartType } from './dashboard-visuals-v2';
 import { pointsFor } from './dashboard-data-v2';
@@ -30,7 +30,7 @@ export function DashboardStudioV2({initial}:{initial:Data}){
 
  const selected=tiles.find(t=>t.id===selectedId)??tiles[0],visible=tiles.filter(t=>t.visible),spanFor=(size:Size)=>size==='wide'?gridColumns:size==='l'?Math.min(3,gridColumns):size==='m'?Math.min(2,gridColumns):1;
  const branchName=branch?(branches.find(b=>String(b.id)===branch)?.name??'Filial'):'Todas as filiais';
- const summary=useMemo(()=>[`Atualizado ${generatedAt(data.generated_at)}`,`${number(avg.period_days)} dia(s)`,String(branchName)],[data.generated_at,avg.period_days,branchName]);
+ const summary=[`Atualizado ${generatedAt(data.generated_at)}`,`${number(avg.period_days)} dia(s)`,String(branchName)];
  const stageStyle={'--bi-columns':gridColumns} as CSSProperties;
 
  return <div ref={stageRef} className={`bi-stage theme-${theme} ${fullscreen?'is-fullscreen':''}`} style={stageStyle}>
