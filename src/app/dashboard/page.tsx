@@ -1,8 +1,9 @@
 import './dashboard-live.css';
+import './dashboard-studio.css';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { DashboardLive } from './dashboard-live';
+import { DashboardStudio } from './dashboard-studio';
 import { dashboardLoad } from './actions';
 
 const SESSION_COOKIE = 'thorpdv_test_session';
@@ -29,5 +30,5 @@ export default async function DashboardPage() {
   }
 
   const live = await dashboardLoad();
-  return <DashboardLive identity={displayIdentity} initial={(live ?? {}) as Record<string, unknown>} />;
+  return <DashboardStudio identity={displayIdentity} initial={(live ?? {}) as Record<string, unknown>} />;
 }
