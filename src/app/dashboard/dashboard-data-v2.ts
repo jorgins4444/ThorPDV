@@ -1,0 +1,27 @@
+import type { Point } from './dashboard-visuals-v2';
+import { asData,asRows,fmt,metricInfo,money,n,number,paymentLabels,percent,shortDate,minuteLabel,type Data,type TileId } from './dashboard-config-v2';
+
+export function pointsFor(id:TileId,data:Data):Point[]{
+ const finance=asData(data.finance),stock=asData(data.stock),people=asData(data.people),equipment=asData(data.equipment),alerts=asData(data.alerts),fiscal=asData(data.fiscal_summary),receivables=asData(data.term_receivables);
+ const daily=asRows(data.daily_evolution),payments=asRows(data.payments),top=asRows(data.top_products),minute=asRows(data.minute),hourly=asRows(data.hourly),branchSales=asRows(data.branch_sales),pdv=asRows(data.pdv_flow),cashDaily=asRows(data.cash_daily),sellers=asRows(data.seller_performance);
+ if(id==='dailyRevenue')return daily.map(r=>({label:shortDate(r.report_day),value:n(r.net_revenue),format:'money',detail:`Receita ${money(r.net_revenue)} · Lucro ${money(r.gross_profit)}`}));
+ if(id==='dailyProfit')return daily.map(r=>({label:shortDate(r.report_day),value:n(r.gross_profit),format:'money',detail:`Margem ${percent(r.gross_margin)} · CMV ${money(r.cmv)}`}));
+ if(id==='dailySales')return daily.map(r=>({label:shortDate(r.report_day),value:n(r.sales_count),format:'number',detail:`${number(r.sales_count)} vendas · ${number(r.items_quantity)} itens`}));
+ if(id==='dailyTicket')return daily.map(r=>({label:shortDate(r.report_day),value:n(r.avg_ticket),format:'money',detail:`Ticket ${money(r.avg_ticket)}`}));
+ if(id==='payments')return payments.map(r=>({label:paymentLabels[String(r.method)]??String(r.method??'Outros'),value:n(r.total),format:'money',detail:`${number(r.quantity)} trans. · ${money(r.total)}`}));
+ if(id==='topProducts')return top.map(r=>({label:String(r.product??'Produto'),value:n(r.revenue),format:'money',detail:`${number(r.quantity)} un. · ${money(r.revenue)}`}));
+ if(id==='minute')return minute.map(r=>({label:minuteLabel(r.report_minute),value:n(r.total),format:'money',detail:`${number(r.quantity)} venda(s) · ${money(r.total)}`}));
+ if(id==='hourly')return hourly.map(r=>({label:`${String(r.report_hour??0).padStart(2,'0')}:00`,value:n(r.total),format:'money',detail:`${number(r.quantity)} vendas · ${money(r.total)}`}));
+ if(id==='branchSales')return branchSales.map(r=>({label:String(r.branch??'Filial'),value:n(r.total),format:'money',detail:`${number(r.quantity)} vendas · ${money(r.total)}`}));
+ if(id==='pdvFlow')return pdv.map(r=>({label:`${String(r.pos??'PDV')} · ${String(r.branch??'')}`,value:n(r.sales_total),format:'money',detail:`${number(r.sales_count)} vendas · Caixa ${money(r.expected_cash)} · ${number(r.sessions_open)} aberto(s)`}));
+ if(id==='cashDaily')return cashDaily.map(r=>({label:shortDate(r.report_day),value:n(r.expected_cash),format:'money',detail:`Esperado ${money(r.expected_cash)} · Fechado ${money(r.closing_amount)} · Dif. ${money(r.difference)}`}));
+ if(id==='sellers')return sellers.map(r=>({label:String(r.seller??'Operador'),value:n(r.revenue),format:'money',detail:`${number(r.sales_count)} vendas · Ticket ${money(r.avg_ticket)}`}));
+ if(id==='finance')return [{label:'A receber hoje',value:n(finance.receivable_today),format:'money'},{label:'A pagar hoje',value:-n(finance.payable_today),format:'money'},{label:'Receber em aberto',value:n(finance.receivable_open),format:'money'},{label:'Pagar em aberto',value:-n(finance.payable_open),format:'money'},{label:'Vencido',value:n(finance.overdue),format:'money'}];
+ if(id==='receivables')return [{label:'Em aberto',value:n(receivables.open),format:'money'},{label:'Vencido',value:n(receivables.overdue),format:'money'},{label:'Recebido',value:n(receivables.received),format:'money'},{label:'Crediário aberto',value:n(receivables.crediario_open),format:'money'},{label:'Boleto aberto',value:n(receivables.boleto_open),format:'money'}];
+ if(id==='stock')return [{label:'Estoque baixo',value:n(stock.low),format:'number'},{label:'Sem estoque',value:n(stock.zero),format:'number'},{label:'Produtos ativos',value:n(stock.products),format:'number'}];
+ if(id==='fiscal')return [{label:'Autorizadas',value:n(fiscal.authorized),format:'number'},{label:'Rejeitadas',value:n(fiscal.rejected),format:'number'},{label:'Canceladas',value:n(fiscal.cancelled),format:'number'},{label:'Pendentes',value:n(fiscal.pending),format:'number'}];
+ if(id==='system')return [{label:'Clientes',value:n(people.customers),format:'number'},{label:'Fornecedores',value:n(people.suppliers),format:'number'},{label:'Usuários PDV',value:n(people.users_pdv),format:'number'},{label:'Usuários ADM',value:n(people.users_adm),format:'number'},{label:'PDVs ativos',value:n(equipment.pdvs),format:'number'},{label:'Caixas abertos',value:n(equipment.cash_open),format:'number'}];
+ if(id==='alerts')return [{label:'Fiscal com erro',value:n(alerts.fiscal_open),format:'number'},{label:'Estoque baixo',value:n(alerts.stock_low),format:'number'},{label:'Financeiro vencido',value:n(alerts.finance_overdue),format:'number'},{label:'Tickets abertos',value:n(alerts.tickets_open),format:'number'}];
+ const metric=metricInfo(id,data);if(metric?.value!==null){const pts:Point[]=[{label:'Período atual',value:metric.value,format:metric.format,detail:metric.text}];if(metric.previous!==null)pts.unshift({label:'Período anterior',value:metric.previous,format:metric.format,detail:fmt(metric.previous,metric.format)});return pts}
+ return [];
+}
