@@ -1,4 +1,12 @@
 function installSyncRecovery(ThorAgent) {
+  const originalFiscalSale = ThorAgent.prototype.fiscalSale;
+  if (typeof originalFiscalSale === 'function') {
+    ThorAgent.prototype.fiscalSale = function (key) {
+      this._lastFiscalSaleKey = String(key || '');
+      return originalFiscalSale.call(this, key);
+    };
+  }
+
   ThorAgent.prototype.syncDiagnostics = function () {
     const rows = this.store.db.prepare(`
       select id,type,state,attempts,last_error,created_at,updated_at
@@ -18,7 +26,7 @@ function installSyncRecovery(ThorAgent) {
   ThorAgent.prototype.recoverSync = async function (eventId = null) {
     const token = this.deviceToken();
     if (!token) throw new Error('not_enrolled');
-    const selected = String(eventId || '').replace(/^local:/, '').trim();
+    const selected = String(eventId || this._lastFiscalSaleKey || '').replace(/^local:/, '').trim();
     const body = selected ? { event_ids: [selected] } : {};
     const response = await fetch(`${this.apiBase.replace(/\/$/,'')}/api/pdv/recover`, {
       method: 'POST',
