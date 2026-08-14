@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import QRCode from 'qrcode';
-import { issueReceivableItauBolecode, receivableBankBillings, receivableCustomerBillingSnapshot } from './receivables-bolecode-actions';
+import { consultReceivableItauBoleto, issueReceivableItauBoleto, receivableBankBillings, receivableCustomerBillingSnapshot } from './receivables-bolecode-actions';
 
 type Row=Record<string,unknown>;
 type Props={receivables:Row[];customers:Row[];integrations:Row[];initialBillings:Row[]};
@@ -43,27 +42,19 @@ function ItfBarcode({value}:{value:string}){
 }
 
 function BoletoPrint({billing,onClose}:{billing:Row;onClose:()=>void}){
-  const [generatedQr,setGeneratedQr]=useState('');
   const response=(billing.response_payload as Row|undefined)??{};
-  const qrBase64=String(billing.pix_qr_base64||'');
-  const pixEmv=String(billing.pix_emv||'');
-  const qrSrc=qrBase64?(qrBase64.startsWith('data:')?qrBase64:`data:image/png;base64,${qrBase64}`):generatedQr;
+  const responseValue=(response.value as Row|undefined)??{};
+  const responseData=((response.data as Row|undefined)??(responseValue.data as Row|undefined)??response) as Row;
+  const beneficiaryData=(responseData.beneficiario as Row|undefined)??{};
   const settings=(billing.integration_settings as Row|undefined)??{};
-  const beneficiary=String(billing.beneficiary_name||response?.['beneficiario']||billing.account_name||'Beneficiário Itaú');
+  const beneficiary=String(billing.beneficiary_name||beneficiaryData.nome_cobranca||billing.account_name||'Beneficiário Itaú');
   const customerAddress=[billing.customer_street,billing.customer_number,billing.customer_complement].filter(Boolean).join(', ');
   const customerCity=[billing.customer_city,billing.customer_state].filter(Boolean).join(' / ');
   const line=String(billing.digitable_line||'');
   const barcode=String(billing.barcode||'');
 
-  useEffect(()=>{
-    let active=true;
-    if(!qrBase64&&pixEmv){QRCode.toDataURL(pixEmv,{margin:1,width:220}).then(url=>{if(active)setGeneratedQr(url)}).catch(()=>{});}
-    else setGeneratedQr('');
-    return()=>{active=false};
-  },[pixEmv,qrBase64]);
-
   return <div className="erp-bolecode-print-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
-    <section className="erp-bolecode-print-shell" role="dialog" aria-modal="true" aria-label="Boleto Itaú BoleCode Pix">
+    <section className="erp-bolecode-print-shell" role="dialog" aria-modal="true" aria-label="Boleto Itaú registrado">
       <div className="erp-bolecode-print-actions"><button type="button" className="erp-ghost" onClick={onClose}>Fechar</button><button type="button" className="erp-primary" onClick={()=>window.print()}>🖨 Imprimir boleto</button></div>
       <article className="thor-boleto-print">
         <header className="thor-boleto-bankline"><div className="thor-boleto-bank"><strong>ITAÚ</strong><span>341-7</span></div><div className="thor-boleto-line">{line||'Linha digitável não retornada pelo Itaú'}</div></header>
@@ -83,27 +74,18 @@ function BoletoPrint({billing,onClose}:{billing:Row;onClose:()=>void}){
           </div>
         </section>
 
-        <section className="thor-boleto-payment-zone">
-          <div className="thor-boleto-compensation">
-            <div className="thor-boleto-section-title">Ficha de Compensação</div>
-            <div className="thor-boleto-mini-grid">
-              <div><small>Beneficiário</small><b>{beneficiary}</b></div><div><small>Vencimento</small><b>{date(billing.due_date)}</b></div>
-              <div><small>Nosso Número</small><b>{String(billing.our_number||'—')}</b></div><div><small>Valor</small><b>{money(billing.amount)}</b></div>
-            </div>
-            <div className="thor-boleto-copy-line"><small>Linha digitável</small><strong>{line||'—'}</strong></div>
-            <ItfBarcode value={barcode}/>
-            <div className="thor-boleto-barcode-number">{barcode||'Código de barras não retornado pelo Itaú'}</div>
+        <section className="thor-boleto-compensation">
+          <div className="thor-boleto-section-title">Ficha de Compensação</div>
+          <div className="thor-boleto-mini-grid">
+            <div><small>Beneficiário</small><b>{beneficiary}</b></div><div><small>Vencimento</small><b>{date(billing.due_date)}</b></div>
+            <div><small>Nosso Número</small><b>{String(billing.our_number||'—')}</b></div><div><small>Valor</small><b>{money(billing.amount)}</b></div>
           </div>
-          <aside className="thor-boleto-pix">
-            <div className="thor-boleto-section-title">Pague também com Pix</div>
-            {qrSrc?<img src={qrSrc} alt="QR Code Pix do BoleCode"/>:<div className="thor-boleto-qr-missing">QR Code não retornado</div>}
-            <small>TXID</small><b>{String(billing.pix_txid||'—')}</b>
-            <p>Use o QR Code ou o Pix Copia e Cola fornecido pelo Itaú para pagar esta mesma cobrança.</p>
-          </aside>
+          <div className="thor-boleto-copy-line"><small>Linha digitável</small><strong>{line||'—'}</strong></div>
+          <ItfBarcode value={barcode}/>
+          <div className="thor-boleto-barcode-number">{barcode||'Código de barras não retornado pelo Itaú'}</div>
         </section>
 
-        {pixEmv&&<section className="thor-boleto-pix-copy"><small>Pix Copia e Cola</small><code>{pixEmv}</code></section>}
-        <footer className="thor-boleto-footer">Cobrança emitida via Itaú BoleCode Pix · ThorGestão · ID {String(billing.external_id||billing.id||'—')}</footer>
+        <footer className="thor-boleto-footer">Boleto registrado via Itaú Cash Management v2 · ThorGestão · ID {String(billing.external_id||billing.id||'—')}</footer>
       </article>
     </section>
   </div>;
@@ -111,13 +93,13 @@ function BoletoPrint({billing,onClose}:{billing:Row;onClose:()=>void}){
 
 export function ReceivablesBolecodePanel({receivables,customers,integrations,initialBillings}:Props){
   const eligible=useMemo(()=>receivables.filter(r=>!['paid','cancelled'].includes(String(r.status||''))&&Number(r.remaining??Math.max(Number(r.amount||0)-Number(r.paid_amount||0),0))>0),[receivables]);
-  const itauIntegrations=useMemo(()=>integrations.filter(i=>i.active!==false&&i.provider==='itau'&&i.product==='bolecode_pix'),[integrations]);
+  const itauIntegrations=useMemo(()=>integrations.filter(i=>i.active!==false&&i.provider==='itau'),[integrations]);
   const [entryId,setEntryId]=useState(()=>String(eligible[0]?.id||''));
   const [integrationId,setIntegrationId]=useState(()=>String(itauIntegrations[0]?.id||''));
   const [billings,setBillings]=useState<Row[]>(initialBillings);
   const [customerRows,setCustomerRows]=useState<Row[]>(customers);
   const [customerRefreshing,setCustomerRefreshing]=useState(false);
-  const [busy,setBusy]=useState<'simulate'|'issue'|''>('');
+  const [busy,setBusy]=useState<'simulate'|'issue'|'consult'|''>('');
   const [message,setMessage]=useState('');
   const [printBilling,setPrintBilling]=useState<Row|null>(null);
 
@@ -158,9 +140,14 @@ export function ReceivablesBolecodePanel({receivables,customers,integrations,ini
     return issues;
   },[customer]);
 
-  async function refresh(){
-    const result=await receivableBankBillings();
-    if(result.ok&&Array.isArray(result.data))setBillings(result.data as Row[]);
+  async function refresh(entry?:string){
+    const result=await receivableBankBillings(entry);
+    if(result.ok&&Array.isArray(result.data)){
+      if(entry){
+        const current=billings.filter(b=>String(b.financial_entry_id)!==entry);
+        setBillings([...(result.data as Row[]),...current]);
+      }else setBillings(result.data as Row[]);
+    }
     return result;
   }
 
@@ -174,15 +161,14 @@ export function ReceivablesBolecodePanel({receivables,customers,integrations,ini
         setCustomerRows(current=>[fresh,...current.filter(row=>String(row.id)!==selectedCustomerId)]);
       }
     }
-    const result=await issueReceivableItauBolecode(String(selected.id),integrationId,simulate);
+    const result=await issueReceivableItauBoleto(String(selected.id),integrationId,simulate);
     setBusy('');
     await refresh();
     if(result.ok){
-      if(result.status==='simulated')setMessage('✓ Validação concluída pelo Itaú. A simulação não registra boleto nem Pix.');
-      else if(result.status==='issued')setMessage('✓ Boleto emitido pelo Itaú. Linha digitável, código de barras e Pix foram vinculados ao título.');
-      else if(result.status==='processing')setMessage('O Itaú recebeu a emissão e respondeu que ela está em processamento. A impressão será liberada quando os dados completos retornarem.');
+      if(result.status==='simulated')setMessage('✓ Validação concluída pelo Itaú. A etapa de validação não registra o boleto.');
+      else if(result.status==='issued')setMessage('✓ Boleto registrado pelo Itaú. Linha digitável e código de barras foram vinculados ao título.');
+      else if(result.status==='processing')setMessage('O Itaú recebeu a emissão e respondeu 202. Use “Consultar no Itaú” para atualizar o processamento.');
       else setMessage('Operação aceita pelo Itaú.');
-      if(result.token_scope_warning)setMessage(current=>`${current} Aviso: o token Sandbox continua trazendo o scope consultaboletos, mas o Thor não bloqueou a chamada.`);
       if(result.billing_id){
         const refreshed=await receivableBankBillings(String(selected.id));
         const rows=refreshed.ok&&Array.isArray(refreshed.data)?refreshed.data as Row[]:[];
@@ -195,19 +181,32 @@ export function ReceivablesBolecodePanel({receivables,customers,integrations,ini
     if(error==='customer_billing_data_incomplete'){
       const missing=Array.isArray(result.missing_fields)?result.missing_fields.map(v=>fieldLabels[String(v)]||String(v)).join(', '):'dados cadastrais';
       setMessage(`Não foi possível emitir: complete no cadastro do cliente: ${missing}.`);
-    }else if(error==='itau_sandbox_scenario_unmapped'){
-      setMessage('O Thor enviou os dados reais do título e do cliente, mas o Sandbox Itaú respondeu que essa combinação não existe entre os cenários mockados. A integração e o registro da tentativa permaneceram salvos.');
     }else if(error==='receivable_billing_already_active'){
-      setMessage('Este título já possui uma cobrança Itaú ativa ou em processamento. Use a cobrança existente para evitar duplicidade.');
+      setMessage('Este título já possui um boleto Itaú ativo ou em processamento. Use a cobrança existente para evitar duplicidade.');
     }else if(error==='production_receivable_issue_not_enabled'){
       setMessage('Produção permanece protegida: a emissão pelo Contas a Receber só será liberada depois da homologação mTLS do Itaú.');
     }else setMessage(String(result.detail||result.api_message||result.error||'Falha ao executar a cobrança no Itaú.'));
   }
 
+  async function consultLatest(){
+    if(!latest?.id)return;
+    setBusy('consult');setMessage('');
+    const result=await consultReceivableItauBoleto(String(latest.id));
+    const refreshed=await refresh(entryId);
+    setBusy('');
+    if(!result.ok){setMessage(String(result.api_message||result.error||'Não foi possível consultar o boleto no Itaú.'));return;}
+    const rows=refreshed.ok&&Array.isArray(refreshed.data)?refreshed.data as Row[]:[];
+    const current=rows.find(b=>String(b.id)===String(latest.id));
+    if(current&&Boolean(current.digitable_line)&&Boolean(current.barcode)){
+      setMessage(`✓ Boleto atualizado no Itaú: ${statusLabel(current.status)}.`);
+      if(['issued','paid'].includes(String(current.status)))setPrintBilling(current);
+    }else setMessage('Consulta concluída. O Itaú ainda não retornou linha digitável e código de barras para esta cobrança.');
+  }
+
   return <>
     <section className="erp-module-card erp-bolecode-hub">
       <div className="erp-bolecode-head">
-        <div><span>COBRANÇA BANCÁRIA</span><h2>Itaú BoleCode Pix</h2><p>Use os dados já cadastrados no Thor para validar ou emitir boleto + Pix diretamente a partir de um título em aberto.</p></div>
+        <div><span>COBRANÇA BANCÁRIA</span><h2>Itaú Boleto Registrado</h2><p>Emita boletos registrados pela API Cash Management v2 usando os dados do título e do cadastro do cliente.</p></div>
         <div className="erp-bolecode-badge">ITAÚ · 341</div>
       </div>
 
@@ -215,7 +214,7 @@ export function ReceivablesBolecodePanel({receivables,customers,integrations,ini
         <label>Título a receber<select value={entryId} onChange={e=>{setEntryId(e.target.value);setMessage('')}}>{eligible.map(r=><option key={String(r.id)} value={String(r.id)}>{String(r.customer||'Cliente')} · {date(r.due_date)} · {money(r.remaining??r.amount)}</option>)}</select></label>
         <label>Conta / integração<select value={integrationId} onChange={e=>setIntegrationId(e.target.value)}><option value="">Selecione...</option>{itauIntegrations.map(i=><option key={String(i.id)} value={String(i.id)}>{String(i.account_name||'Itaú')} · {String(i.environment||'sandbox').toUpperCase()}</option>)}</select></label>
         <div className="erp-bolecode-kpi"><span>Saldo a cobrar</span><b>{money(selected?.remaining??selected?.amount)}</b><small>Vencimento {date(selected?.due_date)}</small></div>
-        <div className="erp-bolecode-kpi"><span>Ambiente</span><b>{String(integration?.environment||'—').toUpperCase()}</b><small>{providerReady?'Credencial configurada':'Credencial não pronta'}</small></div>
+        <div className="erp-bolecode-kpi"><span>API</span><b>Cash Management v2</b><small>{providerReady?'Credencial configurada':'Credencial não pronta'}</small></div>
       </div>}
 
       {selected&&<div className="erp-bolecode-customer-preview">
@@ -224,15 +223,15 @@ export function ReceivablesBolecodePanel({receivables,customers,integrations,ini
         <div className={customerIssues.length?'has-issues':'is-ready'}><span>CADASTRO</span><b>{customerRefreshing?'Atualizando cadastro...':customerIssues.length?'Dados incompletos':'Pronto para cobrança'}</b><small>{customerRefreshing?'Buscando os dados mais recentes do cliente':customerIssues.length?customerIssues.join(', '):`CEP ${String(customer?.postal_code||'')}`}</small></div>
       </div>}
 
-      {latest&&<div className={`erp-bolecode-last status-${String(latest.status)}`}><div><span>ÚLTIMA COBRANÇA DESTE TÍTULO</span><b>{statusLabel(latest.status)} · Nosso Número {String(latest.our_number||'—')}</b><small>{latest.http_status?`HTTP ${String(latest.http_status)}`:'Sem HTTP'} · {date(latest.created_at)}</small></div>{latestPrintable&&<button type="button" className="erp-row-action" onClick={()=>setPrintBilling(latestPrintable)}>Visualizar / imprimir</button>}</div>}
+      {latest&&<div className={`erp-bolecode-last status-${String(latest.status)}`}><div><span>ÚLTIMA COBRANÇA DESTE TÍTULO</span><b>{statusLabel(latest.status)} · Nosso Número {String(latest.our_number||'—')}</b><small>{latest.http_status?`HTTP ${String(latest.http_status)}`:'Sem HTTP'} · {date(latest.created_at)}</small></div><div>{latestPrintable&&<button type="button" className="erp-row-action" onClick={()=>setPrintBilling(latestPrintable)}>Visualizar / imprimir</button>}{String(latest.status)==='processing'&&<button type="button" className="erp-row-action" disabled={busy!==''} onClick={()=>void consultLatest()}>{busy==='consult'?'Consultando...':'Consultar no Itaú'}</button>}</div></div>}
 
       {message&&<p className="erp-bolecode-message">{message}</p>}
       <div className="erp-bolecode-actions">
         <button type="button" className="erp-row-action" disabled={!selected||!integrationId||!providerReady||busy!==''||customerRefreshing||customerIssues.length>0} onClick={()=>void run(true)}>{busy==='simulate'?'Validando...':'Validar no Itaú'}</button>
-        <button type="button" className="erp-primary" disabled={!selected||!integrationId||!providerReady||busy!==''||customerRefreshing||customerIssues.length>0} onClick={()=>void run(false)}>{busy==='issue'?'Emitindo...':'Gerar boleto + Pix'}</button>
+        <button type="button" className="erp-primary" disabled={!selected||!integrationId||!providerReady||busy!==''||customerRefreshing||customerIssues.length>0} onClick={()=>void run(false)}>{busy==='issue'?'Emitindo...':'Gerar boleto'}</button>
         {latestPrintable&&<button type="button" className="erp-bolecode-print-button" onClick={()=>setPrintBilling(latestPrintable)}>🖨 Imprimir boleto</button>}
       </div>
-      <p className="erp-bolecode-footnote">No Sandbox o Itaú pode recusar dados livres com “cenário de teste não mapeado”. Quando houver retorno 200 com os dados oficiais, o Thor libera a impressão automaticamente. Retornos 201/202 ficam como processando até existir consulta do BoleCode.</p>
+      <p className="erp-bolecode-footnote">“Validar no Itaú” usa a etapa <b>validacao</b> e não registra o título. “Gerar boleto” usa <b>efetivacao</b>. Em retorno 202, use “Consultar no Itaú” para recuperar o boleto quando o processamento terminar.</p>
     </section>
     {printBilling&&<BoletoPrint billing={printBilling} onClose={()=>setPrintBilling(null)}/>} 
   </>;
