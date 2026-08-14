@@ -1,0 +1,48 @@
+/* ThorFiscal · operação limpa e configurações expansíveis. */
+.erp-fiscal-grid{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
+.erp-fiscal-grid>.fiscal-config-stack{order:50;grid-column:1/-1!important;gap:8px!important}
+.erp-fiscal-grid>.fiscal-certificate-card{order:40;grid-column:1/-1!important}
+.erp-fiscal-grid>.erp-fiscal-docs{order:20;grid-column:1/-1!important}
+.erp-fiscal-grid>.erp-fiscal-message{order:10;grid-column:1/-1!important}
+.erp-fiscal-grid>.fiscal-cancel-flow{order:15;grid-column:1/-1!important}
+.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card){order:5;grid-column:1/-1!important}
+
+.fiscal-config-stack:before{content:'Configurações fiscais';display:block;margin:8px 0 2px;padding:0 2px;color:#37323f;font-size:13px;font-weight:800;letter-spacing:-.1px}
+.fiscal-config-stack:after{content:'Abra somente o bloco que deseja editar.';display:block;order:-1;color:#8a8690;font-size:9px;margin:-4px 0 2px 2px}
+
+.fiscal-ui-collapsible{position:relative!important;display:grid!important;gap:0!important;padding:0!important;border-color:#e9e6ec!important;border-radius:12px!important;overflow:hidden!important;background:#fff!important}
+.fiscal-ui-collapsible>.fiscal-section-head{min-height:58px;padding:11px 14px!important;align-items:center!important;margin:0!important;background:#fff;cursor:pointer}
+.fiscal-ui-collapsible>.fiscal-section-head>div{min-width:0;flex:1}
+.fiscal-ui-collapsible>.fiscal-section-head h2{font-size:13px!important;margin:0 0 2px!important}
+.fiscal-ui-collapsible>.fiscal-section-head p{font-size:9px!important;margin:0!important;line-height:1.35;color:#817d87!important}
+.fiscal-ui-collapsible>.fiscal-section-head .fiscal-config-tag,.fiscal-ui-collapsible>.fiscal-section-head .fiscal-cert-status{margin-left:auto;margin-right:6px;padding:4px 7px!important;font-size:8px!important}
+.fiscal-ui-collapsible>.fiscal-section-head .fiscal-expand-toggle{flex:0 0 auto;border:1px solid #d8c9f3!important;background:#fff!important;color:#7040c4!important;border-radius:999px!important;padding:6px 10px!important;font-size:9px!important;font-weight:800!important;cursor:pointer}
+.fiscal-ui-collapsible>.fiscal-section-head .fiscal-expand-toggle:after{content:'  +';font-size:11px}
+.fiscal-ui-collapsible:not(.is-collapsed)>.fiscal-section-head .fiscal-expand-toggle:after{content:'  −'}
+.fiscal-ui-collapsible:not(.is-collapsed)>.fiscal-section-head{border-bottom:1px solid #eeeaf1;background:#fcfbfd}
+.fiscal-ui-collapsible.is-collapsed>:not(.fiscal-section-head){display:none!important}
+.fiscal-ui-collapsible:not(.is-collapsed)>:not(.fiscal-section-head){margin:0!important;padding-left:14px!important;padding-right:14px!important}
+.fiscal-ui-collapsible:not(.is-collapsed)>form{padding-top:12px!important;padding-bottom:14px!important}
+.fiscal-ui-collapsible:not(.is-collapsed)>.fiscal-cert-summary,.fiscal-ui-collapsible:not(.is-collapsed)>.fiscal-matrix-grid{margin:12px 14px 0!important;padding-left:0!important;padding-right:0!important}
+.fiscal-ui-collapsible:not(.is-collapsed)>.erp-table-scroll{padding:0 14px 12px!important}
+.fiscal-ui-collapsible:not(.is-collapsed)>.fiscal-helper,.fiscal-ui-collapsible:not(.is-collapsed)>.fiscal-security-note{padding:0 14px 12px!important}
+
+/* Emitente fica visível como resumo; as edições avançadas ficam recolhidas. */
+.fiscal-matrix-source{padding:12px 14px!important;gap:10px!important;border-radius:12px!important}
+.fiscal-matrix-source .fiscal-section-head{align-items:center!important}.fiscal-matrix-source .fiscal-section-head h2{font-size:13px!important}.fiscal-matrix-source .fiscal-section-head p{font-size:9px!important}
+.fiscal-matrix-grid{gap:7px!important}.fiscal-matrix-grid span{padding:8px!important;border-radius:8px!important}.fiscal-matrix-grid small{font-size:8px!important}.fiscal-matrix-grid b{font-size:10px!important}
+
+/* A área operacional fica enxuta e em primeiro plano. */
+.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card){padding:14px!important;display:grid!important;grid-template-columns:minmax(0,1.6fr) minmax(120px,.45fr) minmax(180px,.7fr) auto;gap:8px!important;align-items:end}
+.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card)>h2,.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card)>p{grid-column:1/-1}
+.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card)>h2{margin:0!important;font-size:14px!important}
+.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card)>p{margin:0 0 4px!important;font-size:9px!important}
+.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card) label{display:grid;gap:4px}
+.erp-fiscal-errors,.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card)>.fiscal-security-note{grid-column:1/-1}
+
+.erp-fiscal-docs{border-radius:12px!important}.erp-fiscal-docs:before{content:'Documentos fiscais';display:block;padding:12px 14px 4px;font-size:13px;font-weight:800;color:#37323f}
+.erp-fiscal-docs .erp-table-scroll{padding:0 8px 8px!important}
+.erp-fiscal-docs table th:nth-child(7),.erp-fiscal-docs table td:nth-child(7){font-size:8px!important;word-break:break-all!important}
+
+@media(max-width:980px){.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card){grid-template-columns:1fr 1fr}.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card)>button{grid-column:1/-1}.fiscal-ui-collapsible>.fiscal-section-head{align-items:flex-start!important;flex-wrap:wrap}}
+@media(max-width:620px){.erp-fiscal-grid>.erp-advanced-panel:not(.fiscal-certificate-card){grid-template-columns:1fr}.fiscal-ui-collapsible>.fiscal-section-head p{display:none}.fiscal-ui-collapsible>.fiscal-section-head .fiscal-config-tag,.fiscal-ui-collapsible>.fiscal-section-head .fiscal-cert-status{margin-left:0}.fiscal-matrix-grid{grid-template-columns:1fr 1fr!important}}
