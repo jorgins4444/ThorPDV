@@ -1,0 +1,49 @@
+/* Dashboard: tela cheia deve preservar a geometria normal, apenas ocupando o viewport. */
+.erp-module-main > .bi-stage:fullscreen,
+.bi-stage:fullscreen{
+  width:100vw!important;
+  min-width:100vw!important;
+  max-width:none!important;
+  height:100vh!important;
+  max-height:100vh!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+  padding:20px 24px 28px!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+}
+
+.bi-stage:fullscreen .bi-topline{
+  position:static!important;
+  top:auto!important;
+  padding-top:0!important;
+}
+
+.bi-stage:fullscreen .bi-toolbar,
+.bi-stage:fullscreen .bi-canvas,
+.bi-stage:fullscreen .bi-message{
+  width:100%!important;
+  max-width:none!important;
+  margin-left:0!important;
+  margin-right:0!important;
+  box-sizing:border-box!important;
+}
+
+/* O fullscreen mantém o layout executivo padrão em 4 colunas. */
+.bi-stage:fullscreen .bi-canvas{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  align-items:stretch!important;
+}
+.bi-stage:fullscreen .bi-card{min-width:0!important;max-width:none!important}
+
+@media(max-width:1180px){
+  .bi-stage:fullscreen .bi-canvas{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .bi-stage:fullscreen .bi-card{grid-column:span 1!important}
+  .bi-stage:fullscreen .bi-card[style*="--span: 3"],
+  .bi-stage:fullscreen .bi-card[style*="--span: 4"]{grid-column:1/-1!important}
+}
+@media(max-width:760px){
+  .bi-stage:fullscreen{padding:12px!important}
+  .bi-stage:fullscreen .bi-canvas{grid-template-columns:1fr!important}
+  .bi-stage:fullscreen .bi-card{grid-column:1/-1!important}
+}
