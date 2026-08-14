@@ -1,4 +1,5 @@
 import './banking.css';
+import './banking-v2.css';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
