@@ -5,6 +5,8 @@ import './dashboard/[...slug]/product-studio-feedback.css';
 import './thor-design-system.css';
 import './thor-design-final.css';
 import './thor-universal-polish.css';
+import './thor-responsive-layout.css';
+import './fiscal-compact.css';
 
 export const metadata: Metadata = {
   title: 'ThorPDV',
@@ -16,6 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="pt-BR">
       <body>{children}</body>
       <script src="/product-image-upload-v091.js" defer />
+      <script src="/fiscal-compact-v1.js" defer />
     </html>
   );
 }
