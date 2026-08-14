@@ -1,0 +1,14 @@
+@media print{
+  html,body{background:#fff!important;overflow:visible!important;height:auto!important;min-height:0!important;color:#000!important}
+  body *{visibility:hidden!important}
+  .erp-bolecode-print-backdrop,.erp-bolecode-print-backdrop *,
+  .erp-bolecode-print-shell,.erp-bolecode-print-shell *,
+  .thor-boleto-print,.thor-boleto-print *{visibility:visible!important}
+  .erp-bolecode-print-backdrop{position:absolute!important;inset:0!important;z-index:2147483647!important;display:block!important;width:210mm!important;min-height:297mm!important;margin:0!important;padding:0!important;overflow:visible!important;background:#fff!important;backdrop-filter:none!important}
+  .erp-bolecode-print-shell{position:static!important;display:block!important;width:100%!important;max-width:none!important;margin:0!important;padding:0!important;background:#fff!important}
+  .erp-bolecode-print-actions{display:none!important}
+  .thor-boleto-print{position:static!important;display:block!important;width:100%!important;max-width:none!important;margin:0!important;padding:6mm!important;box-sizing:border-box!important;background:#fff!important;color:#000!important;box-shadow:none!important;border-radius:0!important;transform:none!important;overflow:visible!important;break-inside:avoid!important}
+  .thor-boleto-print *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  .thor-boleto-bank strong{background:#ec7000!important;color:#fff!important}
+  @page{size:A4 portrait;margin:0}
+}
