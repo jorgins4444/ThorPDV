@@ -9,6 +9,11 @@ const money=(v:unknown)=>new Intl.NumberFormat('pt-BR',{style:'currency',currenc
 const date=(v:unknown)=>v?new Date(`${String(v).slice(0,10)}T12:00:00`).toLocaleDateString('pt-BR'):'—';
 const today=()=>new Date().toISOString().slice(0,10);
 const dirLabel=(v:unknown)=>String(v)==='credit'?'Entrada':'Saída';
+const paymentMethodLabels:Record<string,string>={cash:'Dinheiro',pix:'PIX',credit:'Crédito',credit_card:'Cartão de crédito',debit:'Débito',debit_card:'Cartão de débito',voucher:'Voucher',store_credit:'Crediário',cashback:'Cashback',bank_slip:'Boleto',boleto:'Boleto',term_sale:'Venda a prazo',transfer:'Transferência',bank_transfer:'Transferência bancária',ted:'TED',doc:'DOC',check:'Cheque',cheque:'Cheque'};
+const originLabels:Record<string,string>={sale_payment:'Pagamento de venda',sale_payment_reversal:'Estorno de pagamento de venda',financial_settlement:'Baixa financeira',financial_settlement_reversal:'Estorno de baixa financeira',manual:'Lançamento manual',transfer:'Transferência entre contas',bank_transfer:'Transferência bancária',cash_movement:'Movimento de caixa',receivable:'Recebimento',payable:'Pagamento',financial_entry:'Lançamento financeiro',purchase_payment:'Pagamento de compra',sale_refund:'Estorno de venda',cash_close:'Fechamento de caixa',opening_balance:'Saldo inicial',bank_fee:'Tarifa bancária'};
+const friendlyCode=(v:unknown,map:Record<string,string>)=>{const key=String(v??'').trim();if(!key)return '—';return map[key]??key.replace(/_/g,' ').replace(/^./,c=>c.toUpperCase())};
+const paymentMethodLabel=(v:unknown)=>friendlyCode(v,paymentMethodLabels);
+const originLabel=(v:unknown)=>friendlyCode(v,originLabels);
 
 export function FinancialAccountsWorkspace({initial}:{initial:Record<string,unknown>}){
   const [accounts,setAccounts]=useState<Row[]>((initial.accounts as Row[])??[]);
@@ -27,7 +32,7 @@ export function FinancialAccountsWorkspace({initial}:{initial:Record<string,unkn
   const bankAccounts=useMemo(()=>accounts.filter(a=>a.account_type==='bank'),[accounts]);
   const filteredTransactions=useMemo(()=>transactions.filter(t=>{
     const q=query.trim().toLowerCase();
-    const matchesQuery=!q||[t.account,t.description,t.payment_method,t.external_id,t.origin_type].some(v=>String(v??'').toLowerCase().includes(q));
+    const matchesQuery=!q||[t.account,t.description,t.payment_method,t.external_id,t.origin_type,paymentMethodLabel(t.payment_method),originLabel(t.origin_type)].some(v=>String(v??'').toLowerCase().includes(q));
     const matchesAccount=!accountFilter||String(t.bank_account_id??t.account_id??'')===accountFilter||String(t.account??'')===accountFilter;
     const matchesDirection=!directionFilter||String(t.direction)===directionFilter;
     const matchesReconcile=!reconcileFilter||(reconcileFilter==='yes'?t.reconciled===true:t.reconciled!==true);
@@ -92,7 +97,7 @@ export function FinancialAccountsWorkspace({initial}:{initial:Record<string,unkn
         <label>Conciliação<select value={reconcileFilter} onChange={e=>setReconcileFilter(e.target.value)}><option value="">Todas</option><option value="yes">Conciliadas</option><option value="no">Pendentes</option></select></label>
         <button onClick={()=>{setQuery('');setAccountFilter('');setDirectionFilter('');setReconcileFilter('')}}>Limpar</button>
       </div>
-      <div className="bank-table"><table><thead><tr><th>Data</th><th>Conta</th><th>Descrição</th><th>Movimento</th><th>Forma</th><th>Valor</th><th>Origem</th><th>Status</th></tr></thead><tbody>{filteredTransactions.length===0?<tr><td colSpan={8} className="erp-empty">Nenhuma movimentação encontrada.</td></tr>:filteredTransactions.map((t,i)=><tr key={String(t.id??i)}><td>{date(t.transaction_date)}</td><td><b>{String(t.account??'—')}</b></td><td>{String(t.description??'—')}</td><td><span className={`bank-direction ${String(t.direction)}`}>{dirLabel(t.direction)}</span></td><td>{String(t.payment_method??'—')}</td><td className={String(t.direction)==='credit'?'erp-credit':'erp-debit'}>{String(t.direction)==='credit'?'+ ':'- '}{money(t.amount)}</td><td>{String(t.origin_type??'manual')}</td><td><span className={`bank-reconcile ${t.reconciled?'done':'pending'}`}>{t.reconciled?'Conciliado':'Pendente'}</span></td></tr>)}</tbody></table></div>
+      <div className="bank-table"><table><thead><tr><th>Data</th><th>Conta</th><th>Descrição</th><th>Movimento</th><th>Forma</th><th>Valor</th><th>Origem</th><th>Status</th></tr></thead><tbody>{filteredTransactions.length===0?<tr><td colSpan={8} className="erp-empty">Nenhuma movimentação encontrada.</td></tr>:filteredTransactions.map((t,i)=><tr key={String(t.id??i)}><td>{date(t.transaction_date)}</td><td><b>{String(t.account??'—')}</b></td><td>{String(t.description??'—')}</td><td><span className={`bank-direction ${String(t.direction)}`}>{dirLabel(t.direction)}</span></td><td>{paymentMethodLabel(t.payment_method)}</td><td className={String(t.direction)==='credit'?'erp-credit':'erp-debit'}>{String(t.direction)==='credit'?'+ ':'- '}{money(t.amount)}</td><td>{originLabel(t.origin_type)}</td><td><span className={`bank-reconcile ${t.reconciled?'done':'pending'}`}>{t.reconciled?'Conciliado':'Pendente'}</span></td></tr>)}</tbody></table></div>
     </section>:null}
 
     {operation?<div className="bank-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setOperation(null)}}><section className="bank-modal">
