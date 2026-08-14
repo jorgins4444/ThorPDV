@@ -7,6 +7,7 @@ import './thor-design-final.css';
 import './thor-universal-polish.css';
 import './thor-responsive-layout.css';
 import './fiscal-compact.css';
+import './cash-closure-history.css';
 
 export const metadata: Metadata = {
   title: 'ThorPDV',
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>{children}</body>
       <script src="/product-image-upload-v091.js" defer />
       <script src="/fiscal-compact-v1.js" defer />
+      <script src="/admin-permission-hints-v1.js" defer />
     </html>
   );
 }
