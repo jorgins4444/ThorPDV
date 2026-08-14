@@ -3,7 +3,7 @@ import '../../[...slug]/advanced.css';
 import '../../[...slug]/receivables.css';
 import '../../[...slug]/receivables-bolecode.css';
 import { AdvancedShell } from '../../[...slug]/advanced-shell';
-import { erpLoad } from '../../[...slug]/actions';
+import { partyList } from '../../[...slug]/party-actions';
 import { financialAccountsData } from '../../[...slug]/financial-accounts-actions';
 import { bankIntegrationsData } from '../../[...slug]/bank-integrations-actions';
 import { erpReceivablesList } from '../../[...slug]/receivables-actions';
@@ -14,7 +14,7 @@ import { ReceivablesWorkspace } from '../../[...slug]/receivables-workspace';
 export default async function ReceivablesPage(){
   const [receivables,customers,finance,banking,billings]=await Promise.all([
     erpReceivablesList({}),
-    erpLoad('customers'),
+    partyList('customers'),
     financialAccountsData(),
     bankIntegrationsData(),
     receivableBankBillings(),
