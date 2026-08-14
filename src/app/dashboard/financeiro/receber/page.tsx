@@ -23,7 +23,7 @@ export default async function ReceivablesPage(){
   const customerRows=Array.isArray(customers.data)?customers.data:[];
   const integrations=Array.isArray(banking.integrations)?banking.integrations as Record<string,unknown>[]:[];
   const billingRows=Array.isArray(billings.data)?billings.data as Record<string,unknown>[]:[];
-  return <AdvancedShell title="Contas a Receber" subtitle="Acompanhe títulos a prazo, recebimentos e cobranças bancárias em uma única lista, com as operações concentradas no menu Ações." activePath="/dashboard/financeiro/receber">
+  return <AdvancedShell title="Contas a Receber" subtitle="Acompanhe títulos a prazo, recebimentos e cobranças bancárias em uma única lista, com as operações concentradas em Ações de cada título." activePath="/dashboard/financeiro/receber">
     <ReceivablesWorkspace
       initial={rows}
       customers={customerRows}
