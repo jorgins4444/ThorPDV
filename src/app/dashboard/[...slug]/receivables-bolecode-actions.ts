@@ -43,5 +43,9 @@ export async function consultReceivableItauBoleto(billingId:string){
   return rpc('erp_itau_boleto_consult',{p_token:await token(),p_billing_id:billingId});
 }
 
+export async function simulateReceivableItauPayment(billingId:string){
+  return rpc('erp_itau_boleto_simulate_payment',{p_token:await token(),p_billing_id:billingId});
+}
+
 // Compatibilidade temporária com componentes antigos.
 export const issueReceivableItauBolecode=issueReceivableItauBoleto;
