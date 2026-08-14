@@ -1,2 +1,129 @@
-.erp-module-shell{font-family:Arial,Helvetica,sans-serif!important;background:#f5f5f7!important;color:#222332!important}.erp-module-shell :where(button,input,select,textarea){font-family:Arial,Helvetica,sans-serif!important}.erp-module-header h1{font-size:21px!important;letter-spacing:-.25px!important;color:#252331!important}.erp-module-header p{font-size:11px!important;color:#747687!important}.erp-module-card,.erp-advanced-panel{border-color:#eceaf0!important;border-radius:14px!important;box-shadow:0 4px 14px rgba(45,37,62,.035)!important}.erp-primary{background:#8650dc!important;border:1px solid #8650dc!important;border-radius:999px!important;font-size:10px!important;padding:7px 14px!important}.erp-ghost,.erp-row-action{background:#fff!important;color:#7040c4!important;border:1px solid #d8c9f3!important;border-radius:999px!important;font-size:10px!important}.erp-form-grid input,.erp-form-grid select,.erp-form-grid textarea,.erp-advanced-panel input,.erp-advanced-panel select,.erp-inline-input{min-height:34px!important;border:1px solid #dcd8e3!important;border-radius:8px!important;padding:7px 9px!important;font-size:10px!important}.erp-data-table th{background:#f5f4f8!important;color:#59586a!important;font-size:9px!important;text-transform:uppercase!important;letter-spacing:.045em!important;padding:8px 10px!important}.erp-data-table td{font-size:10px!important;padding:8px 10px!important;border-bottom-color:#e7e6e9!important}.erp-pill{border-radius:999px!important;padding:3px 7px!important;font-size:9px!important}.erp-modal{border-radius:15px!important}.erp-modal-head h2{font-size:18px!important}.erp-module-kpis article{border-radius:12px!important;padding:13px!important}.erp-module-kpis strong{font-size:19px!important}
-/* build validation trigger */
+/* Thor Gestão — acabamento visual global alinhado ao Product Studio. */
+.erp-module-shell{
+  --thor-purple:#8650dc;
+  --thor-purple-dark:#7040c4;
+  --thor-purple-soft:#f7f2ff;
+  --thor-green:#18b875;
+  --thor-green-soft:#e8f9f0;
+  --thor-ink:#292633;
+  --thor-muted:#777381;
+  --thor-border:#e8e4eb;
+  --thor-bg:#f5f5f7;
+  --thor-card:#fff;
+  --thor-shadow:0 4px 14px rgba(45,37,62,.035);
+  font-family:Arial,Helvetica,sans-serif!important;
+  background:var(--thor-bg)!important;
+  color:var(--thor-ink)!important;
+}
+.erp-module-shell *{box-sizing:border-box}
+.erp-module-shell :where(button,input,select,textarea){font-family:Arial,Helvetica,sans-serif!important}
+.erp-module-main{background:var(--thor-bg)!important}
+
+/* Cabeçalho e navegação: mesma proporção em qualquer módulo. */
+.erp-module-header{min-height:72px!important;border-bottom:1px solid #e9e5ec!important;box-shadow:0 2px 10px rgba(45,37,62,.025)!important}
+.erp-module-header h1{font-size:21px!important;line-height:1.15!important;letter-spacing:-.25px!important;color:#252331!important}
+.erp-module-header p{font-size:11px!important;line-height:1.3!important;color:var(--thor-muted)!important}
+.erp-back{display:inline-flex!important;align-items:center!important;gap:5px!important;width:max-content!important;min-height:25px!important;margin-bottom:2px!important;padding:4px 8px!important;border:1px solid #ded2f1!important;border-radius:999px!important;background:#fff!important;color:var(--thor-purple-dark)!important;font-size:9px!important;font-weight:800!important;text-decoration:none!important;transition:.16s ease!important}
+.erp-back:hover{background:var(--thor-purple-soft)!important;border-color:#cbb8ed!important;transform:translateX(-1px)}
+.erp-module-user strong{font-size:11px!important}.erp-module-user small{font-size:9px!important;color:var(--thor-muted)!important}.erp-user-dot{width:34px!important;height:34px!important;background:var(--thor-purple)!important;font-size:10px!important}
+.erp-module-sidebar nav>a,.erp-module-group>button{font-size:11px!important}.erp-module-submenu a{font-size:10.5px!important}
+
+/* Cards, painéis e KPIs — inclusive workspaces com CSS próprio/CSS Modules. */
+.erp-module-shell :where(.erp-module-card,.erp-advanced-panel,.sales-cash-card,.product-studio-card,.ref-card,[class*="_card_"][class],[class*="__card"],[class*="-card"]){
+  border-color:var(--thor-border)!important;
+  border-radius:14px!important;
+  background:var(--thor-card)!important;
+  box-shadow:var(--thor-shadow)!important;
+}
+.erp-module-kpis,.sales-cash-kpis,.erp-module-shell [class*="metrics"]{gap:9px!important;margin-bottom:10px!important}
+.erp-module-kpis article,.sales-cash-kpis article,.erp-module-shell [class*="metric"]{
+  border:1px solid var(--thor-border)!important;
+  border-radius:12px!important;
+  background:#fff!important;
+  padding:13px!important;
+  box-shadow:0 4px 14px rgba(45,37,62,.03)!important;
+}
+.erp-module-kpis span,.sales-cash-kpis span,.erp-module-shell [class*="metric"] span{font-size:9px!important;color:var(--thor-muted)!important;letter-spacing:.03em!important}
+.erp-module-kpis strong,.sales-cash-kpis strong,.erp-module-shell [class*="metric"] strong{font-size:19px!important;line-height:1.15!important;color:#34303d!important}
+.erp-module-kpis small,.sales-cash-kpis small,.erp-module-shell [class*="metric"] small{font-size:9px!important;color:#918d97!important}
+
+/* Barras de ações e pesquisa. */
+.erp-module-toolbar,.ref-toolbar,.erp-module-shell [class*="toolbar"]{min-height:52px!important;padding:9px 12px!important;gap:8px!important;border-bottom-color:#eeecf1!important}
+.erp-search input,.ref-toolbar form input,.erp-module-shell [class*="search"] input:not([type="checkbox"]):not([type="radio"]){
+  min-height:34px!important;height:34px!important;border:1px solid var(--thor-purple)!important;border-radius:999px!important;background:#fff!important;color:#302d38!important;padding:0 13px!important;font-size:10px!important;outline:none!important
+}
+.erp-search input:focus,.ref-toolbar form input:focus,.erp-module-shell [class*="search"] input:focus{box-shadow:0 0 0 2px rgba(134,80,220,.08)!important}
+
+/* Botões. Não interfere em switches, ícones, fechar modal ou controles de quantidade. */
+.erp-primary,.ref-primary,.sales-cash-filter-button,.erp-module-shell button[class*="primary"]{
+  min-height:32px!important;height:auto!important;border:1px solid var(--thor-purple)!important;border-radius:999px!important;background:var(--thor-purple)!important;color:#fff!important;padding:7px 14px!important;font-size:10px!important;font-weight:800!important;box-shadow:none!important
+}
+.erp-primary:hover,.ref-primary:hover,.sales-cash-filter-button:hover,.erp-module-shell button[class*="primary"]:hover{background:var(--thor-purple-dark)!important}
+.erp-ghost,.erp-row-action,.ref-filter,.ref-cancel,.sale-detail-button,.erp-module-shell button[class*="secondary"]:not([class*="switch"]),.erp-module-shell button[class*="rowAction"]{
+  min-height:32px!important;height:auto!important;border:1px solid #d8c9f3!important;border-radius:999px!important;background:#fff!important;color:var(--thor-purple-dark)!important;padding:7px 12px!important;font-size:10px!important;font-weight:750!important;box-shadow:none!important
+}
+.erp-ghost:hover,.erp-row-action:hover,.ref-filter:hover,.ref-cancel:hover,.sale-detail-button:hover,.erp-module-shell button[class*="secondary"]:hover{background:#faf7ff!important}
+.erp-danger-btn,.erp-module-shell button[class*="danger"]{border-radius:999px!important;font-size:10px!important;padding:7px 13px!important}
+
+/* Formulários: altura e tipografia do Product Studio. */
+.erp-module-shell :where(.erp-form-grid,.erp-advanced-panel,.erp-sale-settings,.erp-sale-add,.erp-sale-payment,.sales-cash-filters,.sales-cash-modal,.ref-form) label,
+.erp-module-shell [class*="field"]{font-size:9px!important;color:#5a5664!important;font-weight:700!important;gap:4px!important}
+.erp-form-grid input,.erp-form-grid select,.erp-form-grid textarea,.erp-advanced-panel input,.erp-advanced-panel select,.erp-inline-input,
+.erp-sale-settings select,.erp-sale-add select,.erp-sale-add input,.erp-sale-values input,.erp-sale-payment input,.erp-sale-payment select,
+.sales-cash-filters input,.sales-cash-filters select,.sales-cash-modal input,.sales-cash-modal textarea,
+.ref-form input,.ref-form select,.ref-add-value input,
+.erp-module-shell [class*="field"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.erp-module-shell [class*="field"] select,.erp-module-shell [class*="field"] textarea{
+  min-height:34px!important;height:34px!important;border:1px solid #dcd8e3!important;border-radius:8px!important;background:#fff!important;color:#292735!important;padding:7px 9px!important;font-size:10px!important;outline:none!important;box-shadow:none!important
+}
+.erp-form-grid textarea,.sales-cash-modal textarea,.erp-module-shell [class*="field"] textarea{height:auto!important;min-height:72px!important}
+.erp-module-shell :where(input,select,textarea):focus{border-color:var(--thor-purple)!important;box-shadow:0 0 0 2px rgba(134,80,220,.08)!important}
+.erp-module-shell :where(label)>span{font-size:9px}
+
+/* Tabelas: linhas compactas, cabeçalho claro e legibilidade uniforme. */
+.erp-data-table,.studio-list-table,.studio-variant-table,.ref-table-wrap table,.sales-cash-table-wrap table,.detail-table table,.erp-module-shell [class*="tableWrap"] table,.erp-module-shell [class*="table-wrap"] table{
+  width:100%!important;border-collapse:collapse!important
+}
+.erp-data-table th,.studio-list-table th,.studio-variant-table th,.ref-table-wrap th,.sales-cash-table-wrap th,.detail-table th,.erp-module-shell [class*="tableWrap"] th,.erp-module-shell [class*="table-wrap"] th{
+  background:#f5f4f8!important;color:#59586a!important;font-size:9px!important;font-weight:800!important;text-transform:uppercase!important;letter-spacing:.045em!important;padding:8px 10px!important;border-bottom:1px solid #e5e3e8!important;white-space:nowrap!important
+}
+.erp-data-table td,.studio-list-table td,.studio-variant-table td,.ref-table-wrap td,.sales-cash-table-wrap td,.detail-table td,.erp-module-shell [class*="tableWrap"] td,.erp-module-shell [class*="table-wrap"] td{
+  font-size:10px!important;color:#30303d!important;padding:8px 10px!important;border-bottom:1px solid #e7e6e9!important;vertical-align:middle!important
+}
+.erp-data-table tbody tr:hover td,.studio-list-table tbody tr:hover td,.ref-table-wrap tbody tr:hover td,.sales-cash-table-wrap tbody tr:hover td,.erp-module-shell [class*="tableWrap"] tbody tr:hover td{background:#fcfbff!important}
+.erp-module-shell table small{font-size:8.5px!important;color:#8c8992!important}
+
+/* Pills, chips, switches e estados. */
+.erp-pill,.ref-count,.op-type,.op-status,.fiscal-chip,.cash-state,.sale-status,.erp-module-shell [class*="pill"],.erp-module-shell [class*="chip"],.erp-module-shell [class*="tag"]{
+  border-radius:999px!important;padding:3px 7px!important;font-size:9px!important;font-weight:800!important
+}
+.ref-switch,.studio-switch{transform:scale(.94);transform-origin:center}
+
+/* Vendas / Caixa — compacta sem perder densidade de informação. */
+.sales-cash-workspace{gap:10px!important}.sales-cash-card{padding:13px!important}.sales-cash-tabs{margin:0 -13px 11px!important;padding:0 13px!important;gap:3px!important}.sales-cash-tabs button{padding:10px 10px 8px!important;font-size:10px!important;border-bottom-width:2px!important}.period-shortcuts{margin-bottom:10px!important;gap:5px!important}.period-shortcuts span{font-size:9px!important}.period-shortcuts button{padding:5px 9px!important;font-size:9px!important}.sales-cash-filters{gap:8px!important}.sales-cash-section-head{margin-bottom:9px!important}.sales-cash-section-head h2{font-size:14px!important}.sales-cash-section-head p{font-size:10px!important}.sales-cash-open-grid{gap:8px!important}.sales-cash-open-grid article{border-color:var(--thor-border)!important;border-radius:11px!important;padding:11px!important;background:#fcfbfd!important}.cash-session-title strong{font-size:13px!important}.sales-cash-open-grid dd{font-size:10px!important}.sales-cash-modal{border-radius:15px!important;padding:16px!important;gap:10px!important}.sales-cash-modal h3{font-size:18px!important}.sales-cash-modal p{font-size:10px!important}.sale-detail-drawer{padding:16px!important;gap:13px!important}.sale-detail-drawer header h2{font-size:18px!important}.sale-detail-summary{gap:6px!important}.sale-detail-summary div{padding:8px!important;border-radius:9px!important}.sale-detail-summary span{font-size:8px!important}.sale-detail-summary strong{font-size:14px!important}
+
+/* Nova venda. */
+.erp-sale-workspace{gap:10px!important}.erp-sale-catalog{padding:13px!important}.erp-sale-settings,.erp-sale-add{gap:8px!important}.erp-sale-settings{margin-bottom:10px!important}.erp-sale-add{padding-top:10px!important}.erp-sale-checkout{padding:13px!important;gap:14px!important;background:#faf9fb!important}.erp-sale-values,.erp-sale-payment{gap:8px!important}.erp-sale-values span{font-size:9px!important}.erp-sale-values b{font-size:15px!important}.erp-sale-values .total strong{font-size:21px!important;color:var(--thor-green)!important}
+
+/* Modais, drawers e overlays de qualquer módulo. */
+.erp-modal-backdrop,.ref-backdrop,.sales-cash-modal-backdrop,.sale-detail-backdrop,.erp-module-shell [class*="backdrop"]{background:rgba(28,24,36,.48)!important;backdrop-filter:blur(2px)}
+.erp-modal,.ref-modal,.sales-cash-modal,.erp-module-shell [class*="modal"]:not([class*="backdrop"]){border:1px solid #e7e2ec!important;border-radius:15px!important;box-shadow:0 24px 70px rgba(35,27,49,.22)!important}
+.erp-modal-head,.ref-modal>header,.erp-module-shell [class*="modalHead"]{padding:14px 16px!important;border-bottom:1px solid #eeeaf1!important}
+.erp-modal-head h2,.ref-modal h2,.erp-module-shell [class*="modalHead"] h2{font-size:18px!important;color:#2e2b35!important}
+.erp-modal-head p,.erp-module-shell [class*="modalHead"] p{font-size:10px!important;color:var(--thor-muted)!important}
+.erp-modal form,.ref-modal form,.erp-module-shell [class*="modal"] form{padding:14px 16px!important}
+.erp-module-shell [class*="sectionTitle"] b{font-size:11px!important}.erp-module-shell [class*="sectionTitle"] small{font-size:9px!important}.erp-module-shell [class*="section"]{border-color:#ebe7ed!important;border-radius:11px!important}
+
+/* Rodapés e mensagens. */
+.erp-table-footer,.studio-list-footer,.ref-card>footer{min-height:36px!important;padding:7px 11px!important;background:#fafafa!important;border-top:1px solid #eceaf0!important;font-size:9px!important;color:#797782!important}
+.erp-message,.ref-message,.sales-cash-message,.erp-module-shell [class*="message"]{border-radius:8px!important;font-size:10px!important;padding:8px 10px!important}
+
+/* Responsividade preservando a mesma identidade. */
+@media(max-width:1100px){.sales-cash-kpis,.erp-module-shell [class*="metrics"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:760px){
+  .erp-module-header h1{font-size:19px!important}.erp-back{font-size:9px!important}
+  .erp-module-toolbar,.ref-toolbar,.erp-module-shell [class*="toolbar"]{align-items:stretch!important}
+  .sales-cash-kpis,.erp-module-shell [class*="metrics"]{grid-template-columns:1fr 1fr!important}
+  .erp-module-shell [class*="modal"]:not([class*="backdrop"]){width:96vw!important}
+}
+@media(max-width:520px){.sales-cash-kpis,.erp-module-shell [class*="metrics"]{grid-template-columns:1fr!important}}
