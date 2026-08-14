@@ -12,4 +12,19 @@ const map:Record<string,{kind:ReferenceKind;title:string;subtitle:string}>={
   atributos:{kind:'attributes',title:'Atributos',subtitle:'Atributos e valores reutilizáveis na criação de grades e variações.'},
   unidades:{kind:'units',title:'Unidades de Medida',subtitle:'Unidades utilizadas nos produtos, estoque, compras e vendas.'},
 };
-export default async function ProductReferencePage({params}:{params:Promise<{reference:string}>}){const {reference}=await params;const config=map[reference];if(!config)notFound();const list=await productReferenceList(config.kind);return <AdvancedShell title={config.title} subtitle={config.subtitle} activePath={`/dashboard/produtos/${reference}`}><ProductReferenceWorkspace kind={config.kind} initial={list.data}/></AdvancedShell>}
+
+export default async function ProductReferencePage({params}:{params:Promise<{reference:string}>}){
+  const {reference}=await params;
+  const config=map[reference];
+  if(!config)notFound();
+  const list=await productReferenceList(config.kind);
+  return <AdvancedShell
+    title={config.title}
+    subtitle={config.subtitle}
+    activePath={`/dashboard/produtos/${reference}`}
+    backHref="/dashboard/produtos"
+    backLabel="Produtos"
+  >
+    <ProductReferenceWorkspace kind={config.kind} initial={list.data}/>
+  </AdvancedShell>;
+}
