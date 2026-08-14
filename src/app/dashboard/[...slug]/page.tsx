@@ -7,6 +7,7 @@ import './organization.css';
 import './fiscal.css';
 import './fiscal-configuration.css';
 import './fiscal-documents.css';
+import './fiscal-center.css';
 import './reconciliation.css';
 import './cash.css';
 import './sales-cash.css';
@@ -31,7 +32,9 @@ import { BranchConfigWorkspace } from './branch-config-workspace';
 import { BranchesWorkspace } from './branches-workspace';
 import { erpLicenseGet } from './license-actions';
 import { SmartPosPairingPanel } from './smartpos-pairing-panel';
-import { FiscalSettingsWorkspace } from './fiscal-settings-workspace';
+import { FiscalCenterWorkspace } from './fiscal-center-workspace';
+import { FiscalConfigSectionWorkspace, type FiscalSection } from './fiscal-config-section-workspace';
+import { FiscalCertificateWorkspace } from './fiscal-certificate-workspace';
 import { FiscalDocumentsWorkspace } from './fiscal-documents-workspace';
 import { erpFiscalDocuments } from './fiscal-transmit-actions';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
@@ -53,10 +56,21 @@ const resourceBySlug: Record<string, string> = {
   'estoque': 'stock', 'estoque/nova': 'stock', 'estoque/inventario': 'inventory_counts', 'estoque/ajustes': 'stock', 'estoque/transferencias': 'stock', 'estoque/producao':'products',
   'financeiro/receber': 'finance', 'financeiro/receber/novo': 'finance', 'financeiro/pagar': 'finance', 'financeiro/pagar/novo': 'finance',
   'financeiro/fluxo-caixa': 'report_finance', 'financeiro/conciliacao': 'finance',
-  'administrativo/empresas': 'companies', 'administrativo/filiais': 'branches', 'administrativo/pdvs': 'pos_registers', 'fiscal': 'branches', 'documentos-fiscais':'fiscal_documents', 'fiscal/nfe':'fiscal_documents', 'fiscal/nfce':'fiscal_documents', 'integracoes': 'integrations', 'configuracoes': 'branches',
+  'administrativo/empresas': 'companies', 'administrativo/filiais': 'branches', 'administrativo/pdvs': 'pos_registers',
+  'fiscal': 'branches', 'fiscal/emitente':'branches', 'fiscal/nfce-config':'branches', 'fiscal/series':'branches', 'fiscal/caixas':'branches', 'fiscal/danfe':'branches', 'fiscal/cfops':'branches', 'fiscal/certificado':'branches',
+  'documentos-fiscais':'fiscal_documents', 'fiscal/nfe':'fiscal_documents', 'fiscal/nfce':'fiscal_documents', 'integracoes': 'integrations', 'configuracoes': 'branches',
   'relatorios/financeiro': 'report_finance', 'relatorios/vendas': 'report_sales', 'relatorios/estoque': 'report_stock', 'relatorios/listagens': 'products',
   'atendimento': 'tickets', 'atendimento/mensagens': 'tickets', 'atendimento/sla': 'tickets',
   'vendas': 'sales', 'vendas/nova': 'sales', 'pdv/caixa': 'pos_registers', 'ajuda': 'companies',
+};
+
+const fiscalSectionBySlug:Record<string,{section:FiscalSection;title:string;subtitle:string}>={
+  'fiscal/emitente':{section:'emitente',title:'Emitente Fiscal',subtitle:'Dados cadastrais e fiscais da Matriz utilizados na emissão de NF-e e NFC-e.'},
+  'fiscal/nfce-config':{section:'nfce',title:'NFC-e / CSC',subtitle:'Ambiente de emissão, ID CSC e token de segurança fornecido pela SEFAZ.'},
+  'fiscal/series':{section:'series',title:'Séries e Numeração',subtitle:'Séries fiscais de NF-e e NFC-e, sequência numérica, status e série padrão.'},
+  'fiscal/caixas':{section:'caixas',title:'Caixas × Série Fiscal',subtitle:'Vincule cada terminal do PDV à série correta de NFC-e com exclusividade de numeração.'},
+  'fiscal/danfe':{section:'danfe',title:'DANFE / Impressão',subtitle:'Parâmetros de apresentação e impressão dos itens no documento auxiliar.'},
+  'fiscal/cfops':{section:'cfops',title:'CFOPs',subtitle:'Cadastro e manutenção dos CFOPs utilizados em produtos e operações fiscais.'},
 };
 
 export default async function ModulePage({ params }: { params: Promise<{ slug: string[] }> }) {
@@ -103,7 +117,16 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (slug === 'pdv/caixa') return <AdvancedShell title="Caixa / PDV" subtitle="Abertura, vendas vinculadas e fechamento com valor esperado e diferença por terminal." activePath="/dashboard/administrativo/pdvs"><CashWorkspace posRegisters={initial.data}/></AdvancedShell>;
   if (slug === 'fiscal') {
     const settings=await erpFiscalSettingsGet();
-    return <AdvancedShell title="Fiscal" subtitle="Configurações fiscais da empresa e das filiais: séries, numeração, CSC, ambiente, regras de emissão e certificado digital." activePath="/dashboard/fiscal"><FiscalSettingsWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
+    return <AdvancedShell title="Fiscal" subtitle="Central das configurações fiscais da empresa e das filiais." activePath="/dashboard/fiscal"><FiscalCenterWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
+  }
+  if (fiscalSectionBySlug[slug]) {
+    const target=fiscalSectionBySlug[slug];
+    const settings=await erpFiscalSettingsGet();
+    return <AdvancedShell title={target.title} subtitle={target.subtitle} activePath={`/dashboard/${slug}`} backHref="/dashboard/fiscal" backLabel="Fiscal"><FiscalConfigSectionWorkspace settings={(settings.settings??{}) as Record<string,unknown>} section={target.section}/></AdvancedShell>;
+  }
+  if (slug === 'fiscal/certificado') {
+    const settings=await erpFiscalSettingsGet();
+    return <AdvancedShell title="Certificado Digital A1" subtitle="Certificado utilizado para assinatura fiscal e comunicação segura com a SEFAZ." activePath="/dashboard/fiscal/certificado" backHref="/dashboard/fiscal" backLabel="Fiscal"><FiscalCertificateWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
   }
   if (slug === 'documentos-fiscais' || slug === 'fiscal/nfe' || slug === 'fiscal/nfce') {
     const [settings,sales,documents]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments()]);
