@@ -29,12 +29,19 @@ export async function receivableCustomerBillingSnapshot(customerId:string){
   return rpc('erp_customer_billing_snapshot',{p_token:await token(),p_customer:customerId});
 }
 
-export async function issueReceivableItauBolecode(entryId:string,integrationId:string,simulate=false){
+export async function issueReceivableItauBoleto(entryId:string,integrationId:string,simulate=false){
   const pToken=await token();
   const transport=await rpc('erp_bank_integration_transport',{p_token:pToken,p_integration:integrationId});
   if(!transport.ok)return transport;
   if(transport.environment==='production'){
     return {ok:false,error:'production_receivable_issue_not_enabled',detail:'A emissão de Contas a Receber em Produção exige o runtime mTLS do Itaú e permanece bloqueada até a homologação produtiva.'};
   }
-  return rpc('erp_itau_bolecode_issue_receivable',{p_token:pToken,p_entry_id:entryId,p_integration:integrationId,p_simulate:simulate});
+  return rpc('erp_itau_boleto_issue_receivable',{p_token:pToken,p_entry_id:entryId,p_integration:integrationId,p_simulate:simulate});
 }
+
+export async function consultReceivableItauBoleto(billingId:string){
+  return rpc('erp_itau_boleto_consult',{p_token:await token(),p_billing_id:billingId});
+}
+
+// Compatibilidade temporária com componentes antigos.
+export const issueReceivableItauBolecode=issueReceivableItauBoleto;
