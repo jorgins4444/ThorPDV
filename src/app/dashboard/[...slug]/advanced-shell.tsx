@@ -7,7 +7,7 @@ import { erpLicenseGet } from './license-actions';
 import { advancedMenu, type MenuGroup, type MenuItem } from './advanced-menu';
 
 const groupModule:Record<string,string>={'Pessoas':'people','Vendas':'sales','Produtos':'products','Tabela de Preços':'pricing','Estoque':'stock','Financeiro':'finance','Administrativo':'administration','Relatórios':'reports'};
-function itemModule(label:string,href:string){if(href.includes('/administrativo/filiais'))return 'branches';if(href.includes('/estoque/producao'))return 'production';if(href.includes('/compras'))return 'purchases';if(href.includes('/fiscal'))return 'fiscal';if(href.includes('/integracoes'))return 'integrations';if(href.includes('/administrativo/pdvs')||href.includes('/pdv-desktop'))return 'pdv';return groupModule[label]||'administration'}
+function itemModule(label:string,href:string){if(href.includes('/administrativo/filiais'))return 'branches';if(href.includes('/estoque/producao'))return 'production';if(href.includes('/compras'))return 'purchases';if(href.includes('/fiscal')||href.includes('/documentos-fiscais'))return 'fiscal';if(href.includes('/integracoes'))return 'integrations';if(href.includes('/administrativo/pdvs')||href.includes('/pdv-desktop'))return 'pdv';return groupModule[label]||'administration'}
 function pathMatches(activePath:string,href:string){return activePath===href||activePath.startsWith(`${href}/`)}
 function activeGroupForPath(groups:MenuGroup[],activePath:string){return groups.find(([, ,items])=>items.some(([,href])=>pathMatches(activePath,href)))?.[0]??null}
 function activeHrefForPath(items:MenuItem[],activePath:string){return items.filter(([,href])=>pathMatches(activePath,href)).sort((a,b)=>b[1].length-a[1].length)[0]?.[1]??null}
