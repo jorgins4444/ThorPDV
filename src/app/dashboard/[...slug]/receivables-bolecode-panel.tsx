@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { issueReceivableItauBolecode, receivableBankBillings } from './receivables-bolecode-actions';
+import { issueReceivableItauBolecode, receivableBankBillings, receivableCustomerBillingSnapshot } from './receivables-bolecode-actions';
 
 type Row=Record<string,unknown>;
 type Props={receivables:Row[];customers:Row[];integrations:Row[];initialBillings:Row[]};
@@ -115,17 +115,35 @@ export function ReceivablesBolecodePanel({receivables,customers,integrations,ini
   const [entryId,setEntryId]=useState(()=>String(eligible[0]?.id||''));
   const [integrationId,setIntegrationId]=useState(()=>String(itauIntegrations[0]?.id||''));
   const [billings,setBillings]=useState<Row[]>(initialBillings);
+  const [customerRows,setCustomerRows]=useState<Row[]>(customers);
+  const [customerRefreshing,setCustomerRefreshing]=useState(false);
   const [busy,setBusy]=useState<'simulate'|'issue'|''>('');
   const [message,setMessage]=useState('');
   const [printBilling,setPrintBilling]=useState<Row|null>(null);
 
   const selected=eligible.find(r=>String(r.id)===entryId)??null;
-  const customer=customers.find(c=>String(c.id)===String(selected?.customer_id||''))??null;
+  const selectedCustomerId=String(selected?.customer_id||'');
+  const customer=customerRows.find(c=>String(c.id)===selectedCustomerId)??null;
   const integration=itauIntegrations.find(i=>String(i.id)===integrationId)??null;
   const selectedBillings=billings.filter(b=>String(b.financial_entry_id)===entryId);
   const latestPrintable=selectedBillings.find(b=>Boolean(b.digitable_line)&&Boolean(b.barcode)&&['issued','paid'].includes(String(b.status)));
   const latest=selectedBillings[0];
   const providerReady=Boolean(integration?.provider_ready);
+
+  useEffect(()=>{
+    let active=true;
+    if(!selectedCustomerId)return;
+    setCustomerRefreshing(true);
+    receivableCustomerBillingSnapshot(selectedCustomerId).then(result=>{
+      if(!active)return;
+      if(result.ok&&result.customer&&typeof result.customer==='object'&&!Array.isArray(result.customer)){
+        const fresh=result.customer as Row;
+        setCustomerRows(current=>[fresh,...current.filter(row=>String(row.id)!==selectedCustomerId)]);
+      }
+      setCustomerRefreshing(false);
+    }).catch(()=>{if(active)setCustomerRefreshing(false)});
+    return()=>{active=false};
+  },[selectedCustomerId]);
 
   const customerIssues=useMemo(()=>{
     if(!customer)return ['Cliente não localizado'];
@@ -149,6 +167,13 @@ export function ReceivablesBolecodePanel({receivables,customers,integrations,ini
   async function run(simulate:boolean){
     if(!selected||!integrationId)return;
     setBusy(simulate?'simulate':'issue');setMessage('');
+    if(selectedCustomerId){
+      const snapshot=await receivableCustomerBillingSnapshot(selectedCustomerId);
+      if(snapshot.ok&&snapshot.customer&&typeof snapshot.customer==='object'&&!Array.isArray(snapshot.customer)){
+        const fresh=snapshot.customer as Row;
+        setCustomerRows(current=>[fresh,...current.filter(row=>String(row.id)!==selectedCustomerId)]);
+      }
+    }
     const result=await issueReceivableItauBolecode(String(selected.id),integrationId,simulate);
     setBusy('');
     await refresh();
@@ -196,15 +221,15 @@ export function ReceivablesBolecodePanel({receivables,customers,integrations,ini
       {selected&&<div className="erp-bolecode-customer-preview">
         <div><span>PAGADOR</span><b>{String(customer?.name||selected.customer||'Cliente')}</b><small>{doc(customer?.document)}</small></div>
         <div><span>ENDEREÇO</span><b>{[customer?.street,customer?.number].filter(Boolean).join(', ')||'Não informado'}</b><small>{[customer?.district,customer?.city,customer?.state].filter(Boolean).join(' · ')}</small></div>
-        <div className={customerIssues.length?'has-issues':'is-ready'}><span>CADASTRO</span><b>{customerIssues.length?'Dados incompletos':'Pronto para cobrança'}</b><small>{customerIssues.length?customerIssues.join(', '):`CEP ${String(customer?.postal_code||'')}`}</small></div>
+        <div className={customerIssues.length?'has-issues':'is-ready'}><span>CADASTRO</span><b>{customerRefreshing?'Atualizando cadastro...':customerIssues.length?'Dados incompletos':'Pronto para cobrança'}</b><small>{customerRefreshing?'Buscando os dados mais recentes do cliente':customerIssues.length?customerIssues.join(', '):`CEP ${String(customer?.postal_code||'')}`}</small></div>
       </div>}
 
       {latest&&<div className={`erp-bolecode-last status-${String(latest.status)}`}><div><span>ÚLTIMA COBRANÇA DESTE TÍTULO</span><b>{statusLabel(latest.status)} · Nosso Número {String(latest.our_number||'—')}</b><small>{latest.http_status?`HTTP ${String(latest.http_status)}`:'Sem HTTP'} · {date(latest.created_at)}</small></div>{latestPrintable&&<button type="button" className="erp-row-action" onClick={()=>setPrintBilling(latestPrintable)}>Visualizar / imprimir</button>}</div>}
 
       {message&&<p className="erp-bolecode-message">{message}</p>}
       <div className="erp-bolecode-actions">
-        <button type="button" className="erp-row-action" disabled={!selected||!integrationId||!providerReady||busy!==''||customerIssues.length>0} onClick={()=>void run(true)}>{busy==='simulate'?'Validando...':'Validar no Itaú'}</button>
-        <button type="button" className="erp-primary" disabled={!selected||!integrationId||!providerReady||busy!==''||customerIssues.length>0} onClick={()=>void run(false)}>{busy==='issue'?'Emitindo...':'Gerar boleto + Pix'}</button>
+        <button type="button" className="erp-row-action" disabled={!selected||!integrationId||!providerReady||busy!==''||customerRefreshing||customerIssues.length>0} onClick={()=>void run(true)}>{busy==='simulate'?'Validando...':'Validar no Itaú'}</button>
+        <button type="button" className="erp-primary" disabled={!selected||!integrationId||!providerReady||busy!==''||customerRefreshing||customerIssues.length>0} onClick={()=>void run(false)}>{busy==='issue'?'Emitindo...':'Gerar boleto + Pix'}</button>
         {latestPrintable&&<button type="button" className="erp-bolecode-print-button" onClick={()=>setPrintBilling(latestPrintable)}>🖨 Imprimir boleto</button>}
       </div>
       <p className="erp-bolecode-footnote">No Sandbox o Itaú pode recusar dados livres com “cenário de teste não mapeado”. Quando houver retorno 200 com os dados oficiais, o Thor libera a impressão automaticamente. Retornos 201/202 ficam como processando até existir consulta do BoleCode.</p>
