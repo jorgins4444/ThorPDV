@@ -1,0 +1,39 @@
+/* Última camada: padroniza workspaces antigos e novos sem alterar regras funcionais. */
+.erp-module-main,.erp-module-main *:not(code):not(pre):not(.mono):not([class*="mono"]){font-family:Arial,Helvetica,sans-serif!important}
+.erp-module-main{color:#292633}
+.erp-module-main h2{color:#302d38;font-size:16px;letter-spacing:-.15px}.erp-module-main h3{color:#34303d;font-size:13px}.erp-module-main p{color:#777381;font-size:10px;line-height:1.45}
+
+/* Todo campo de cadastro segue a escala do Product Studio. */
+.erp-module-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
+.erp-module-main select,.erp-module-main textarea{
+  min-height:34px!important;border:1px solid #dcd8e3!important;border-radius:8px!important;background:#fff!important;color:#292735!important;padding:7px 9px!important;font-size:10px!important;outline:none!important;box-shadow:none!important
+}
+.erp-module-main textarea{height:auto!important;min-height:72px!important;resize:vertical}
+.erp-module-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+.erp-module-main select:focus,.erp-module-main textarea:focus{border-color:#8650dc!important;box-shadow:0 0 0 2px rgba(134,80,220,.08)!important}
+.erp-module-main label{font-size:9px;color:#5a5664}.erp-module-main label>span{font-size:9px!important;font-weight:700}
+
+/* Todas as tabelas administrativas usam a mesma densidade. */
+.erp-module-main table{border-collapse:collapse}.erp-module-main table th{background:#f5f4f8!important;color:#59586a!important;font-size:9px!important;font-weight:800!important;text-transform:uppercase!important;letter-spacing:.04em!important;padding:8px 10px!important;border-bottom:1px solid #e5e3e8!important}.erp-module-main table td{color:#30303d!important;font-size:10px!important;padding:8px 10px!important;border-bottom-color:#e7e6e9!important}.erp-module-main table tbody tr:hover td{background:#fcfbff}.erp-module-main table small{font-size:8.5px!important;color:#8c8992!important}
+
+/* Botões tradicionais recebem o padrão roxo/branco; controles especiais ficam intactos. */
+.erp-module-main button:not([class*="switch"]):not([class*="toggle"]):not([class*="close"]):not([class*="icon"]):not([class*="expand"]):not([class*="arrow"]){font-size:10px!important;font-weight:750;border-radius:999px;transition:background .15s ease,border-color .15s ease,color .15s ease,transform .15s ease}
+.erp-module-main button[class*="primary"],.erp-module-main button[class*="filter-button"],.erp-module-main button[class*="save"],.erp-module-main button[class*="finish"]{background:#8650dc!important;color:#fff!important;border-color:#8650dc!important}
+.erp-module-main button[class*="primary"]:hover,.erp-module-main button[class*="filter-button"]:hover,.erp-module-main button[class*="save"]:hover{background:#7040c4!important}
+.erp-module-main button[class*="secondary"],.erp-module-main button[class*="ghost"],.erp-module-main button[class*="rowAction"],.erp-module-main button[class*="view"],.erp-module-main button[class*="edit"]{background:#fff!important;color:#7040c4!important;border:1px solid #d8c9f3!important}
+
+/* Prefixos dos módulos especializados. */
+.erp-receivables,.erp-fiscal-workspace,.erp-org-workspace,.erp-operator-workspace,.erp-pdv-profile-workspace,.erp-production-workspace,.erp-purchase-workspace,.erp-report-workspace,.erp-reconciliation-workspace,.erp-financial-accounts,.erp-branch-workspace{gap:10px!important}
+.erp-term-only-note,.erp-receivable-summary>div,.erp-settlement-panel,.erp-detail-card,.erp-detail-kpis>div,.erp-fiscal-card,.erp-org-card,.erp-operator-card,.erp-pdv-profile-card,.erp-production-card,.erp-purchase-card,.erp-report-card,.erp-reconciliation-card,.erp-financial-card,.erp-branch-card{border-color:#e8e4eb!important;border-radius:12px!important;box-shadow:0 4px 14px rgba(45,37,62,.03)!important}
+.erp-receivable-filter-grid,.erp-settlement-grid,.erp-report-filter,.erp-fiscal-form,.erp-org-form,.erp-operator-form,.erp-pdv-profile-form,.erp-purchase-form{gap:8px!important}
+.erp-receivable-filter-grid>label,.erp-settlement-grid>label{font-size:9px!important}.erp-receivable-filter-grid input,.erp-receivable-filter-grid select,.erp-settlement-grid input,.erp-settlement-grid select{min-height:34px!important}
+.erp-receivable-summary{gap:8px!important;margin-bottom:10px!important}.erp-receivable-summary>div{padding:10px!important;background:#fbfafc!important}.erp-receivable-summary span{font-size:9px!important}.erp-receivable-summary b{font-size:14px!important}
+.erp-detail-modal,.erp-reverse-modal{border:1px solid #e7e2ec!important;border-radius:15px!important;box-shadow:0 24px 70px rgba(35,27,49,.22)!important}.erp-detail-header h2,.erp-reverse-modal h2{font-size:18px!important}.erp-detail-header p,.erp-reverse-modal>p{font-size:10px!important}.erp-detail-kpis{gap:6px!important}.erp-detail-kpis>div{padding:8px!important;background:#fbfafc!important}.erp-detail-kpis span{font-size:8px!important}.erp-detail-kpis b{font-size:13px!important}.erp-detail-card{padding:10px!important}.erp-detail-card-title h3{font-size:11px!important}
+
+/* Cabeçalhos/seções e abas especializadas. */
+.erp-module-main [class*="section-head"],.erp-module-main [class*="sectionHead"],.erp-module-main [class*="filter-head"],.erp-module-main [class*="filterHead"]{margin-bottom:9px!important}.erp-module-main [class*="section-head"] h2,.erp-module-main [class*="sectionHead"] h2,.erp-module-main [class*="filter-head"] h2,.erp-module-main [class*="filterHead"] h2{font-size:14px!important}.erp-module-main [class*="tabs"] button{font-size:10px!important;padding-top:9px!important;padding-bottom:8px!important}
+
+/* Modais genéricos, inclusive CSS Modules. */
+.erp-module-main [class*="backdrop"]{background:rgba(28,24,36,.48)!important;backdrop-filter:blur(2px)}.erp-module-main [class*="modal"]:not([class*="backdrop"]){border:1px solid #e7e2ec!important;border-radius:15px!important;box-shadow:0 24px 70px rgba(35,27,49,.22)!important}.erp-module-main [class*="modalHead"],.erp-module-main [class*="modal-head"]{padding:14px 16px!important;border-bottom:1px solid #eeeaf1!important}.erp-module-main [class*="modalHead"] h2,.erp-module-main [class*="modal-head"] h2{font-size:18px!important}
+
+@media(max-width:760px){.erp-module-main table th,.erp-module-main table td{font-size:9px!important;padding:7px 8px!important}.erp-module-main h2{font-size:15px}.erp-module-main [class*="modal"]:not([class*="backdrop"]){width:96vw!important}}
