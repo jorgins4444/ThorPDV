@@ -1,6 +1,7 @@
 import './dashboard-studio-v2.css';
 import './[...slug]/module.css';
 import './[...slug]/management-shell.css';
+import './dashboard-fullscreen-fix.css';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
