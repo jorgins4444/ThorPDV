@@ -6,6 +6,7 @@ import './promotion.css';
 import './organization.css';
 import './fiscal.css';
 import './fiscal-configuration.css';
+import './fiscal-documents.css';
 import './reconciliation.css';
 import './cash.css';
 import './sales-cash.css';
@@ -30,7 +31,9 @@ import { BranchConfigWorkspace } from './branch-config-workspace';
 import { BranchesWorkspace } from './branches-workspace';
 import { erpLicenseGet } from './license-actions';
 import { SmartPosPairingPanel } from './smartpos-pairing-panel';
-import { FiscalWorkspace } from './fiscal-workspace';
+import { FiscalSettingsWorkspace } from './fiscal-settings-workspace';
+import { FiscalDocumentsWorkspace } from './fiscal-documents-workspace';
+import { erpFiscalDocuments } from './fiscal-transmit-actions';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
 import { CashWorkspace } from './cash-workspace';
 import { SalesCashWorkspace } from './sales-cash-workspace';
@@ -50,7 +53,7 @@ const resourceBySlug: Record<string, string> = {
   'estoque': 'stock', 'estoque/nova': 'stock', 'estoque/inventario': 'inventory_counts', 'estoque/ajustes': 'stock', 'estoque/transferencias': 'stock', 'estoque/producao':'products',
   'financeiro/receber': 'finance', 'financeiro/receber/novo': 'finance', 'financeiro/pagar': 'finance', 'financeiro/pagar/novo': 'finance',
   'financeiro/fluxo-caixa': 'report_finance', 'financeiro/conciliacao': 'finance',
-  'administrativo/empresas': 'companies', 'administrativo/filiais': 'branches', 'administrativo/pdvs': 'pos_registers', 'fiscal': 'fiscal_documents', 'fiscal/nfe':'fiscal_documents', 'fiscal/nfce':'fiscal_documents', 'integracoes': 'integrations', 'configuracoes': 'branches',
+  'administrativo/empresas': 'companies', 'administrativo/filiais': 'branches', 'administrativo/pdvs': 'pos_registers', 'fiscal': 'branches', 'documentos-fiscais':'fiscal_documents', 'fiscal/nfe':'fiscal_documents', 'fiscal/nfce':'fiscal_documents', 'integracoes': 'integrations', 'configuracoes': 'branches',
   'relatorios/financeiro': 'report_finance', 'relatorios/vendas': 'report_sales', 'relatorios/estoque': 'report_stock', 'relatorios/listagens': 'products',
   'atendimento': 'tickets', 'atendimento/mensagens': 'tickets', 'atendimento/sla': 'tickets',
   'vendas': 'sales', 'vendas/nova': 'sales', 'pdv/caixa': 'pos_registers', 'ajuda': 'companies',
@@ -98,9 +101,14 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   }
   if (slug === 'configuracoes') return <AdvancedShell title="Configurações da Operação" subtitle="Terminais, parâmetros do PDV, tributos operacionais, entrega, SmartPOS e integrações. Dados cadastrais do emitente ficam exclusivamente em Matriz." activePath="/dashboard/configuracoes"><div className="erp-org-grid">{branches.data.length?<><BranchConfigWorkspace branches={branches.data}/><SmartPosPairingPanel branches={branches.data}/></>:<section className="erp-module-card erp-advanced-panel"><h2>Nenhuma unidade cadastrada</h2><p>Configure a Matriz antes de habilitar a operação.</p></section>}</div></AdvancedShell>;
   if (slug === 'pdv/caixa') return <AdvancedShell title="Caixa / PDV" subtitle="Abertura, vendas vinculadas e fechamento com valor esperado e diferença por terminal." activePath="/dashboard/administrativo/pdvs"><CashWorkspace posRegisters={initial.data}/></AdvancedShell>;
-  if (slug === 'fiscal' || slug === 'fiscal/nfe' || slug === 'fiscal/nfce') {
-    const [settings, sales] = await Promise.all([erpFiscalSettingsGet(), erpLoad('sales')]);
-    return <AdvancedShell title="Fiscal" subtitle="O emitente vem da Matriz. Aqui ficam NFC-e/NF-e, séries, numeração, caixas, DANFE, CFOPs, certificado A1 e transmissão fiscal." activePath="/dashboard/fiscal"><FiscalWorkspace initialDocs={initial.data} sales={sales.data} settings={(settings.settings ?? {}) as Record<string, unknown>} preselect={slug.endsWith('nfce')?'nfce':'nfe'}/></AdvancedShell>;
+  if (slug === 'fiscal') {
+    const settings=await erpFiscalSettingsGet();
+    return <AdvancedShell title="Fiscal" subtitle="Configurações fiscais da empresa e das filiais: séries, numeração, CSC, ambiente, regras de emissão e certificado digital." activePath="/dashboard/fiscal"><FiscalSettingsWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
+  }
+  if (slug === 'documentos-fiscais' || slug === 'fiscal/nfe' || slug === 'fiscal/nfce') {
+    const [settings,sales,documents]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments()]);
+    const initialType=slug.endsWith('/nfce')?'nfce':slug.endsWith('/nfe')?'nfe':'all';
+    return <AdvancedShell title="Documentos Fiscais" subtitle="Emissão e acompanhamento de NF-e e NFC-e, status SEFAZ, protocolos, XML, DANFE e cancelamentos." activePath="/dashboard/documentos-fiscais"><FiscalDocumentsWorkspace initialDocs={documents.data} sales={sales.data} settings={(settings.settings??{}) as Record<string,unknown>} initialType={initialType}/></AdvancedShell>;
   }
   if (slug === 'financeiro/conciliacao') {
     const reconciliation = await reconciliationData();
