@@ -25,6 +25,10 @@ export async function receivableBankBillings(entryId?:string){
   return rpc('erp_receivable_bank_billings',{p_token:await token(),p_entry_id:entryId||null});
 }
 
+export async function receivableCustomerBillingSnapshot(customerId:string){
+  return rpc('erp_customer_billing_snapshot',{p_token:await token(),p_customer:customerId});
+}
+
 export async function issueReceivableItauBolecode(entryId:string,integrationId:string,simulate=false){
   const pToken=await token();
   const transport=await rpc('erp_bank_integration_transport',{p_token:pToken,p_integration:integrationId});
