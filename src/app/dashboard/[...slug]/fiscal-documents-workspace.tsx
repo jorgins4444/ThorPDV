@@ -1,0 +1,110 @@
+'use client';
+
+import { useMemo, useState, useTransition } from 'react';
+import { fiscalPrepareV2 } from './fiscal-config-actions';
+import { erpFiscalCancel, erpFiscalDocuments, erpFiscalSend, erpFiscalXml } from './fiscal-transmit-actions';
+
+type Row=Record<string,unknown>;
+const text=(v:unknown)=>v==null?'':String(v);
+const num=(v:unknown)=>Number(v||0);
+const money=(v:unknown)=>num(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const dt=(v:unknown)=>v?new Date(String(v)).toLocaleString('pt-BR'):'—';
+const statusLabel:Record<string,string>={draft:'Rascunho',processing:'Processando',authorized:'Autorizado',rejected:'Rejeitado',cancelled:'Cancelado',transmission_error:'Falha de transmissão'};
+const statusClass=(status:unknown)=>`fdoc-status fdoc-${text(status)||'unknown'}`;
+
+export function FiscalDocumentsWorkspace({initialDocs,sales,settings,initialType='all'}:{initialDocs:Row[];sales:Row[];settings:Row;initialType?:'all'|'nfe'|'nfce'}){
+  const [docs,setDocs]=useState<Row[]>(initialDocs);
+  const [typeFilter,setTypeFilter]=useState<'all'|'nfe'|'nfce'>(initialType);
+  const [statusFilter,setStatusFilter]=useState('all');
+  const [query,setQuery]=useState('');
+  const [selected,setSelected]=useState<Row|null>(null);
+  const [message,setMessage]=useState('');
+  const [preparing,setPreparing]=useState(false);
+  const [sale,setSale]=useState('');
+  const [docType,setDocType]=useState<'nfe'|'nfce'>(initialType==='nfce'?'nfce':'nfe');
+  const [seriesId,setSeriesId]=useState('');
+  const [busy,setBusy]=useState('');
+  const [pending,startTransition]=useTransition();
+
+  const series=useMemo(()=>((Array.isArray(settings.series)?settings.series:[]) as Row[]).filter(s=>text(s.document_type)===docType&&s.active!==false),[settings,docType]);
+  const completedSales=useMemo(()=>sales.filter(s=>text(s.status)==='completed'),[sales]);
+  const filtered=useMemo(()=>docs.filter(d=>{
+    if(typeFilter!=='all'&&text(d.document_type)!==typeFilter)return false;
+    if(statusFilter!=='all'&&text(d.status)!==statusFilter)return false;
+    const q=query.trim().toLowerCase();if(!q)return true;
+    return [d.number,d.series,d.access_key,d.protocol,d.sale_number,d.customer,d.status,d.document_type].some(v=>text(v).toLowerCase().includes(q));
+  }),[docs,typeFilter,statusFilter,query]);
+
+  const counts=useMemo(()=>({
+    total:docs.length,
+    authorized:docs.filter(d=>text(d.status)==='authorized').length,
+    pending:docs.filter(d=>['draft','processing','transmission_error'].includes(text(d.status))).length,
+    rejected:docs.filter(d=>text(d.status)==='rejected').length,
+    cancelled:docs.filter(d=>text(d.status)==='cancelled').length,
+  }),[docs]);
+
+  async function refresh(){const r=await erpFiscalDocuments();if(r.ok)setDocs(r.data);else setMessage(text(r.error||'Não foi possível atualizar os documentos.'));}
+
+  async function prepare(){
+    if(!sale){setMessage('Selecione uma venda para preparar o documento.');return;}
+    setBusy('prepare');setMessage('Validando dados fiscais e reservando numeração...');
+    const r=await fiscalPrepareV2(sale,docType,seriesId||undefined);
+    setBusy('');
+    if(r.ok){
+      const validation=Array.isArray(r.validation_errors)?r.validation_errors:[];
+      setMessage(validation.length?`Documento criado com ${validation.length} pendência(s) de validação.`:`${docType.toUpperCase()} preparada com sucesso.`);
+      setSale('');setSeriesId('');setPreparing(false);await refresh();
+    }else{
+      const labels:Record<string,string>={fiscal_series_not_found:'A série selecionada não está disponível.',fiscal_series_not_configured:'Cadastre uma série fiscal ativa no módulo Fiscal.',nfce_series_not_assigned_to_cash_register:'O caixa da venda não possui série NFC-e vinculada.'};
+      setMessage(labels[text(r.error)]||`Não foi possível preparar o documento: ${text(r.error||'erro')}`);
+    }
+  }
+
+  async function send(row:Row){
+    const id=text(row.id);if(!id)return;
+    if(text(row.document_type)==='nfe'){setMessage('A transmissão NF-e modelo 55 ainda não está habilitada no transporte ThorFiscal atual.');return;}
+    setBusy(id);setMessage('Transmitindo NFC-e para a SEFAZ...');
+    const r=await erpFiscalSend(id);setBusy('');
+    if(r.ok&&(r.authorized||r.already_authorized))setMessage(`NFC-e autorizada${r.protocol?` · protocolo ${text(r.protocol)}`:''}.`);
+    else if(r.retryable)setMessage('A transmissão não teve confirmação conclusiva. O documento foi preservado e pode ser reenviado sem gerar nova numeração.');
+    else setMessage(text(r.message||r.detail||r.error||'Não foi possível transmitir a NFC-e.'));
+    await refresh();
+  }
+
+  async function cancel(row:Row){
+    const id=text(row.id);if(!id)return;
+    const raw=window.prompt(`Justificativa para cancelar ${text(row.document_type).toUpperCase()} ${text(row.number)} (15 a 255 caracteres):`,'');if(!raw)return;
+    const reason=raw.trim().replace(/\s+/g,' ');if(reason.length<15||reason.length>255){setMessage('A justificativa deve ter entre 15 e 255 caracteres.');return;}
+    if(!window.confirm('Confirmar envio do cancelamento para a SEFAZ?'))return;
+    setBusy(id);const r=await erpFiscalCancel(id,reason);setBusy('');
+    if(r.ok)setMessage(`Documento cancelado${r.cancellation_protocol?` · protocolo ${text(r.cancellation_protocol)}`:''}.`);
+    else setMessage(text(r.message||r.detail||r.error||'Não foi possível cancelar o documento.'));
+    await refresh();
+  }
+
+  async function downloadXml(row:Row){
+    const id=text(row.id);if(!id)return;setBusy(id);
+    const r=await erpFiscalXml(id);setBusy('');
+    if(!r.ok||!text(r.xml)){setMessage(text(r.error==='xml_not_available'?'XML ainda não está disponível.':r.error||'Não foi possível obter o XML.'));return;}
+    const blob=new Blob([text(r.xml)],{type:'application/xml;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=text(r.filename)||`${text(row.document_type).toUpperCase()}-${text(row.number)||id}.xml`;a.click();URL.revokeObjectURL(url);
+  }
+
+  function openDanfe(row:Row){const id=text(row.id);if(!id)return;const win=window.open(`/api/pdv/fiscal/${encodeURIComponent(id)}/danfe`,'_blank','noopener,noreferrer');if(!win)setMessage('O navegador bloqueou a abertura do DANFE.');}
+
+  return <div className="fiscal-documents-module">
+    <section className="fdoc-toolbar-card">
+      <div className="fdoc-title-row"><div><span>DOCUMENTOS FISCAIS</span><h2>NF-e e NFC-e</h2><p>Emissão, acompanhamento SEFAZ, arquivos fiscais e histórico em um único lugar.</p></div><button className="fdoc-primary" onClick={()=>setPreparing(true)}>+ Novo documento</button></div>
+      <div className="fdoc-kpis"><article><span>Total</span><strong>{counts.total}</strong></article><article><span>Autorizados</span><strong>{counts.authorized}</strong></article><article><span>Pendentes</span><strong>{counts.pending}</strong></article><article><span>Rejeitados</span><strong>{counts.rejected}</strong></article><article><span>Cancelados</span><strong>{counts.cancelled}</strong></article></div>
+      <div className="fdoc-filters"><div className="fdoc-type-tabs"><button className={typeFilter==='all'?'active':''} onClick={()=>setTypeFilter('all')}>Todos</button><button className={typeFilter==='nfce'?'active':''} onClick={()=>setTypeFilter('nfce')}>NFC-e</button><button className={typeFilter==='nfe'?'active':''} onClick={()=>setTypeFilter('nfe')}>NF-e</button></div><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar número, chave, protocolo, venda..."/><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="all">Todos os status</option><option value="authorized">Autorizados</option><option value="draft">Rascunhos</option><option value="processing">Processando</option><option value="transmission_error">Falha de transmissão</option><option value="rejected">Rejeitados</option><option value="cancelled">Cancelados</option></select><button className="fdoc-secondary" onClick={()=>startTransition(()=>{void refresh()})}>{pending?'Atualizando...':'Atualizar'}</button></div>
+      {message&&<div className="fdoc-message">{message}</div>}
+    </section>
+
+    <section className="fdoc-list-card"><div className="fdoc-list-head"><div><h3>Histórico de documentos</h3><p>{filtered.length} documento(s) no filtro atual.</p></div><a href="/dashboard/fiscal">Configurações fiscais →</a></div>
+      <div className="fdoc-table-wrap"><table><thead><tr><th>Emissão</th><th>Documento</th><th>Venda / Cliente</th><th>Ambiente</th><th>Status SEFAZ</th><th>Chave / Protocolo</th><th>Total</th><th>Ações</th></tr></thead><tbody>{filtered.length===0?<tr><td colSpan={8} className="fdoc-empty">Nenhum documento fiscal encontrado.</td></tr>:filtered.map((d,i)=><tr key={text(d.id)||String(i)} onDoubleClick={()=>setSelected(d)}><td><strong>{dt(d.created_at||d.authorization_at)}</strong><small>{text(d.authorization_at)?`Autorizado ${dt(d.authorization_at)}`:''}</small></td><td><span className="fdoc-kind">{text(d.document_type).toUpperCase()||'DOC'}</span><strong>#{text(d.number)||'—'}</strong><small>Série {text(d.series)||'—'}</small></td><td><strong>{text(d.sale_number)?`Venda #${text(d.sale_number)}`:'—'}</strong><small>{text(d.customer)||text(d.customer_name)||'Consumidor não identificado'}</small></td><td>{text(d.environment)==='production'?'Produção':text(d.environment)==='homologation'?'Homologação':text(d.environment)||'—'}</td><td><span className={statusClass(d.status)}>{statusLabel[text(d.status)]||text(d.status)||'—'}</span>{text(d.rejection_code)?<small>cStat {text(d.rejection_code)}</small>:null}</td><td><strong className="fdoc-mono">{text(d.access_key)?`${text(d.access_key).slice(0,10)}…${text(d.access_key).slice(-6)}`:'—'}</strong><small>{text(d.protocol)?`Prot. ${text(d.protocol)}`:'Sem protocolo'}</small></td><td><strong>{money(d.total||d.sale_total)}</strong></td><td><div className="fdoc-actions"><button onClick={()=>setSelected(d)}>Detalhes</button>{text(d.document_type)==='nfce'&&['draft','rejected','processing','transmission_error'].includes(text(d.status))?<button disabled={busy===text(d.id)} onClick={()=>void send(d)}>{busy===text(d.id)?'...':'Transmitir'}</button>:null}{['authorized','cancelled'].includes(text(d.status))?<button disabled={busy===text(d.id)} onClick={()=>void downloadXml(d)}>XML</button>:null}{['authorized','cancelled'].includes(text(d.status))?<button onClick={()=>openDanfe(d)}>DANFE</button>:null}{text(d.document_type)==='nfce'&&text(d.status)==='authorized'?<button className="danger" disabled={busy===text(d.id)} onClick={()=>void cancel(d)}>Cancelar</button>:null}</div></td></tr>)}</tbody></table></div>
+    </section>
+
+    {preparing&&<div className="fdoc-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setPreparing(false)}}><section className="fdoc-modal"><header><div><span>NOVO DOCUMENTO</span><h3>Preparar documento fiscal</h3><p>Selecione uma venda concluída e a série fiscal.</p></div><button onClick={()=>setPreparing(false)}>×</button></header><label>Venda<select value={sale} onChange={e=>setSale(e.target.value)}><option value="">Selecione uma venda...</option>{completedSales.map(s=><option key={text(s.id)} value={text(s.id)}>Venda #{text(s.number)} · {text(s.customer||'Consumidor')} · {money(s.total)}</option>)}</select></label><div className="fdoc-form-row"><label>Documento<select value={docType} onChange={e=>{setDocType(e.target.value as 'nfe'|'nfce');setSeriesId('')}}><option value="nfe">NF-e</option><option value="nfce">NFC-e</option></select></label><label>Série<select value={seriesId} onChange={e=>setSeriesId(e.target.value)}><option value="">Automática / padrão</option>{series.map(s=><option key={text(s.id)} value={text(s.id)}>Série {text(s.series).padStart(3,'0')} · próxima {text(s.next_number)}{s.is_default?' · padrão':''}</option>)}</select></label></div><footer><button className="fdoc-secondary" onClick={()=>setPreparing(false)}>Cancelar</button><button className="fdoc-primary" disabled={busy==='prepare'||!sale} onClick={()=>void prepare()}>{busy==='prepare'?'Preparando...':'Validar e criar rascunho'}</button></footer></section></div>}
+
+    {selected&&<div className="fdoc-detail-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setSelected(null)}}><aside className="fdoc-detail"><header><div><span>DOCUMENTO FISCAL</span><h3>{text(selected.document_type).toUpperCase()} #{text(selected.number)||'—'} · Série {text(selected.series)||'—'}</h3><p>{dt(selected.created_at)} · {text(selected.environment)==='production'?'Produção':'Homologação'}</p></div><button onClick={()=>setSelected(null)}>×</button></header><div className="fdoc-detail-status"><span className={statusClass(selected.status)}>{statusLabel[text(selected.status)]||text(selected.status)}</span>{text(selected.cancellation_at)?<small>Cancelado em {dt(selected.cancellation_at)}</small>:null}</div><dl><div><dt>Venda</dt><dd>{text(selected.sale_number)?`#${text(selected.sale_number)}`:'—'}</dd></div><div><dt>Valor</dt><dd>{money(selected.total||selected.sale_total)}</dd></div><div><dt>Protocolo autorização</dt><dd>{text(selected.protocol)||'—'}</dd></div><div><dt>Autorização</dt><dd>{dt(selected.authorization_at)}</dd></div><div className="wide"><dt>Chave de acesso</dt><dd className="fdoc-mono full">{text(selected.access_key)||'—'}</dd></div>{text(selected.cancellation_protocol)?<div className="wide"><dt>Protocolo de cancelamento</dt><dd>{text(selected.cancellation_protocol)}</dd></div>:null}{text(selected.rejection_code)||text(selected.rejection_message)?<div className="wide fdoc-error-box"><dt>Retorno SEFAZ</dt><dd>{text(selected.rejection_code)?`cStat ${text(selected.rejection_code)} · `:''}{text(selected.rejection_message)||text(selected.last_error_message)||'Rejeição registrada'}</dd></div>:null}</dl><footer>{text(selected.document_type)==='nfce'&&['draft','rejected','processing','transmission_error'].includes(text(selected.status))?<button className="fdoc-primary" onClick={()=>void send(selected)}>Transmitir / tentar novamente</button>:null}{['authorized','cancelled'].includes(text(selected.status))?<button onClick={()=>void downloadXml(selected)}>Baixar XML</button>:null}{['authorized','cancelled'].includes(text(selected.status))?<button onClick={()=>openDanfe(selected)}>Abrir DANFE</button>:null}{text(selected.document_type)==='nfce'&&text(selected.status)==='authorized'?<button className="danger" onClick={()=>void cancel(selected)}>Cancelar na SEFAZ</button>:null}</footer></aside></div>}
+  </div>;
+}
