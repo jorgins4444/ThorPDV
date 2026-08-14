@@ -12,4 +12,13 @@ async function rpc(name:string,args:Record<string,unknown>){const supabase=await
 
 export async function controlBankProviderData(){return rpc('platform_bank_provider_get',{p_token:await token()});}
 export async function controlBankProviderSave(payload:Record<string,unknown>){return rpc('platform_bank_provider_save',{p_token:await token(),p_payload:payload});}
-export async function controlBankProviderTest(provider:string,environment:string){return rpc('platform_bank_provider_test',{p_token:await token(),p_provider:provider,p_environment:environment});}
+export async function controlBankProviderTest(provider:string,environment:string){
+ const t=await token();
+ if(provider==='itau'&&environment==='production'){
+  const supabase=await createClient();
+  const {data,error}=await supabase.functions.invoke('itau-bolecode-production',{body:{action:'provider_test',control_token:t}});
+  if(error)return {ok:false,error:'itau_production_edge_failed',detail:error.message} as Result;
+  return (data??{ok:false}) as Result;
+ }
+ return rpc('platform_bank_provider_test',{p_token:t,p_provider:provider,p_environment:environment});
+}
