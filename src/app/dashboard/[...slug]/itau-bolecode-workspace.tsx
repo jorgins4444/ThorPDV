@@ -20,7 +20,7 @@ const err:Record<string,string>={
  itau_token_failed:'O Itaú recusou a autenticação.',
  itau_token_missing_in_response:'O token retornado pelo Itaú não foi reconhecido.',
  itau_bolecode_exception:'Falha interna durante a chamada do BoleCode.',
- itau_sandbox_scenario_unmapped:'Este conjunto de dados não existe entre os cenários mockados pelo Sandbox Itaú. Use o Cenário oficial Itaú para validar a integração.'
+ itau_sandbox_scenario_unmapped:'A autenticação e o gateway Itaú responderam, mas o Sandbox não possui um cenário mock mapeado para esta chamada/aplicação.'
 };
 
 export function ItauBolecodeWorkspace({accountsInitial,integrationsInitial,billingsInitial}:{accountsInitial:Record<string,unknown>;integrationsInitial:Record<string,unknown>;billingsInitial:Record<string,unknown>}){
@@ -36,6 +36,7 @@ export function ItauBolecodeWorkspace({accountsInitial,integrationsInitial,billi
  const selected=accounts.find(a=>text(a.id)===text(integration?.bank_account_id));
  const settings=(integration?.settings&&typeof integration.settings==='object'?integration.settings:{}) as Row;
  const isSandbox=text(integration?.environment)!=='production';
+ const sandboxUnmapped=text(result?.error)==='itau_sandbox_scenario_unmapped';
 
  function run(fn:()=>Promise<void>){startTransition(()=>{void fn()})}
  async function refresh(){
@@ -48,11 +49,11 @@ export function ItauBolecodeWorkspace({accountsInitial,integrationsInitial,billi
   if(r.ok)setMessage(success);
   else setMessage(err[text(r.error)]||text(r.api_message||r.error||r.detail||'Falha na API Itaú.'));
  }
- async function officialTest(){
+ async function documentationExampleTest(){
   if(!integration)return;
   setMessage('');setResult(null);
   const r=await testItauBolecode(text(integration.id),{sandbox_scenario:'official'},true);
-  applyResult(r as Row,'Cenário oficial do Sandbox processado pelo Itaú.');
+  applyResult(r as Row,'Exemplo da documentação processado pelo Sandbox Itaú.');
   await refresh();
  }
  async function customTest(e:FormEvent<HTMLFormElement>){
@@ -70,8 +71,8 @@ export function ItauBolecodeWorkspace({accountsInitial,integrationsInitial,billi
 
  return <div className="itau-bank-workspace">
   <section className="itau-hero">
-   <div><small>CENTRAL DE HOMOLOGAÇÃO</small><h2>Itaú BoleCode Pix</h2><p>Teste a comunicação, execute o cenário oficial do Sandbox e acompanhe cada retorno do Itaú.</p></div>
-   <div className="itau-state"><span className={integration?.active&&integration?.provider_ready?'on':'off'}/><div><strong>{integration?.active&&integration?.provider_ready?'Sandbox pronto para testes':integration?'Integração requer atenção':'Nenhuma conta vinculada'}</strong><small>{integration?`${isSandbox?'Sandbox':'Produção'} · ${integration.provider_ready?'OAuth validado':'Credencial pendente no ThorControl'}`:'Configure boletos dentro de Contas Bancárias'}</small></div></div>
+   <div><small>CENTRAL DE HOMOLOGAÇÃO</small><h2>Itaú BoleCode Pix</h2><p>Valide credenciais, comunicação com o gateway e acompanhe os retornos reais do Sandbox.</p></div>
+   <div className="itau-state"><span className={integration?.active&&integration?.provider_ready?'on':'off'}/><div><strong>{integration?.active&&integration?.provider_ready?'OAuth pronto para chamadas':integration?'Integração requer atenção':'Nenhuma conta vinculada'}</strong><small>{integration?`${isSandbox?'Sandbox':'Produção'} · ${integration.provider_ready?'Credenciais validadas':'Credencial pendente no ThorControl'}`:'Configure boletos dentro de Contas Bancárias'}</small></div></div>
   </section>
   {message&&<div className="itau-message">{message}</div>}
 
@@ -82,24 +83,24 @@ export function ItauBolecodeWorkspace({accountsInitial,integrationsInitial,billi
    </section>
 
    <section className="itau-card itau-linked-summary">
-    <div className="itau-card-head"><div><small>VÍNCULO ATUAL</small><h3>{text(selected?.name)||text(integration?.account_name)}</h3></div><span className={`itau-pill ${integration?.provider_ready?'ready':''}`}>{integration?.provider_ready?'API autenticada':'Credencial pendente'}</span></div>
+    <div className="itau-card-head"><div><small>VÍNCULO ATUAL</small><h3>{text(selected?.name)||text(integration?.account_name)}</h3></div><span className={`itau-pill ${integration?.provider_ready?'ready':''}`}>{integration?.provider_ready?'Credencial ativa':'Credencial pendente'}</span></div>
     <div className="itau-result-grid"><div><span>Ambiente</span><strong>{isSandbox?'Sandbox':'Produção'}</strong></div><div><span>Beneficiário da conta</span><strong>{text(settings.beneficiary_id)||'—'}</strong></div><div><span>Carteira</span><strong>{text(settings.wallet)||'109'}</strong></div><div><span>Status</span><strong>{integration?.active?'Ativa':'Inativa'}</strong></div></div>
     <div className="itau-linked-actions"><a href="/dashboard/financeiro/contas-bancarias">Editar na conta bancária</a><span>As credenciais permanecem centralizadas no ThorControl.</span></div>
    </section>
 
    <details className="itau-card itau-simulator">
-    <summary><div><small>LABORATÓRIO SANDBOX</small><h3>Simulador BoleCode</h3><p>O Sandbox Itaú trabalha com cenários pré-mapeados. O cenário oficial é o teste recomendado.</p></div><span>Abrir simulador ↓</span></summary>
+    <summary><div><small>LABORATÓRIO SANDBOX</small><h3>Simulador BoleCode</h3><p>O Sandbox usa dados fictícios e cenários internos do Itaú. Os exemplos OpenAPI/Postman não são apresentados pelo banco como gatilhos garantidos.</p></div><span>Abrir simulador ↓</span></summary>
     <div className="itau-test">
      <section className="itau-official-scenario">
-      <div className="itau-official-head"><div><small>CENÁRIO MAPEADO PELO ITAÚ</small><h4>Cenário oficial BoleCode Pix</h4><p>Este teste usa exatamente os dados de exemplo fornecidos pelo Itaú. Ele não usa o beneficiário, valor ou pagador reais da sua conta.</p></div><span>Recomendado</span></div>
-      <div className="itau-official-grid"><div><span>Beneficiário Sandbox</span><b>150000052061</b></div><div><span>Valor</span><b>R$ 1.234,56</b></div><div><span>Nosso Número</span><b>12345678</b></div><div><span>Vencimento</span><b>31/12/2026</b></div><div><span>Pagador</span><b>João da Silva</b></div><div><span>CEP</span><b>01310100</b></div></div>
-      <div className="itau-official-action"><div><b>O que este teste comprova?</b><span>OAuth, endpoint, autorização, montagem do request e leitura da resposta Boleto + Pix.</span></div><button type="button" className="itau-primary" onClick={()=>run(officialTest)} disabled={pending||!isSandbox||!integration?.provider_ready||!integration?.active}>{pending?'Processando...':'Executar cenário oficial Itaú'}</button></div>
+      <div className="itau-official-head"><div><small>EXEMPLO DA DOCUMENTAÇÃO</small><h4>Request mínimo BoleCode Pix</h4><p>Este teste replica os dados do exemplo fornecido no OpenAPI/Postman. Ele serve para verificar a comunicação, mas pode retornar “cenário não mapeado” se o mock não estiver habilitado para a aplicação.</p></div><span>Diagnóstico</span></div>
+      <div className="itau-official-grid"><div><span>Beneficiário de exemplo</span><b>150000052061</b></div><div><span>Valor</span><b>R$ 1.234,56</b></div><div><span>Nosso Número</span><b>12345678</b></div><div><span>Vencimento</span><b>31/12/2026</b></div><div><span>Pagador</span><b>João da Silva</b></div><div><span>CEP</span><b>01310100</b></div></div>
+      <div className="itau-official-action"><div><b>O que este teste verifica?</b><span>Obtenção do token, acesso ao endpoint, autorização do gateway, envio do JSON e interpretação da resposta.</span></div><button type="button" className="itau-primary" onClick={()=>run(documentationExampleTest)} disabled={pending||!isSandbox||!integration?.provider_ready||!integration?.active}>{pending?'Processando...':'Executar exemplo da documentação'}</button></div>
      </section>
 
      <details className="itau-custom-scenario">
-      <summary><div><b>Payload personalizado</b><span>Avançado · pode não existir no Sandbox</span></div><strong>Abrir ↓</strong></summary>
+      <summary><div><b>Payload personalizado</b><span>Avançado · depende de cenário disponível no Sandbox</span></div><strong>Abrir ↓</strong></summary>
       <form onSubmit={e=>run(()=>customTest(e))}>
-       <div className="itau-custom-warning"><b>Atenção ao Sandbox</b><span>Dados livres podem receber HTTP 500 “Cenário de teste não mapeado”. Isso não significa falha na integração.</span></div>
+       <div className="itau-custom-warning"><b>Atenção ao Sandbox</b><span>Dados livres podem receber HTTP 500 “Cenário de teste não mapeado”. Esse retorno indica limitação do mock, não falha de autenticação.</span></div>
        <div className="itau-form-grid"><label className="wide">Nome / Razão social<input required name="name" placeholder="Cliente de Teste"/></label><label>CPF/CNPJ<input required name="document" inputMode="numeric" placeholder="Somente números"/></label><label>Valor<input required name="amount" type="number" min="0.01" step="0.01" placeholder="100.00"/></label><label>Vencimento<input required name="due_date" type="date"/></label><label>CEP<input required name="postal_code" inputMode="numeric" maxLength={9}/></label><label className="wide">Logradouro<input required name="street" placeholder="Rua Exemplo"/></label><label>Número<input name="number" placeholder="100"/></label><label>Complemento<input name="complement"/></label><label>Bairro<input required name="district"/></label><label>Cidade<input required name="city"/></label><label>UF<input required name="state" maxLength={2} placeholder="PI"/></label></div>
        <div className="itau-test-actions"><button value="simulate" disabled={pending||!integration?.provider_ready||!integration?.active}>{pending?'Processando...':'Simular payload livre'}</button><button className="itau-primary" value="effective" disabled={pending||!integration?.provider_ready||!integration?.active||!isSandbox}>{isSandbox?'Emitir payload livre':'Produção bloqueada nesta fase'}</button></div>
       </form>
@@ -109,9 +110,10 @@ export function ItauBolecodeWorkspace({accountsInitial,integrationsInitial,billi
   </>}
 
   {result?<section className="itau-card itau-result">
-   <div className="itau-card-head"><div><small>RETORNO DA API</small><h3>{result.ok?'Operação aceita pelo Itaú':'Falha na operação'}</h3></div><span className={`itau-http ${result.ok?'ok':'error'}`}>HTTP {text(result.http_status)||'—'}</span></div>
-   {text(result.sandbox_scenario)==='official'?<div className="itau-result-context"><b>Cenário oficial do Sandbox Itaú</b><span>Os valores abaixo são mockados pelo banco e servem exclusivamente para homologação.</span></div>:null}
-   <div className="itau-result-grid"><div><span>Status</span><strong>{text(result.status)||text(result.error)||'—'}</strong></div><div><span>Nosso Número</span><strong>{text(result.our_number)||'—'}</strong></div><div><span>Correlation ID</span><strong>{text(result.correlation_id)||'—'}</strong></div><div><span>TXID Pix</span><strong>{text(result.pix_txid)||'—'}</strong></div></div>
+   <div className="itau-card-head"><div><small>RETORNO DA API</small><h3>{result.ok?'Operação aceita pelo Itaú':sandboxUnmapped?'Sandbox sem cenário mapeado':'Falha na operação'}</h3></div><span className={`itau-http ${result.ok?'ok':'error'}`}>HTTP {text(result.http_status)||'—'}</span></div>
+   {text(result.sandbox_scenario)==='official'?<div className="itau-result-context"><b>Exemplo da documentação Itaú</b><span>Os valores abaixo são de referência do OpenAPI/Postman e não representam uma cobrança real.</span></div>:null}
+   {sandboxUnmapped?<div className="itau-result-context"><b>Diagnóstico da integração</b><span>OAuth: OK · Gateway Itaú: OK · Endpoint BoleCode: alcançado · Cenário mock: não mapeado. Use o Correlation ID abaixo ao acionar o suporte Itaú.</span></div>:null}
+   <div className="itau-result-grid"><div><span>Status</span><strong>{sandboxUnmapped?'Mock não mapeado':text(result.status)||text(result.error)||'—'}</strong></div><div><span>Nosso Número</span><strong>{text(result.our_number)||'—'}</strong></div><div><span>Correlation ID</span><strong>{text(result.correlation_id)||'—'}</strong></div><div><span>TXID Pix</span><strong>{text(result.pix_txid)||'—'}</strong></div></div>
    {result.digitable_line?<div className="itau-code"><span>Linha digitável</span><code>{text(result.digitable_line)}</code></div>:null}
    {result.pix_emv?<div className="itau-code"><span>Pix Copia e Cola</span><code>{text(result.pix_emv)}</code></div>:null}
    {result.pix_qr_base64?<img className="itau-qr" src={`data:image/png;base64,${text(result.pix_qr_base64)}`} alt="QR Code Pix retornado pelo Itaú"/>:null}
