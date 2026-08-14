@@ -1,5 +1,6 @@
 (()=>{
   const PERMISSION='cash.correct_closure';
+  const tokensOf=textarea=>textarea.value.split(',').map(x=>x.trim()).filter(Boolean);
   function enhance(){
     if(!location.pathname.includes('/dashboard/perfis-adm'))return;
     document.querySelectorAll('textarea[name="permissions_text"]').forEach(textarea=>{
@@ -10,20 +11,24 @@
       box.className='adm-permission-option';
       const input=document.createElement('input');
       input.type='checkbox';
-      input.checked=textarea.value.split(',').map(x=>x.trim()).includes(PERMISSION);
       const copy=document.createElement('span');
-      copy.innerHTML='<b>Corrigir fechamento de caixa</b><small>Permite alterar somente o valor contado de um caixa já fechado. Toda correção fica auditada.</small>';
-      box.append(input,copy);
-      textarea.closest('label')?.insertAdjacentElement('afterend',box);
-      const sync=()=>{
-        const tokens=textarea.value.split(',').map(x=>x.trim()).filter(Boolean).filter(x=>x!==PERMISSION);
+      const refresh=()=>{
+        const tokens=tokensOf(textarea);const all=tokens.includes('all');
+        input.checked=all||tokens.includes(PERMISSION);input.disabled=all;
+        copy.innerHTML=all
+          ?'<b>Corrigir fechamento de caixa</b><small>Permitido pelo acesso total deste perfil (all).</small>'
+          :'<b>Corrigir fechamento de caixa</b><small>Permite alterar somente o valor contado de um caixa já fechado. Toda correção fica auditada.</small>';
+      };
+      refresh();box.append(input,copy);textarea.closest('label')?.insertAdjacentElement('afterend',box);
+      input.addEventListener('change',()=>{
+        const tokens=tokensOf(textarea).filter(x=>x!==PERMISSION);
         if(input.checked)tokens.push(PERMISSION);
         textarea.value=tokens.join(', ');
         textarea.dispatchEvent(new Event('input',{bubbles:true}));
         textarea.dispatchEvent(new Event('change',{bubbles:true}));
-      };
-      input.addEventListener('change',sync);
-      textarea.addEventListener('input',()=>{input.checked=textarea.value.split(',').map(x=>x.trim()).includes(PERMISSION)});
+        refresh();
+      });
+      textarea.addEventListener('input',refresh);
     });
   }
   let queued=false;const schedule=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;enhance()})};
