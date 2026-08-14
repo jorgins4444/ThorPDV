@@ -18,6 +18,7 @@ import './product-master.css';
 import './production.css';
 import './branch-config.css';
 import './branches-workspace.css';
+import './receivables-print-fix.css';
 import { ModuleClient } from './module-client';
 import { AdvancedShell } from './advanced-shell';
 import { InventoryClient, ReportsClient, StockTransferClient } from './advanced-clients';
