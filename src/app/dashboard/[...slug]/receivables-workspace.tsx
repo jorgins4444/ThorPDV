@@ -2,9 +2,10 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { erpReceivableDetail, erpReceivablesList, erpReverseReceivable, erpSettleReceivable, type ReceivableFilters } from './receivables-actions';
+import { ReceivableBoletoActionModal } from './receivable-boleto-action-modal';
 
 type Row=Record<string,unknown>;
-type Props={initial:Row[];customers:Row[];accounts:Row[];paymentMethods:Row[]};
+type Props={initial:Row[];customers:Row[];accounts:Row[];paymentMethods:Row[];integrations:Row[];initialBillings:Row[]};
 
 const statusLabels:Record<string,string>={open:'Em aberto',paid:'Quitado',partial:'Parcial',overdue:'Vencido',cancelled:'Estornado'};
 const documentLabels:Record<string,string>={boleto:'Boleto',crediario:'Crediário'};
@@ -32,7 +33,7 @@ const errorLabel=(value:unknown)=>{const e=String(value||'erro');const labels:Re
 
 const empty:ReceivableFilters={issuedFrom:'',issuedTo:'',documentType:'',customerId:'',dueFrom:'',dueTo:'',paidFrom:'',paidTo:''};
 
-export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods}:Props){
+export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods,integrations,initialBillings}:Props){
   const [rows,setRows]=useState<Row[]>(initial);
   const [filters,setFilters]=useState<ReceivableFilters>(empty);
   const [message,setMessage]=useState('');
@@ -49,6 +50,8 @@ export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods}
   const [reverseTarget,setReverseTarget]=useState<Row|null>(null);
   const [reverseReason,setReverseReason]=useState('');
   const [reversing,setReversing]=useState(false);
+  const [actionsId,setActionsId]=useState('');
+  const [boletoTarget,setBoletoTarget]=useState<Row|null>(null);
 
   const activeAccounts=useMemo(()=>accounts.filter(a=>a.active!==false&&['bank','internal_cash'].includes(String(a.account_type))),[accounts]);
   const bankOnly=useMemo(()=>activeAccounts.filter(a=>a.account_type==='bank'),[activeAccounts]);
@@ -80,7 +83,7 @@ export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods}
 
   function openSettlement(row:Row){
     const firstMethod=String(settlementMethods.find(m=>String(m.code)==='cash')?.code??settlementMethods[0]?.code??'cash');
-    setDetail(null);
+    setActionsId('');setDetail(null);
     setSelected(row);
     setMethod(firstMethod);
     setAccountId(defaultAccount(firstMethod));
@@ -108,6 +111,7 @@ export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods}
   }
 
   async function openDetails(row:Row){
+    setActionsId('');
     const id=String(row.id||'');if(!id)return;
     setDetailLoadingId(id);setMessage('');
     const r=await erpReceivableDetail(id);
@@ -115,7 +119,8 @@ export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods}
     if(r.ok){setSelected(null);setDetail(r)}else setMessage(`Não foi possível abrir os detalhes: ${errorLabel(r.error)}`);
   }
 
-  function askReverse(row:Row){setReverseTarget(row);setReverseReason('');}
+  function askReverse(row:Row){setActionsId('');setReverseTarget(row);setReverseReason('');}
+  function openBoleto(row:Row){setActionsId('');setBoletoTarget(row);}
 
   async function reverseReceivable(){
     if(!reverseTarget||reverseReason.trim().length<3)return;
@@ -167,7 +172,7 @@ export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods}
 
     <section className="erp-module-card erp-receivable-list-card">
       <div className="erp-receivable-summary"><div><span>Parcelas a prazo</span><b>{rows.filter(r=>String(r.status)!=='cancelled').length}</b></div><div><span>Valor total</span><b>{money(totals.amount)}</b></div><div><span>Valor recebido</span><b>{money(totals.paid)}</b></div><div><span>Saldo a receber</span><b>{money(Math.max(totals.amount-totals.paid,0))}</b></div></div>
-      {rows.length===0?<p className="erp-empty">Nenhum título de Crediário ou Boleto encontrado para os filtros selecionados.</p>:<div className="erp-receivable-table-shell"><table className="erp-data-table erp-receivable-table"><thead><tr><th>Emissão</th><th>Modalidade</th><th>Cliente / operação</th><th>Vencimento</th><th>Parcela</th><th>Valor</th><th>Saldo</th><th>Status</th><th>Ações</th></tr></thead><tbody>{rows.map(row=>{const status=String(row.status||'open');const canReceive=!['paid','cancelled'].includes(status)&&Number(row.remaining||0)>0;const canReverse=status!=='cancelled';return <tr key={String(row.id)} className={status==='cancelled'?'row-reversed':''}><td>{date(row.issued_at)}</td><td><span className={`erp-doc-chip doc-${String(row.document_type)}`}>{docLabel(row.document_type)}</span></td><td className="erp-customer-operation"><b>{String(row.customer||'—')}</b><small>Operação #{String(row.sale_number||'—')}</small></td><td>{date(row.due_date)}</td><td>{row.installment?`${String(row.installment)}/${String(row.installments||row.installment)}`:'—'}</td><td><b>{money(row.amount)}</b></td><td><b>{money(row.remaining)}</b></td><td><span className={`erp-fin-status status-${status}`}>{statusLabel(status)}</span></td><td><div className="erp-receivable-row-actions"><button type="button" className="erp-action-btn action-view" title="Ver detalhes da conta" aria-label="Ver detalhes da conta" disabled={detailLoadingId===String(row.id)} onClick={()=>void openDetails(row)}><span>🔎</span><em>{detailLoadingId===String(row.id)?'...':'Detalhes'}</em></button>{canReceive&&<button type="button" className="erp-action-btn action-receive" title="Receber ou quitar" onClick={()=>openSettlement(row)}><span>✓</span><em>Receber</em></button>}{canReverse&&<button type="button" className="erp-action-btn action-reverse" title="Estornar conta" onClick={()=>askReverse(row)}><span>↶</span><em>Estornar</em></button>}</div></td></tr>})}</tbody></table></div>}
+      {rows.length===0?<p className="erp-empty">Nenhum título de Crediário ou Boleto encontrado para os filtros selecionados.</p>:<div className="erp-receivable-table-shell"><table className="erp-data-table erp-receivable-table"><thead><tr><th>Emissão</th><th>Modalidade</th><th>Cliente / operação</th><th>Vencimento</th><th>Parcela</th><th>Valor</th><th>Saldo</th><th>Status</th><th>Ações</th></tr></thead><tbody>{rows.map(row=>{const id=String(row.id);const status=String(row.status||'open');const canReceive=!['paid','cancelled'].includes(status)&&Number(row.remaining||0)>0;const canReverse=status!=='cancelled';const canBoleto=canReceive&&integrations.some(i=>i.active!==false&&String(i.provider)==='itau');const menuOpen=actionsId===id;return <tr key={id} className={status==='cancelled'?'row-reversed':''}><td>{date(row.issued_at)}</td><td><span className={`erp-doc-chip doc-${String(row.document_type)}`}>{docLabel(row.document_type)}</span></td><td className="erp-customer-operation"><b>{String(row.customer||'—')}</b><small>Operação #{String(row.sale_number||'—')}</small></td><td>{date(row.due_date)}</td><td>{row.installment?`${String(row.installment)}/${String(row.installments||row.installment)}`:'—'}</td><td><b>{money(row.amount)}</b></td><td><b>{money(row.remaining)}</b></td><td><span className={`erp-fin-status status-${status}`}>{statusLabel(status)}</span></td><td><div className="erp-actions-menu-wrap"><button type="button" className={`erp-actions-menu-trigger ${menuOpen?'is-open':''}`} onClick={()=>setActionsId(menuOpen?'':id)}><span>⚙</span>Ações <b>▾</b></button>{menuOpen&&<div className="erp-actions-menu"><button type="button" disabled={detailLoadingId===id} onClick={()=>void openDetails(row)}><span>🔎</span><b>{detailLoadingId===id?'Carregando...':'Ver detalhes'}</b><small>Operação, produtos e recebimentos</small></button>{canReceive&&<button type="button" onClick={()=>openSettlement(row)}><span>✓</span><b>Receber / quitar</b><small>Baixa total ou parcial do título</small></button>}{canBoleto&&<><div className="erp-actions-menu-sep"/><button type="button" className="boleto" onClick={()=>openBoleto(row)}><span>▤</span><b>Processar boleto Itaú</b><small>Validar, emitir, consultar ou imprimir</small></button></>}{canReverse&&<><div className="erp-actions-menu-sep"/><button type="button" className="danger" onClick={()=>askReverse(row)}><span>↶</span><b>Estornar conta</b><small>Reverte o lançamento financeiro</small></button></>}</div>}</div></td></tr>})}</tbody></table></div>}
     </section>
 
     {detail&&<div className="erp-detail-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}><section className="erp-detail-modal" role="dialog" aria-modal="true" aria-label="Detalhes da conta a receber">
@@ -182,6 +187,8 @@ export function ReceivablesWorkspace({initial,customers,accounts,paymentMethods}
       {detailStatus==='cancelled'&&<div className="erp-reversal-banner"><b>Conta estornada</b><span>{String(detailTitle.reversal_reason||'Estorno financeiro registrado.')}</span></div>}
       <footer className="erp-detail-footer"><div><small>O estorno financeiro não cancela automaticamente a venda nem a NFC-e.</small></div><div>{!['paid','cancelled'].includes(detailStatus)&&Number(detailTitle.remaining||0)>0&&<button type="button" className="erp-detail-receive" onClick={()=>openSettlement(detailRow)}>✓ Receber / quitar</button>}{detailStatus!=='cancelled'&&<button type="button" className="erp-detail-reverse" onClick={()=>askReverse(detailRow)}>↶ Estornar conta</button>}</div></footer>
     </section></div>}
+
+    {boletoTarget&&<ReceivableBoletoActionModal row={boletoTarget} customers={customers} integrations={integrations} initialBillings={initialBillings} onClose={()=>setBoletoTarget(null)}/>} 
 
     {reverseTarget&&<div className="erp-detail-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!reversing)setReverseTarget(null)}}><section className="erp-reverse-modal" role="dialog" aria-modal="true" aria-label="Estornar conta a receber"><div className="erp-reverse-icon">↶</div><h2>Estornar esta conta?</h2><p>A parcela será marcada como <b>Estornada</b>. Se houver recebimento, o ThorGestão criará a movimentação financeira inversa e manterá o histórico original.</p><div className="erp-reverse-warning"><b>Importante</b><span>A venda e a NFC-e não serão canceladas por esta ação.</span></div><label>Motivo do estorno<textarea autoFocus rows={3} value={reverseReason} onChange={e=>setReverseReason(e.target.value)} placeholder="Ex.: título lançado indevidamente, negociação cancelada..."/></label><div className="erp-reverse-actions"><button type="button" className="erp-ghost" disabled={reversing} onClick={()=>setReverseTarget(null)}>Voltar</button><button type="button" className="erp-danger" disabled={reversing||reverseReason.trim().length<3} onClick={()=>void reverseReceivable()}>{reversing?'Estornando...':'↶ Confirmar estorno'}</button></div></section></div>}
   </div>;
