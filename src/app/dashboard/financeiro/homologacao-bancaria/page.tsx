@@ -1,7 +1,7 @@
 import '../../[...slug]/module.css';
 import '../../[...slug]/advanced.css';
-import '../../[...slug]/financial-accounts.css';
 import '../../[...slug]/bank-homologation.css';
+import '../../[...slug]/ui-visibility-fixes.css';
 import { AdvancedShell } from '../../[...slug]/advanced-shell';
 import { bankHomologationData } from '../../[...slug]/bank-cnab-actions';
 import { BankHomologationWorkspace } from '../../[...slug]/bank-homologation-workspace';
