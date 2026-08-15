@@ -34,19 +34,58 @@ function receiptEventId(saleKey){
   const key=text(saleKey);
   return key.startsWith('local:')?key.slice(6):'';
 }
+function receiptServerNumber(agent,eventId){
+  const row=agent.store.receiptByEvent(eventId);
+  return text(row?.server_number);
+}
+function queuedSaleEvent(agent,eventId){
+  const row=agent.store.db.prepare('select id,type,payload,state,last_error from queue where id=?').get(eventId);
+  if(!row)return null;
+  let payload={};
+  try{payload=JSON.parse(row.payload||'{}');}catch{}
+  return {...row,payload};
+}
 async function waitForServerNumber(agent,saleKey){
   const eventId=receiptEventId(saleKey);
   if(!eventId)return;
-  let row=agent.store.receiptByEvent(eventId);
-  if(text(row?.server_number))return;
-  try{await agent.sync.run(true);}catch{}
-  const deadline=Date.now()+12000;
-  while(Date.now()<deadline){
-    row=agent.store.receiptByEvent(eventId);
-    if(text(row?.server_number))return;
-    const queued=agent.store.db.prepare('select state from queue where id=?').get(eventId);
+  if(receiptServerNumber(agent,eventId))return;
+
+  // finalizeSale já dispara a sincronização em background. Damos uma janela curta
+  // para aproveitar a resposta que já estiver chegando, sem iniciar outro ciclo completo.
+  const graceDeadline=Date.now()+180;
+  while(Date.now()<graceDeadline){
+    if(receiptServerNumber(agent,eventId))return;
+    const queued=queuedSaleEvent(agent,eventId);
     if(queued?.state==='rejected')throw new Error('sale_sync_rejected');
-    await sleep(120);
+    await sleep(30);
+  }
+
+  // Caminho rápido da impressão direta: envia apenas o evento da venda. O endpoint
+  // /push devolve o número sequencial na própria resposta e applyPushResults grava
+  // server_number no recibo local. O servidor é idempotente pelo client_event_id,
+  // então é seguro caso o sync de background esteja enviando a mesma venda.
+  const queued=queuedSaleEvent(agent,eventId);
+  if(queued?.state==='rejected')throw new Error('sale_sync_rejected');
+  if(queued&&queued.state==='pending'&&queued.type==='sale_completed'&&typeof agent.sync?.pushEvents==='function'){
+    try{
+      await Promise.race([
+        agent.sync.pushEvents([{id:eventId,type:queued.type,payload:queued.payload}]),
+        sleep(2500).then(()=>{throw new Error('fast_sale_push_timeout');}),
+      ]);
+    }catch(error){
+      // Se a rede estiver lenta, a sincronização de background pode concluir logo
+      // depois. Não iniciamos sync.run(true), pois esse era justamente o delay.
+      if(text(error?.message)==='sale_sync_rejected')throw error;
+    }
+  }
+
+  if(receiptServerNumber(agent,eventId))return;
+  const deadline=Date.now()+3500;
+  while(Date.now()<deadline){
+    if(receiptServerNumber(agent,eventId))return;
+    const current=queuedSaleEvent(agent,eventId);
+    if(current?.state==='rejected')throw new Error('sale_sync_rejected');
+    await sleep(50);
   }
   throw new Error('sale_number_pending_sync');
 }
