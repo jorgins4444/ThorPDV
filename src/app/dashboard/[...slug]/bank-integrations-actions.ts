@@ -24,3 +24,4 @@ export async function testItauBolecode(integrationId:string,payload:Record<strin
  return rpc('erp_itau_bolecode_test',{p_token:t,p_integration:integrationId,p_payload:payload,p_effective:effective});
 }
 export async function bankBillingsList(limit=100){return rpc('erp_bank_billings_list',{p_token:await token(),p_limit:limit});}
+export async function simulateItauBoletoPayment(billingId:string){return rpc('erp_itau_boleto_simulate_payment',{p_token:await token(),p_billing_id:billingId});}
