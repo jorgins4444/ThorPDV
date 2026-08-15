@@ -8,6 +8,7 @@ import './thor-universal-polish.css';
 import './thor-responsive-layout.css';
 import './fiscal-compact.css';
 import './cash-closure-history.css';
+import { ThorFeedbackCenter } from './thor-feedback-center';
 
 export const metadata: Metadata = {
   title: 'ThorPDV',
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>{children}<ThorFeedbackCenter/></body>
       <script src="/product-image-upload-v091.js" defer />
       <script src="/fiscal-compact-v1.js" defer />
       <script src="/admin-permission-hints-v1.js" defer />
