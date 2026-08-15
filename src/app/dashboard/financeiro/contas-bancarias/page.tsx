@@ -2,6 +2,7 @@ import '../../[...slug]/module.css';
 import '../../[...slug]/advanced.css';
 import '../../[...slug]/financial-accounts.css';
 import '../../[...slug]/bank-integrations.css';
+import '../../[...slug]/bank-settlement-simulator.css';
 import { AdvancedShell } from '../../[...slug]/advanced-shell';
 import { financialAccountsData } from '../../[...slug]/financial-accounts-actions';
 import { bankBillingsList, bankIntegrationsData } from '../../[...slug]/bank-integrations-actions';
