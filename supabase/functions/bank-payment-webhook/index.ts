@@ -23,6 +23,36 @@ function safeEqual(a: string, b: string) {
   return out === 0;
 }
 
+function b64url(bytes: Uint8Array) {
+  let raw = "";
+  for (const b of bytes) raw += String.fromCharCode(b);
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function hmac(value: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(WEBHOOK_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return b64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))));
+}
+
+async function validOauthToken(token: string) {
+  if (!WEBHOOK_SECRET || !token.startsWith("thorwh.v1.")) return false;
+  const parts = token.split(".");
+  if (parts.length !== 5) return false;
+  const [, version, expRaw, nonce, signature] = parts;
+  if (version !== "v1") return false;
+  const exp = Number(expRaw);
+  if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000) - 30) return false;
+  if (exp > Math.floor(Date.now() / 1000) + 600) return false;
+  const expected = await hmac(`${expRaw}.${nonce}`);
+  return safeEqual(signature, expected);
+}
+
 function getPath(obj: any, path: string): unknown {
   return path.split(".").reduce((cur: any, key) => cur && typeof cur === "object" ? cur[key] : undefined, obj);
 }
@@ -65,54 +95,79 @@ async function sha256(value: string) {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function normalizeEnvironment(value: unknown) {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "sandbox" || v === "homologation" || v === "production") return v;
+  if (["homologacao", "homologação", "hml", "homol"].includes(v)) return "homologation";
+  if (["prod", "producao", "produção"].includes(v)) return "production";
+  return undefined;
+}
+
 function normalize(payload: any, req: Request) {
-  const paymentStatus = text(pick(payload, [
+  const occurrence = text(pick(payload, [
+    "occurrence_code", "occurrenceCode", "codigo_ocorrencia", "codigoOcorrencia",
+    "evento.codigo_ocorrencia", "evento.codigoOcorrencia", "notificacao.codigo_ocorrencia",
+  ]));
+  const rawStatus = text(pick(payload, [
     "payment_status", "paymentStatus", "status", "situacao", "situacao_pagamento",
     "payment.status", "pagamento.status", "cobranca.status", "boleto.status", "evento.status",
   ]));
+  const paymentStatus = rawStatus || (occurrence === "06" ? "liquidado" : undefined);
   const eventType = text(pick(payload, [
-    "event_type", "eventType", "type", "tipo", "tipo_evento", "evento.tipo", "notification.type",
-  ])) || paymentStatus || "unknown";
+    "event_type", "eventType", "type", "tipo", "tipo_evento", "evento.tipo", "notification.type", "notificacao.tipo",
+  ])) || paymentStatus || (occurrence ? `ocorrencia_${occurrence}` : "unknown");
   const paymentChannel = text(pick(payload, [
     "payment_channel", "paymentChannel", "channel", "canal", "meio_pagamento", "payment.method", "pagamento.meio",
-  ])) || (text(pick(payload, ["pix_txid", "txid", "pix.txid", "pagamento.txid"])) ? "pix" : "boleto");
+  ])) || (text(pick(payload, ["pix_txid", "txid", "pix.txid", "pagamento.txid", "endToEndId", "end_to_end_id"])) ? "pix" : "boleto");
 
   return {
     event_type: eventType,
     payment_status: paymentStatus || eventType,
     payment_channel: paymentChannel,
+    occurrence_code: occurrence,
     billing_id: text(pick(payload, ["billing_id", "billingId", "metadata.billing_id"])),
     our_number: text(pick(payload, [
-      "our_number", "ourNumber", "nosso_numero", "nossoNumero", "numero_titulo", "numeroTitulo",
-      "boleto.nosso_numero", "boleto.nossoNumero", "cobranca.nosso_numero", "cobranca.nossoNumero",
+      "our_number", "ourNumber", "nosso_numero", "nossoNumero", "numero_titulo", "numeroTitulo", "numero_nosso_numero", "numeroNossoNumero",
+      "boleto.nosso_numero", "boleto.nossoNumero", "boleto.numero_nosso_numero", "cobranca.nosso_numero", "cobranca.nossoNumero",
+      "dado_boleto.dados_individuais_boleto.0.numero_nosso_numero", "data.numero_nosso_numero",
     ])),
     external_id: text(pick(payload, [
-      "external_id", "externalId", "id_titulo", "idTitulo", "billing.external_id", "cobranca.id", "boleto.id",
+      "external_id", "externalId", "id_titulo", "idTitulo", "id_boleto", "idBoleto", "billing.external_id", "cobranca.id", "boleto.id",
     ])),
     pix_txid: text(pick(payload, ["pix_txid", "pixTxid", "txid", "pix.txid", "pagamento.txid"])),
-    correlation_id: text(req.headers.get("x-itau-correlationid")) || text(req.headers.get("x-correlation-id")) || text(pick(payload, ["correlation_id", "correlationId"])),
+    correlation_id: text(req.headers.get("x-itau-correlationid")) || text(req.headers.get("x-itau-correlation-id")) || text(req.headers.get("x-correlation-id")) || text(pick(payload, ["correlation_id", "correlationId"])),
     amount: amount(pick(payload, [
-      "paid_amount", "paidAmount", "valor_pago", "valorPago", "amount", "valor",
-      "payment.amount", "pagamento.valor", "pagamento.valor_pago", "liquidacao.valor",
+      "paid_amount", "paidAmount", "valor_pago", "valorPago", "amount", "valor", "valor_pagamento", "valorPagamento",
+      "payment.amount", "pagamento.valor", "pagamento.valor_pago", "liquidacao.valor", "data.valor_pago",
     ])),
     paid_at: isoDate(pick(payload, [
-      "paid_at", "paidAt", "payment_date", "paymentDate", "data_pagamento", "dataPagamento",
-      "data_liquidacao", "dataLiquidacao", "payment.date", "pagamento.data", "liquidacao.data",
+      "paid_at", "paidAt", "payment_date", "paymentDate", "data_pagamento", "dataPagamento", "data_hora_pagamento", "dataHoraPagamento",
+      "data_liquidacao", "dataLiquidacao", "payment.date", "pagamento.data", "liquidacao.data", "data.data_pagamento",
     ])),
   };
 }
 
 Deno.serve(async (req) => {
+  const url = new URL(req.url);
+  const requestedEnvironment = normalizeEnvironment(url.searchParams.get("environment"));
+
   if (req.method === "GET") {
-    return json({ ok: true, service: "ThorGestao bank payment webhook", authentication: WEBHOOK_SECRET ? "configured" : "not_configured" });
+    return json({
+      ok: true,
+      service: "ThorGestao bank payment webhook",
+      authentication: WEBHOOK_SECRET ? "configured" : "not_configured",
+      supported_environments: ["sandbox", "homologation", "production"],
+      requested_environment: requestedEnvironment || null,
+    });
   }
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
   if (!WEBHOOK_SECRET) return json({ ok: false, error: "webhook_secret_not_configured" }, 503);
   const bearer = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
   const headerSecret = (req.headers.get("x-thor-webhook-secret") || "").trim();
-  const candidate = headerSecret || bearer;
-  if (!candidate || !safeEqual(candidate, WEBHOOK_SECRET)) return json({ ok: false, error: "unauthorized_webhook" }, 401);
+  const staticAuth = Boolean(headerSecret && safeEqual(headerSecret, WEBHOOK_SECRET)) || Boolean(bearer && safeEqual(bearer, WEBHOOK_SECRET));
+  const oauthAuth = bearer ? await validOauthToken(bearer) : false;
+  if (!staticAuth && !oauthAuth) return json({ ok: false, error: "unauthorized_webhook" }, 401);
 
   const raw = await req.text();
   let payload: any;
@@ -120,12 +175,15 @@ Deno.serve(async (req) => {
   catch { return json({ ok: false, error: "invalid_json" }, 400); }
 
   const provider = (text(req.headers.get("x-thor-bank-provider")) || text(payload.provider) || "itau")!.toLowerCase();
-  const environmentRaw = (text(req.headers.get("x-thor-bank-environment")) || text(payload.environment) || "production")!.toLowerCase();
-  const environment = environmentRaw === "sandbox" ? "sandbox" : "production";
+  const environment = requestedEnvironment
+    || normalizeEnvironment(req.headers.get("x-thor-bank-environment"))
+    || normalizeEnvironment(payload.environment)
+    || "production";
   const normalized = normalize(payload, req);
-  const eventId = text(pick(payload, ["event_id", "eventId", "notification_id", "notificationId", "id_evento", "idEvento", "evento.id"]))
-    || normalized.correlation_id
-    || await sha256(raw || JSON.stringify(payload));
+  const eventId = text(pick(payload, [
+    "event_id", "eventId", "notification_id", "notificationId", "id_notificacao", "idNotificacao",
+    "id_evento", "idEvento", "evento.id", "notificacao.id", "id",
+  ])) || normalized.correlation_id || await sha256(`${environment}:${raw || JSON.stringify(payload)}`);
 
   const { data, error } = await db.rpc("bank_webhook_receive", {
     p_provider: provider,
@@ -137,7 +195,7 @@ Deno.serve(async (req) => {
   });
 
   if (error) return json({ ok: false, error: "webhook_database_error", detail: error.message }, 500);
-  if (!data?.ok && data?.error === "bank_billing_not_found") return json(data, 202);
+  if (!data?.ok && (data?.error === "bank_billing_not_found" || data?.error === "ambiguous_bank_billing")) return json(data, 202);
   if (!data?.ok) return json(data || { ok: false, error: "webhook_processing_failed" }, 422);
   return json(data, 200);
 });
