@@ -1,5 +1,6 @@
 'use client';
 
+// Build retry marker: 2026-08-15 product files module.
 import { useMemo, useState } from 'react';
 
 type ProductRow={
