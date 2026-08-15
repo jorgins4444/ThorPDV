@@ -26,7 +26,8 @@ function currentOperator(agent){
 }
 function sellerFor(agent,input,operator){
   const orderSeller=text(agent._commercialV070?.order?.seller_user_id);
-  const requested=orderSeller||text(input?.sellerUserId)||text(input?.seller_user_id)||text(operator?.id);
+  const configured=text(agent.store.get('sale_seller_user_id',''));
+  const requested=orderSeller||text(input?.sellerUserId)||text(input?.seller_user_id)||configured||text(operator?.id);
   return staffUsers(agent).find(row=>text(row.id)===requested)||operator||null;
 }
 function receiptEventId(saleKey){
@@ -90,8 +91,22 @@ function replacePre(html,body){
   return String(html).replace(/<pre>[\s\S]*?<\/pre>/i,`<pre>${htmlEscape(body)}</pre>`);
 }
 
-function installSaleIdentityV830(ThorAgent){
-  if(!ThorAgent||ThorAgent.prototype.__saleIdentityV830)return;
+function installSaleIdentityV830(ThorAgent,Store){
+  if(!ThorAgent||!Store||ThorAgent.prototype.__saleIdentityV830)return;
+
+  if(!Store.prototype.__saleSellerSettingV830){
+    const originalSettings=Store.prototype.settings;
+    const originalSaveSettings=Store.prototype.saveSettings;
+    Store.prototype.settings=function(...args){
+      const base=originalSettings.apply(this,args);
+      return {...base,saleSellerUserId:this.get('sale_seller_user_id','')||''};
+    };
+    Store.prototype.saveSettings=function(input={}){
+      if(Object.prototype.hasOwnProperty.call(input,'saleSellerUserId')) this.set('sale_seller_user_id',text(input.saleSellerUserId));
+      return originalSaveSettings.call(this,input);
+    };
+    Store.prototype.__saleSellerSettingV830=true;
+  }
 
   const originalEvent=ThorAgent.prototype.event;
   ThorAgent.prototype.event=function(type,payload={}){
