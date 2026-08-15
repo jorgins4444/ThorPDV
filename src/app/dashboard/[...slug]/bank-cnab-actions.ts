@@ -11,7 +11,7 @@ const SESSION_COOKIE='thorpdv_test_session';
 async function token(){const store=await cookies();const value=store.get(SESSION_COOKIE)?.value;if(!value)redirect('/login');return value;}
 async function rpc(name:string,args:Record<string,unknown>){const supabase=await createClient();const {data,error}=await supabase.rpc(name,args);if(error)return {ok:false,error:error.message};return (data??{ok:false}) as Record<string,unknown>}
 
-function validateReturnFile(layout:CnabLayout,content:string){
+function validateReturnFile(layout:CnabLayout,content:string):Record<string,unknown>{
   const lines=String(content||'').replace(/\r/g,'').split('\n').filter(line=>line.length>0);
   const first=lines[0]||'';
   if(!first)return {ok:false,error:'return_file_empty',detail:'O arquivo selecionado está vazio.'};
