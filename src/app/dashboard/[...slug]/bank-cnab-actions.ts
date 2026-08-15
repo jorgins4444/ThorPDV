@@ -11,6 +11,34 @@ const SESSION_COOKIE='thorpdv_test_session';
 async function token(){const store=await cookies();const value=store.get(SESSION_COOKIE)?.value;if(!value)redirect('/login');return value;}
 async function rpc(name:string,args:Record<string,unknown>){const supabase=await createClient();const {data,error}=await supabase.rpc(name,args);if(error)return {ok:false,error:error.message};return (data??{ok:false}) as Record<string,unknown>}
 
+function validateReturnFile(layout:CnabLayout,content:string){
+  const lines=String(content||'').replace(/\r/g,'').split('\n').filter(line=>line.length>0);
+  const first=lines[0]||'';
+  if(!first)return {ok:false,error:'return_file_empty',detail:'O arquivo selecionado está vazio.'};
+
+  if(layout==='cnab400'){
+    const operation=first.slice(1,2);
+    const literal=first.slice(2,9).trim().toUpperCase();
+    const serviceCode=first.slice(9,11);
+    const bankCode=first.slice(76,79);
+    if(operation==='1'||literal==='REMESSA'){
+      return {ok:false,error:'cnab400_file_is_not_return',detail:'O arquivo selecionado é uma REMESSA CNAB 400 (01REMESSA), não um arquivo de RETORNO do banco. Selecione o arquivo devolvido pelo Itaú, cujo cabeçalho deve iniciar com 02RETORNO01COBRANCA.'};
+    }
+    if(operation!=='2'||literal!=='RETORNO'||serviceCode!=='01'||bankCode!=='341'){
+      return {ok:false,error:'return_not_itau_cnab400',detail:'O arquivo não possui o cabeçalho esperado de retorno Itaú CNAB 400 (02RETORNO01COBRANCA e banco 341).'};
+    }
+  }
+
+  if(layout==='cnab240'){
+    const bankCode=first.slice(0,3);
+    const fileCode=first.slice(142,143);
+    if(bankCode!=='341'||fileCode!=='2'){
+      return {ok:false,error:'return_not_itau_cnab240',detail:'O arquivo não possui o cabeçalho esperado de retorno Itaú CNAB 240.'};
+    }
+  }
+  return {ok:true};
+}
+
 export async function cnabData(){return rpc('erp_cnab_data',{p_token:await token()})}
 export async function bankHomologationData(){return rpc('erp_bank_homologation_data',{p_token:await token()})}
 export async function bankLayoutProfile(configId:string){return rpc('erp_bank_layout_profile_get',{p_token:await token(),p_config:configId})}
@@ -44,12 +72,14 @@ export async function markCnabRemittanceSent(remittanceId:string){
 }
 
 export async function previewCnabReturn(layout:CnabLayout,content:string){
+  const validation=validateReturnFile(layout,content);if(!validation.ok)return validation;
   return rpc(layout==='cnab240'?'erp_cnab240_return_preview':'erp_cnab400_return_preview',{
     p_token:await token(),p_content:content,
   });
 }
 
 export async function importCnabReturn(layout:CnabLayout,configId:string,fileName:string,content:string){
+  const validation=validateReturnFile(layout,content);if(!validation.ok)return validation;
   return rpc(layout==='cnab240'?'erp_cnab240_return_import':'erp_cnab400_return_import',{
     p_token:await token(),p_config:configId,p_file_name:fileName,p_content:content,
   });
