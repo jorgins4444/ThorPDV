@@ -21,6 +21,7 @@ export async function selectHomologationTest(configId:string,financialEntryId:st
 export async function bindHomologationRemittance(configId:string,remittanceId:string){return rpc('erp_bank_homologation_bind_remittance',{p_token:await token(),p_config:configId,p_remittance:remittanceId})}
 export async function homologationTestFile(configId:string){return rpc('erp_bank_homologation_test_file',{p_token:await token(),p_config:configId})}
 export async function cnabBoletoData(remittanceItemId:string){return rpc('erp_cnab_boleto_get',{p_token:await token(),p_remittance_item:remittanceItemId})}
+export async function cnabRemittanceBoletoItems(remittanceId:string){return rpc('erp_cnab_remittance_boleto_items',{p_token:await token(),p_remittance:remittanceId})}
 export async function markHomologationRemittanceSent(configId:string){return rpc('erp_bank_homologation_mark_sent',{p_token:await token(),p_config:configId})}
 export async function restartBankHomologation(configId:string){return rpc('erp_bank_homologation_restart',{p_token:await token(),p_config:configId})}
 
