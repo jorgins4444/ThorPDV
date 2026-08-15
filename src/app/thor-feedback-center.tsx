@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import styles from './thor-feedback-center.module.css';
 
 type FeedbackKind='success'|'info'|'warning'|'error';
@@ -10,6 +10,7 @@ type FeedbackState={id:number;kind:FeedbackKind;title:string;message:string;dura
 const successPattern=/\b(salv[oa]|salv[oa]s|salvo com sucesso|salva com sucesso|gravado|gravada|cadastrad[oa]|atualizad[oa]|alterad[oa]|ativad[oa]|desativad[oa]|registrad[oa]|gerad[oa]|importad[oa]|conclu[ií]d[oa]|configurad[oa]|aplicad[oa]|criad[oa]|vinculad[oa]|removid[oa]|exclu[ií]d[oa]|processad[oa]|confirmad[oa]|finalizad[oa]|sucesso)\b/i;
 const errorPattern=/\b(erro|falha|falhou|inv[aá]lid[oa]|rejeitad[oa]|n[aã]o foi poss[ií]vel|n[aã]o p[oô]de|cancelad[oa]|pendente|aguardando|aten[cç][aã]o)\b/i;
 const likelyMessageSelector='[role="status"],[role="alert"],.studio-message,.erp-message,.message,.alert,.notice,.feedback,.toast,[class*="success"],[class*="message"],[class*="alert"],[class*="notice"],[class*="feedback"],[class*="toast"]';
+const ownUiSelector='[data-thor-feedback-ui="true"]';
 
 function compact(value:string){return value.replace(/\s+/g,' ').trim();}
 function safeMessage(value:string){const clean=compact(value);return clean.length>190?`${clean.slice(0,187)}…`:clean;}
@@ -64,12 +65,13 @@ export function ThorFeedbackCenter(){
     const inspectNode=(node:Node)=>{
       if(node.nodeType===Node.TEXT_NODE){
         const parent=node.parentElement;
+        if(parent?.closest(ownUiSelector))return;
         if(parent?.closest(likelyMessageSelector))consider(parent.textContent);
         return;
       }
-      if(!(node instanceof HTMLElement))return;
+      if(!(node instanceof HTMLElement)||node.closest(ownUiSelector))return;
       if(node.matches(likelyMessageSelector))consider(node.textContent);
-      node.querySelectorAll(likelyMessageSelector).forEach(element=>consider(element.textContent));
+      node.querySelectorAll(likelyMessageSelector).forEach(element=>{if(!element.closest(ownUiSelector))consider(element.textContent)});
       if(node.childElementCount===0)consider(node.textContent);
     };
 
@@ -100,8 +102,8 @@ export function ThorFeedbackCenter(){
   },[]);
 
   if(!feedback)return null;
-  return <div className={styles.viewport} aria-live="polite" aria-atomic="true">
-    <section key={feedback.id} className={`${styles.card} ${styles[feedback.kind]}`} role="status" style={{'--thor-feedback-duration':`${feedback.duration}ms`} as React.CSSProperties}>
+  return <div className={styles.viewport} aria-live="polite" aria-atomic="true" data-thor-feedback-ui="true">
+    <section key={feedback.id} className={`${styles.card} ${styles[feedback.kind]}`} role="status" style={{'--thor-feedback-duration':`${feedback.duration}ms`} as CSSProperties}>
       <div className={styles.glow}/>
       <div className={styles.iconWrap} aria-hidden="true">
         <svg className={styles.check} viewBox="0 0 72 72" fill="none">
