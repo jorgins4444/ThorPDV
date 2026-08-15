@@ -32,7 +32,6 @@ function ascii(value:unknown){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^\x20-\x7E]/g,' ')
     .replace(/[|;]/g,' ')
-    .replace(/\s+/g,' ')
     .trim();
 }
 
