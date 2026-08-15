@@ -14,7 +14,7 @@
     const field = document.createElement('div');
     field.className = 'field';
     field.dataset.receiptColumnsField = '1';
-    field.innerHTML = `<label>Largura do cupom não fiscal</label><select id="receiptColumns"><option value="44" ${current===44?'selected':''}>44 colunas — padrão térmico</option><option value="65" ${current===65?'selected':''}>65 colunas — modo compacto</option></select><small class="muted">Usado apenas no comprovante / pré-venda não fiscal. NFC-e continua com o DANFE fiscal.</small>`;
+    field.innerHTML = `<label>Largura do cupom térmico</label><select id="receiptColumns"><option value="44" ${current===44?'selected':''}>44 colunas — padrão térmico</option><option value="65" ${current===65?'selected':''}>65 colunas — cupom compacto</option></select><small class="muted">Aplicado à pré-venda/comprovante e ao DANFE NFC-e. Na NFC-e o Thor acrescenta chave de acesso, protocolo e QR Code.</small>`;
     const printerField = printerSelect.closest('.field');
     if (printerField?.parentNode) printerField.parentNode.insertBefore(field, printerField.nextSibling);
 
