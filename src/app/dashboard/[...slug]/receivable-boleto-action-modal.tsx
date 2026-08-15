@@ -1,57 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { ReceivablesBolecodePanel } from './receivables-bolecode-panel';
-import { simulateReceivableItauPayment } from './receivables-bolecode-actions';
-
 type Row=Record<string,unknown>;
+type Props={row:Row;customers:Row[];integrations:Row[];initialBillings:Row[];onClose:()=>void};
+const money=(v:unknown)=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const date=(v:unknown)=>v?new Date(`${String(v).slice(0,10)}T12:00:00`).toLocaleDateString('pt-BR'):'—';
 
-type Props={
-  row:Row;
-  customers:Row[];
-  integrations:Row[];
-  initialBillings:Row[];
-  onClose:()=>void;
-};
-
-export function ReceivableBoletoActionModal({row,customers,integrations,initialBillings,onClose}:Props){
-  const id=String(row.id||'');
-  const billings=initialBillings.filter(b=>String(b.financial_entry_id)===id);
-  const payableSandboxBilling=billings.find(b=>String(b.environment)==='sandbox'&&['issued','processing'].includes(String(b.status)));
-  const [simulating,setSimulating]=useState(false);
-  const [simulationMessage,setSimulationMessage]=useState('');
-
-  async function simulatePayment(){
-    if(!payableSandboxBilling?.id||simulating)return;
-    setSimulating(true);
-    setSimulationMessage('');
-    const result=await simulateReceivableItauPayment(String(payableSandboxBilling.id));
-    setSimulating(false);
-    if(result.ok){
-      const amount=Number(result.amount||row.remaining||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-      setSimulationMessage(`✓ Evento bancário simulado processado. ${amount} baixado automaticamente no Contas a Receber.`);
-      window.setTimeout(()=>window.location.reload(),900);
-      return;
-    }
-    const error=String(result.error||'');
-    if(error==='sandbox_only')setSimulationMessage('A simulação de liquidação é permitida somente no ambiente Sandbox.');
-    else if(error==='billing_not_payable')setSimulationMessage('Este boleto não está em situação válida para simular pagamento.');
-    else setSimulationMessage(String(result.detail||result.error||'Não foi possível simular a liquidação do boleto.'));
-  }
-
+export function ReceivableBoletoActionModal({row,onClose}:Props){
   return <div className="erp-boleto-action-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
-    <section className="erp-boleto-action-modal" role="dialog" aria-modal="true" aria-label="Processar boleto Itaú">
-      <header className="erp-boleto-action-header">
-        <div><span>COBRANÇA BANCÁRIA</span><h2>Processar boleto Itaú</h2><p>{String(row.customer||'Cliente')} · vencimento {String(row.due_date||'—')} · saldo {Number(row.remaining||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</p></div>
-        <button type="button" onClick={onClose} aria-label="Fechar">×</button>
-      </header>
-      {payableSandboxBilling&&<div style={{padding:'12px 20px 0',display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
-        <button type="button" className="erp-primary" onClick={simulatePayment} disabled={simulating}>{simulating?'Simulando evento bancário…':'✓ Simular pagamento do boleto'}</button>
-        <small>Sandbox: simula uma liquidação Itaú e executa a mesma baixa automática preparada para o webhook bancário.</small>
-      </div>}
-      {simulationMessage&&<div style={{padding:'10px 20px 0'}}><strong>{simulationMessage}</strong></div>}
+    <section className="erp-boleto-action-modal" role="dialog" aria-modal="true" aria-label="Processar boleto por remessa">
+      <header className="erp-boleto-action-header"><div><span>COBRANÇA BANCÁRIA</span><h2>Boleto por Remessa / Retorno</h2><p>{String(row.customer||'Cliente')} · vencimento {date(row.due_date)} · saldo {money(row.remaining)}</p></div><button type="button" onClick={onClose} aria-label="Fechar">×</button></header>
       <div className="erp-boleto-action-body">
-        <ReceivablesBolecodePanel receivables={[row]} customers={customers} integrations={integrations} initialBillings={billings}/>
+        <div style={{padding:'24px',display:'grid',gap:16}}>
+          <div style={{padding:'18px',border:'1px solid #dde3ea',borderRadius:12,background:'#f8fafc'}}><strong style={{display:'block',fontSize:17,marginBottom:6}}>Cobrança via Itaú CNAB 400</strong><span>O ThorGestão não envia mais este boleto pela API BoleCode. O registro será feito por arquivo de remessa e a baixa será processada pelo arquivo retorno do banco.</span></div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}><div><b>1. Remessa</b><small style={{display:'block',marginTop:4}}>Selecione este título e gere o arquivo .REM.</small></div><div><b>2. Itaú</b><small style={{display:'block',marginTop:4}}>Envie a remessa na transmissão de arquivos.</small></div><div><b>3. Retorno</b><small style={{display:'block',marginTop:4}}>Importe o .RET para baixar automaticamente.</small></div></div>
+          <div style={{display:'flex',justifyContent:'flex-end',gap:10}}><button type="button" onClick={onClose}>Fechar</button><a className="erp-primary" href="/dashboard/financeiro/remessa-retorno">Abrir Remessa / Retorno</a></div>
+        </div>
       </div>
     </section>
   </div>;
