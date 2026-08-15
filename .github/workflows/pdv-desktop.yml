@@ -60,6 +60,7 @@ jobs:
             'agent/sales-options-v071.js',
             'agent/sales-settlement-v073.js',
             'agent/product-images-v090.js',
+            'agent/receipt-print-v829.js',
             'renderer/app.js',
             'renderer/update-center.js',
             'renderer/checkout-v3.js',
@@ -101,7 +102,8 @@ jobs:
             'renderer/redesign-v099.js',
             'renderer/redesign-v100.js',
             'renderer/redesign-v101.js',
-            'renderer/term-finalize-v102.js'
+            'renderer/term-finalize-v102.js',
+            'renderer/receipt-print-v829.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
