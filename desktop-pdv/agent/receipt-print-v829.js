@@ -1,4 +1,5 @@
 const { execFile } = require('child_process');
+const QRCode = require('qrcode');
 
 function psQuote(value) {
   return String(value || '').replace(/'/g, "''");
@@ -62,6 +63,9 @@ function ascii(value) {
     .replace(/[\t]+/g, ' ');
 }
 
+function htmlEscape(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
 function digits(value) { return String(value ?? '').replace(/\D/g, ''); }
 function money(value) { return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function quantity(value) {
@@ -247,10 +251,27 @@ function buildNfceReceipt(sale, columns) {
   return lines.map(line => String(line).slice(0, width)).join('\n');
 }
 
+function qrSvg(data) {
+  const qr = QRCode.create(String(data || ''), { errorCorrectionLevel:'M' });
+  const size = qr.modules.size;
+  const margin = 4;
+  const dots = [];
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      if (qr.modules.get(y, x)) dots.push(`M${x} ${y}h1v1h-1z`);
+    }
+  }
+  return `<svg class="thor-qr" xmlns="http://www.w3.org/2000/svg" viewBox="${-margin} ${-margin} ${size + margin * 2} ${size + margin * 2}" shape-rendering="crispEdges" role="img" aria-label="QR Code da NFC-e"><rect x="${-margin}" y="${-margin}" width="${size + margin * 2}" height="${size + margin * 2}" fill="#fff"/><path d="${dots.join('')}" fill="#000"/></svg>`;
+}
+
 function htmlForReceipt(text, columns) {
   const width = columns === 65 ? 65 : 44;
-  const escaped = String(text).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-  return `<!doctype html><html><head><meta charset="utf-8"><style>@page{margin:6mm}body{font-family:Consolas,'Courier New',monospace;margin:0;color:#111}pre{width:${width}ch;max-width:100%;white-space:pre;font-size:${width===65?'9px':'11px'};line-height:1.25;margin:0 auto}</style></head><body><pre>${escaped}</pre></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>@page{margin:6mm}body{font-family:Consolas,'Courier New',monospace;margin:0;color:#111}pre{width:${width}ch;max-width:100%;white-space:pre;font-size:${width===65?'9px':'11px'};line-height:1.25;margin:0 auto}</style></head><body><pre>${htmlEscape(text)}</pre></body></html>`;
+}
+
+function htmlForNfce(text, columns, qrCodeUrl) {
+  const width = columns === 65 ? 65 : 44;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>@page{size:80mm auto;margin:2mm}*{box-sizing:border-box}body{width:76mm;margin:0 auto;padding:1mm;background:#fff;color:#000;font-family:Consolas,'Courier New',monospace}pre{width:${width}ch;max-width:100%;white-space:pre-wrap;font-size:${width===65?'8px':'10px'};line-height:1.2;margin:0 auto}.qr-wrap{text-align:center;margin:3mm 0 1mm}.thor-qr{display:block;width:38mm;height:38mm;margin:0 auto}.qr-url{font-size:6.5px;word-break:break-all;text-align:center;margin-top:1mm}@media screen{body{box-shadow:0 0 8px #bbb;margin:8px auto}}</style></head><body><pre>${htmlEscape(text)}</pre><div class="qr-wrap">${qrSvg(qrCodeUrl)}<div class="qr-url">${htmlEscape(qrCodeUrl)}</div></div></body></html>`;
 }
 
 function qrEscPos(data) {
@@ -296,6 +317,10 @@ async function printReceiptRaw(printerName, text, columns, options = {}) {
   return true;
 }
 
+function localContext(agent) {
+  try { return JSON.parse(agent.store.get('context', '{}') || '{}'); } catch { return {}; }
+}
+
 function installReceiptPrintingV829(ThorAgent, Store) {
   if (!ThorAgent || !Store || ThorAgent.prototype.__receiptPrintV829) return;
 
@@ -314,10 +339,18 @@ function installReceiptPrintingV829(ThorAgent, Store) {
   const originalDocumentData = ThorAgent.prototype.documentData;
   ThorAgent.prototype.documentData = function (saleKey, type = 'pre_sale') {
     const base = originalDocumentData.call(this, saleKey, type);
-    if (type === 'nfce' || base?.kind === 'remote_pdf') return base;
     const columns = Number(this.settings()?.receiptColumns) === 65 ? 65 : 44;
-    const context = base.sale?.context || (() => { try { return JSON.parse(this.store.get('context', '{}') || '{}'); } catch { return {}; } })();
-    const sale = { ...(base.sale || {}), context };
+    const sale = { ...(base.sale || {}), context:base.sale?.context || localContext(this) };
+
+    if (type === 'nfce') {
+      const fiscal = sale.fiscal || {};
+      if (digits(fiscal.access_key).length !== 44) throw new Error('nfce_access_key_unavailable');
+      if (!String(fiscal.qr_code_url || '').trim()) throw new Error('nfce_qr_code_unavailable_sync');
+      const text = buildNfceReceipt(sale, columns);
+      return { ...base, kind:'thermal_nfce', sale, text, html:htmlForNfce(text, columns, String(fiscal.qr_code_url)), receiptColumns:columns, remotePdfUrl:base.url };
+    }
+
+    if (base?.kind === 'remote_pdf') return base;
     const text = buildReceipt(sale, columns);
     return { ...base, sale, kind:'text', text, html:htmlForReceipt(text, columns), receiptColumns:columns };
   };
@@ -329,15 +362,10 @@ function installReceiptPrintingV829(ThorAgent, Store) {
     const columns = Number(this.settings()?.receiptColumns) === 65 ? 65 : 44;
 
     if (type === 'nfce') {
-      const sale = this.fiscalSale(saleKey);
-      const fiscal = sale?.fiscal || {};
+      const doc = this.documentData(saleKey, type);
+      const fiscal = doc.sale?.fiscal || {};
       if (!['authorized','cancelled'].includes(String(fiscal.status || ''))) throw new Error('nfce_not_authorized');
-      if (digits(fiscal.access_key).length !== 44) throw new Error('nfce_access_key_unavailable');
-      if (!String(fiscal.qr_code_url || '').trim()) throw new Error('nfce_qr_code_unavailable_sync');
-      const context = sale.context || (() => { try { return JSON.parse(this.store.get('context', '{}') || '{}'); } catch { return {}; } })();
-      const thermalSale = { ...sale, context };
-      const text = buildNfceReceipt(thermalSale, columns);
-      await printReceiptRaw(target, text, columns, { qrCodeUrl:String(fiscal.qr_code_url), documentName:`ThorPDV DANFE NFC-e ${fiscal.number || sale.number || ''}` });
+      await printReceiptRaw(target, doc.text, columns, { qrCodeUrl:String(fiscal.qr_code_url), documentName:`ThorPDV DANFE NFC-e ${fiscal.number || doc.sale?.number || ''}` });
       return { ok:true, target, mode:'raw_escpos_nfce', columns, accessKey:fiscal.access_key };
     }
 
@@ -349,4 +377,4 @@ function installReceiptPrintingV829(ThorAgent, Store) {
   ThorAgent.prototype.__receiptPrintV829 = true;
 }
 
-module.exports = { installReceiptPrintingV829, buildReceipt, buildNfceReceipt, escposPayload, qrEscPos };
+module.exports = { installReceiptPrintingV829, buildReceipt, buildNfceReceipt, escposPayload, qrEscPos, qrSvg };
