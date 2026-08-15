@@ -1,0 +1,41 @@
+/* Correcoes de visibilidade compartilhadas pelas telas bancarias do Thor Gestao.
+   Mantem cores e overflow isolados para evitar conflitos entre CSS globais de rotas. */
+
+/* Homologacao bancaria: estrutura totalmente visivel, sem molduras circulares. */
+.hom-studio{isolation:isolate;overflow:visible!important}
+.hom-layout,.hom-stage,.hom-stage-card,.hom-stage-card.structure{overflow:visible!important}
+.hom-stage-card.structure{border-radius:8px!important;box-shadow:none!important}
+.hom-stage-card.structure::before,.hom-stage-card.structure::after,.hom-layout::before,.hom-layout::after{content:none!important;display:none!important}
+.hom-records{overflow-x:auto!important;overflow-y:visible!important;scrollbar-width:thin}
+.hom-records article{overflow:visible!important;border-radius:8px!important;min-width:720px}
+.hom-field-head,.hom-field{min-width:700px}
+.hom-steps button i,.hom-check-list i,.hom-success-icon{border-radius:7px!important}
+
+/* Texto dos botoes da homologacao sempre legivel. */
+.hom-studio button,.hom-modal button{color:#273342!important;font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important}
+.hom-studio button.primary,.hom-modal button.primary,.hom-direction button.active{background:#273342!important;border-color:#273342!important;color:#fff!important}
+.hom-studio button:disabled,.hom-modal button:disabled{color:#596273!important}
+.hom-studio button.primary:disabled,.hom-modal button.primary:disabled{color:#fff!important}
+.hom-modal>header>button{color:#273342!important;background:transparent!important}
+.hom-studio .primary-link{display:inline-block;padding:10px 15px;border:1px solid #273342;border-radius:8px;background:#273342;color:#fff!important;text-decoration:none;font-size:12px;font-weight:800;font-family:Arial,Helvetica,sans-serif}
+
+/* Remessa / Retorno: elimina texto branco sobre fundo branco em botoes/links. */
+.cnab-studio button,.cnab-modal button{color:#202833!important;font-family:Arial,Helvetica,sans-serif!important;font-weight:750!important}
+.cnab-studio button.primary,.cnab-modal button.primary{background:#202833!important;border-color:#202833!important;color:#fff!important}
+.cnab-studio button.secondary,.cnab-toolbar a.secondary{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 13px;border:1px solid #ccd3dc;border-radius:9px;background:#fff!important;color:#202833!important;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-weight:750}
+.cnab-message button,.cnab-modal>header>button{color:#202833!important;background:transparent!important}
+.cnab-studio .primary-link{color:#fff!important;background:#202833!important;border-color:#202833!important}
+
+/* Contas bancarias: contraste explicito para todos os botoes. */
+.bank-studio button,.bank-modal button{color:#6f42bd!important;font-family:Arial,Helvetica,sans-serif!important;font-weight:800!important}
+.bank-studio button.primary,.bank-modal button.primary,.bank-empty button,.bank-form-actions .primary{color:#fff!important}
+.bank-modal header>button{color:#756f7c!important;background:#f5f2f7!important}
+
+/* Controles do shell nunca herdam cores invisiveis das telas internas. */
+.erp-module-user .erp-ghost{background:#fff!important;color:#3d4653!important;border:1px solid #dce1e7!important}
+.erp-module-sidebar .erp-module-group>button{color:#fff!important}
+
+@media(max-width:760px){
+  .hom-records article,.hom-field-head,.hom-field{min-width:0}
+  .hom-records{overflow-x:visible!important}
+}
