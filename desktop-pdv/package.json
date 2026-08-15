@@ -1,6 +1,6 @@
 {
   "name": "thorpdv-desktop",
-  "version": "0.8.28",
+  "version": "0.8.29",
   "private": true,
   "description": "ThorPDV Desktop para Windows com agente offline-first",
   "main": "main-v090.js",
@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
-    "better-sqlite3": "latest"
+    "better-sqlite3": "latest",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "electron": "latest",
