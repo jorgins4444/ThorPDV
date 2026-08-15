@@ -32,7 +32,7 @@ export async function erpReportV2(
 ) {
   const token = await sessionToken();
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('erp_report_v3', {
+  const { data, error } = await supabase.rpc('erp_report_v4', {
     p_token: token,
     p_report: report,
     p_start: start || null,
