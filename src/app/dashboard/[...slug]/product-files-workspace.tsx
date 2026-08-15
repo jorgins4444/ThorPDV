@@ -1,7 +1,7 @@
 'use client';
 
 // Build retry marker: 2026-08-15 product files module.
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 type ProductRow={
   id?:string;
@@ -24,7 +24,7 @@ type ExportData={
 type TerminalModel=''|'gertec'|'sweda';
 type Tab='prices'|'scales';
 
-type BuiltFile={content:string;filename:string;lines:number;skippedCodes:number;skippedPrices:number;preview:string[]};
+type BuiltFile={content:string;filename:string;lines:number;skippedCodes:number;skippedPrices:number};
 
 const scaleModels=['Filizola (SMART)','Toledo (MGV5)','Toledo (MGV6)','Toledo (MGV7)','Ramuza (Atena)','Urano (Integra)'];
 
@@ -47,7 +47,7 @@ function priceNumber(value:unknown){
 }
 
 function buildFile(model:TerminalModel,products:ProductRow[]):BuiltFile{
-  if(!model) return {content:'',filename:'',lines:0,skippedCodes:0,skippedPrices:0,preview:[]};
+  if(!model) return {content:'',filename:'',lines:0,skippedCodes:0,skippedPrices:0};
   const lines:string[]=[];
   let skippedCodes=0;
   let skippedPrices=0;
@@ -78,11 +78,11 @@ function buildFile(model:TerminalModel,products:ProductRow[]):BuiltFile{
     lines:lines.length,
     skippedCodes,
     skippedPrices,
-    preview:lines.slice(0,6),
   };
 }
 
 function downloadText(file:BuiltFile){
+  if(!file.content||!file.filename)return;
   const blob=new Blob([file.content],{type:'text/plain;charset=us-ascii'});
   const url=URL.createObjectURL(blob);
   const link=document.createElement('a');
@@ -98,8 +98,17 @@ export function ProductFilesWorkspace({initialData}:{initialData:ExportData}){
   const [tab,setTab]=useState<Tab>('prices');
   const [model,setModel]=useState<TerminalModel>('');
   const [scaleModel,setScaleModel]=useState('');
+  const [generationMessage,setGenerationMessage]=useState('');
   const products=Array.isArray(initialData.data)?initialData.data:[];
-  const built=useMemo(()=>buildFile(model,products),[model,products]);
+
+  const generatePriceFile=()=>{
+    setGenerationMessage('');
+    const built=buildFile(model,products);
+    if(built.lines===0){setGenerationMessage('Nenhum registro válido foi encontrado para gerar o arquivo.');return;}
+    downloadText(built);
+    const skipped=built.skippedCodes+built.skippedPrices;
+    setGenerationMessage(`${built.lines.toLocaleString('pt-BR')} linha(s) gerada(s)${skipped?` • ${skipped.toLocaleString('pt-BR')} registro(s) ignorado(s) por limite do layout`:''}.`);
+  };
 
   return <div className="product-files-studio">
     <div className="product-files-tabs" role="tablist" aria-label="Arquivos de produtos">
@@ -107,39 +116,31 @@ export function ProductFilesWorkspace({initialData}:{initialData:ExportData}){
       <button type="button" className={tab==='scales'?'active':''} onClick={()=>setTab('scales')}>Balanças</button>
     </div>
 
-    {tab==='prices'?<>
-      <section className="product-files-card">
-        <div className="product-files-heading">
-          <div><small>TERMINAIS DE CONSULTA</small><h2>Gerar arquivo de preços</h2><p>Exporte os produtos ativos do ThorGestão no formato aceito pelo software de consulta de preços.</p></div>
-          <div className="product-files-kpi"><strong>{products.length}</strong><span>produtos disponíveis</span></div>
-        </div>
+    {tab==='prices'?<section className="product-files-card">
+      <div className="product-files-heading">
+        <div><small>TERMINAIS DE CONSULTA</small><h2>Gerar arquivo de preços</h2><p>Exporte os produtos ativos do ThorGestão no formato aceito pelo software de consulta de preços.</p></div>
+        <div className="product-files-kpi"><strong>{products.length}</strong><span>produtos disponíveis</span></div>
+      </div>
 
-        {!initialData.ok?<div className="product-files-alert error">Não foi possível carregar os produtos: {initialData.error||'erro desconhecido'}.</div>:null}
+      {!initialData.ok?<div className="product-files-alert error">Não foi possível carregar os produtos: {initialData.error||'erro desconhecido'}.</div>:null}
 
-        <div className="product-files-form">
-          <label>Modelo do terminal
-            <select value={model} onChange={e=>setModel(e.target.value as TerminalModel)}>
-              <option value="">Selecione</option>
-              <option value="gertec">Gertec</option>
-              <option value="sweda">Sweda</option>
-            </select>
-          </label>
-          <button type="button" className="product-files-download" disabled={!model||!initialData.ok||built.lines===0} onClick={()=>downloadText(built)}>↓ Baixar arquivo</button>
-        </div>
+      <div className="product-files-form">
+        <label>Modelo do terminal
+          <select value={model} onChange={e=>{setModel(e.target.value as TerminalModel);setGenerationMessage('')}}>
+            <option value="">Selecione</option>
+            <option value="gertec">Gertec</option>
+            <option value="sweda">Sweda</option>
+          </select>
+        </label>
+        <button type="button" className="product-files-download" disabled={!model||!initialData.ok||products.length===0} onClick={generatePriceFile}>↓ Baixar arquivo</button>
+      </div>
 
-        <div className="product-files-source">
-          <span>Preço utilizado</span><strong>{initialData.price_table_name||'Preço de venda do cadastro'}</strong>
-          <em>Código interno + SKU numérico + códigos de barras, sem duplicação dentro do produto.</em>
-        </div>
-      </section>
-
-      {model?<section className="product-files-preview">
-        <div className="product-files-preview-head"><div><small>PRÉVIA DO LAYOUT</small><h3>{model==='gertec'?'Gertec · delimitado por |':'Sweda · registro fixo de 47 posições'}</h3></div><div><b>{built.lines}</b><span>linhas no arquivo</span></div></div>
-        <pre>{built.preview.join('\n')||'Nenhuma linha disponível.'}</pre>
-        {model==='sweda'?<p className="product-files-note">Sweda: código com 13 posições preenchido com zeros à esquerda, descrição com 20 posições e preço com 12 dígitos em centavos. Códigos maiores que 13 dígitos são ignorados para não corromper o layout.</p>:<p className="product-files-note">Gertec: código, descrição e preço separados por “|”, com “|” também no final de cada registro.</p>}
-        {built.skippedCodes>0||built.skippedPrices>0?<div className="product-files-alert warn">{built.skippedCodes>0?`${built.skippedCodes} código(s) não couberam no formato de 13 posições. `:''}{built.skippedPrices>0?`${built.skippedPrices} preço(s) ultrapassaram o limite do layout.`:''}</div>:null}
-      </section>:null}
-    </>:<section className="product-files-card">
+      <div className="product-files-source">
+        <span>Preço utilizado</span><strong>{initialData.price_table_name||'Preço de venda do cadastro'}</strong>
+        <em>Código interno + SKU numérico + códigos de barras, sem duplicação dentro do produto.</em>
+      </div>
+      {generationMessage?<div className="product-files-alert info">{generationMessage}</div>:null}
+    </section>:<section className="product-files-card">
       <div className="product-files-heading">
         <div><small>BALANÇAS</small><h2>Exportar dados de produto para balança</h2><p>Esta área já está preparada para os layouts estruturais de balança que serão adicionados em seguida.</p></div>
         <div className="product-files-kpi pending"><strong>6</strong><span>modelos preparados</span></div>
