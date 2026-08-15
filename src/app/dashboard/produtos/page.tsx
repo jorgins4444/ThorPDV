@@ -22,6 +22,7 @@ export default async function ProductsPage(){
       <Link href="/dashboard/produtos/categorias">Categorias</Link>
       <Link href="/dashboard/produtos/atributos">Atributos</Link>
       <Link href="/dashboard/produtos/unidades">Unidades de Medida</Link>
+      <Link href="/dashboard/produtos/arquivos">Arquivos</Link>
       <Link href="/dashboard/grupos">Grupos</Link>
       <Link href="/dashboard/classes">Classes</Link>
       <Link href="/dashboard/modificadores">Modificadores</Link>
