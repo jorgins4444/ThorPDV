@@ -2,13 +2,18 @@
 
 import { ChangeEvent, useEffect, useMemo, useState, useTransition } from 'react';
 import { ProductFiscalEditor } from './product-fiscal-editor';
+import { RTC_CST_OPTIONS } from '../../../lib/fiscal/rtc-tax-table';
 import {
   productStudioAddStock,
   productStudioBarcode,
+  productStudioBulkUpdate,
   productStudioCompositionSet,
   productStudioDetail,
+  productStudioFilteredIds,
   productStudioList,
   productStudioSave,
+  productStudioSetActive,
+  type ProductListFilters,
 } from './product-studio-actions';
 
 type Row=Record<string,unknown>;
@@ -18,7 +23,7 @@ type GradeAttribute={name:string;values:string[]};
 type VariantDraft={id:string;product_code:string;sku:string;label:string;attributes:Record<string,string>;barcode:string;cost_price:string;sale_price:string;minimum_stock:string;stock_to_add:string;stock:number;active:boolean;image_url:string};
 type AdvancedTab='operation'|'fiscal'|'stock'|'composition'|'history';
 
-const units=[['UN','Unidade'],['KG','Quilograma'],['CX','Caixa'],['PC','Peça'],['PCT','Pacote'],['FD','Fardo'],['LT','Litro'],['ML','Mililitro'],['G','Grama'],['M','Metro'],['M2','Metro²'],['M3','Metro³'],['DZ','Dúzia'],['BD','Balde'],['SC','Saco'],['RL','Rolo']] as const;
+const units=[['UN','Unidade'],['KG','Quilograma'],['CX','Caixa'],['PC','Peça'],['PCT','Pacote'],['FD','Fardo'],['LT','Litro'],['ML','Mililitro'],['G','Grama'],['M','Metro'],['M2','Metro²'],['M3','Metro cúbico'],['DZ','Dúzia'],['BD','Balde'],['SC','Saco'],['RL','Rolo']] as const;
 const productTypes=[['fixed_asset','Ativo imobilizado'],['packaging','Embalagem'],['use_consumption','Material de uso e consumo'],['raw_material','Matéria-prima'],['resale','Mercadoria para revenda'],['other','Outras'],['other_inputs','Outros insumos'],['finished_product','Produto acabado'],['work_in_process','Produto em processo'],['intermediate_product','Produto intermediário'],['service','Serviços'],['byproduct','Subproduto']] as const;
 const text=(v:unknown)=>v==null?'':String(v);
 const num=(v:unknown)=>Number(v||0)||0;
@@ -27,6 +32,15 @@ const rows=(v:unknown):Row[]=>Array.isArray(v)?v as Row[]:[];
 const obj=(v:unknown):Row=>v&&typeof v==='object'&&!Array.isArray(v)?v as Row:{};
 const money=(v:unknown)=>num(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const productTypeLabel=(v:unknown)=>productTypes.find(([code])=>code===text(v))?.[1]||'Mercadoria para revenda';
+
+const icmsTaxOptions=[['00','Tributada integralmente'],['10','Tributada + ST'],['20','Redução de base'],['30','Isenta/não tributada + ST'],['40','Isenta'],['41','Não tributada'],['50','Suspensão'],['51','Diferimento'],['60','ICMS cobrado anteriormente por ST'],['70','Redução de base + ST'],['90','Outras']] as const;
+const csosnTaxOptions=[['101','Tributada com permissão de crédito'],['102','Tributada sem permissão de crédito'],['103','Isenção por faixa de receita'],['201','Crédito + ST'],['202','Sem crédito + ST'],['203','Isenção + ST'],['300','Imune'],['400','Não tributada'],['500','ICMS cobrado anteriormente por ST/antecipação'],['900','Outros']] as const;
+const taxOptions=[
+  ...RTC_CST_OPTIONS.map(o=>({value:`reform:${o.code}`,label:`IBS/CBS ${o.code} - ${o.label}`})),
+  ...csosnTaxOptions.map(([code,label])=>({value:`csosn:${code}`,label:`CSOSN ${code} - ${label}`})),
+  ...icmsTaxOptions.map(([code,label])=>({value:`cst:${code}`,label:`CST ICMS ${code} - ${label}`})),
+];
+const taxLabel=(row:Row)=>{const key=text(row.tax_situation);if(!key)return '—';return taxOptions.find(o=>o.value===key)?.label||key.replace('reform:','IBS/CBS ').replace('csosn:','CSOSN ').replace('cst:','CST ICMS ');};
 
 function blank(){return {
   id:'',product_code:'',sku:'',barcode:'',name:'',description:'',group_id:'',class_id:'',unit:'UN',product_type:'resale',product_structure:'simple',active:true,is_weighable:false,
@@ -62,9 +76,9 @@ function ProductEditor({row,products,groups,classes,suppliers,modifiers,branches
 
   const refreshDetail=async(productId:string)=>{const result=await productStudioDetail(productId);if(!result.ok)return;const detail=obj(result.data);setStockRows(rows(detail.stock));setHistory(rows(detail.history));setVariants(rows(detail.variants).map(variantFromRow));};
   const generateBarcode=()=>startTransition(async()=>{const r=await productStudioBarcode();if(r.ok)set('barcode',text(r.barcode));else setMessage(text(r.error||'Não foi possível gerar o EAN.'));});
-  const generateVariants=()=>{const combos=combinations(gradeAttributes);if(!combos.length)return setMessage('Informe pelo menos um atributo com valores antes de gerar as variações.');const existing=new Map(variants.map(v=>[variantKey(v.attributes),v]));setVariants(combos.map((attrs,index)=>{const found=existing.get(variantKey(attrs));return found??{id:'',product_code:'',sku:'',label:Object.values(attrs).join(' • '),attributes:attrs,barcode:'',cost_price:draft.cost_price,sale_price:draft.sale_price,minimum_stock:draft.minimum_stock,stock_to_add:'',stock:0,active:true,image_url:''};}).map((v,index)=>({...v,label:Object.values(v.attributes).join(' • ')})));setMessage(`${combos.length} variação(ões) preparadas.`);};
+  const generateVariants=()=>{const combos=combinations(gradeAttributes);if(!combos.length)return setMessage('Informe pelo menos um atributo com valores antes de gerar as variações.');const existing=new Map(variants.map(v=>[variantKey(v.attributes),v]));setVariants(combos.map(attrs=>{const found=existing.get(variantKey(attrs));return found??{id:'',product_code:'',sku:'',label:Object.values(attrs).join(' • '),attributes:attrs,barcode:'',cost_price:draft.cost_price,sale_price:draft.sale_price,minimum_stock:draft.minimum_stock,stock_to_add:'',stock:0,active:true,image_url:''};}).map(v=>({...v,label:Object.values(v.attributes).join(' • ')})));setMessage(`${combos.length} variação(ões) preparadas.`);};
   const applyDefaults=()=>setVariants(current=>current.map(v=>({...v,cost_price:draft.cost_price,sale_price:draft.sale_price,minimum_stock:draft.minimum_stock})));
-  const addGradeValue=(index:number,value:string)=>{const clean=value.trim();if(!clean)return;setGradeAttributes(current=>current.map((a,i)=>i===index&& !a.values.includes(clean)?{...a,values:[...a.values,clean]}:a));};
+  const addGradeValue=(index:number,value:string)=>{const clean=value.trim();if(!clean)return;setGradeAttributes(current=>current.map((a,i)=>i===index&&!a.values.includes(clean)?{...a,values:[...a.values,clean]}:a));};
 
   const save=()=>startTransition(async()=>{setMessage('');if(!draft.name.trim())return setMessage('Informe a descrição do produto.');if(draft.product_structure==='grade'&&!variants.length)return setMessage('Gere ao menos uma variação para o produto com grade.');const fiscal_profile={cst_icms:draft.cst_icms||null,csosn:draft.csosn||null,cst_pis:draft.cst_pis||null,cst_cofins:draft.cst_cofins||null,cst_ipi:draft.cst_ipi||null,icms_rate:num(draft.icms_rate),pis_rate:num(draft.pis_rate),cofins_rate:num(draft.cofins_rate),ipi_rate:num(draft.ipi_rate),reform_cst:draft.reform_cst||null,reform_classification:draft.reform_classification||null,fiscal_origin_uf:draft.fiscal_origin_uf||null,fiscal_destination_uf:draft.fiscal_destination_uf||null,fiscal_customer_type:draft.fiscal_customer_type||'both',icms_tax_benefit:draft.icms_tax_benefit||null,icms_exemption_reason:draft.icms_exemption_reason||null,icms_discount:Boolean(draft.icms_discount),icms_credit_benefit:draft.icms_credit_benefit||null,icms_presumed_credit_rate:num(draft.icms_presumed_credit_rate),ipi_legal_framework:draft.ipi_legal_framework||null,petroleum_anp_code:draft.petroleum_anp_code||null,petroleum_cide_rate:num(draft.petroleum_cide_rate),petroleum_mix_percent:num(draft.petroleum_mix_percent)};const result=await productStudioSave({...draft,cost_price:num(draft.cost_price),sale_price:num(draft.sale_price),minimum_stock:num(draft.minimum_stock),stock_to_add:draft.product_structure==='simple'?num(draft.stock_to_add):0,shelf_life_days:num(draft.shelf_life_days),production_yield:num(draft.production_yield),purchase_units:purchaseUnits,modifier_ids:modifierIds,fiscal_profile,grade_attributes:gradeAttributes,variants:draft.product_structure==='grade'?variants.map((v,index)=>({...v,sort:index+1,cost_price:num(v.cost_price),sale_price:num(v.sale_price),minimum_stock:num(v.minimum_stock),stock_to_add:num(v.stock_to_add)})):[]});if(!result.ok)return setMessage(`Não foi possível salvar: ${text(result.error)}`);const productId=text(result.id);const comp=await productStudioCompositionSet(productId,composition);if(!comp.ok)return setMessage(`Produto salvo, mas a composição não pôde ser atualizada: ${text(comp.error)}`);setDraft(current=>({...current,id:productId,product_code:text(result.product_code||current.product_code),stock_to_add:''}));await refreshDetail(productId);await onSaved();setMessage(draft.product_structure==='grade'?'Produto com grade salvo. As variações possuem código, preço, estoque e foto próprios.':'Produto simples salvo com sucesso.');});
   const addStock=()=>{if(!draft.id)return setMessage('Salve o produto antes de lançar estoque.');const quantity=num(draft.stock_to_add);if(quantity<=0)return setMessage('Informe uma quantidade maior que zero.');startTransition(async()=>{const r=await productStudioAddStock(draft.id,quantity,num(draft.cost_price));if(!r.ok)return setMessage(text(r.error||'Não foi possível registrar a entrada.'));set('stock_to_add','');await refreshDetail(draft.id);await onSaved();setMessage(`Entrada registrada: +${quantity}.`);});};
@@ -97,9 +111,123 @@ function ProductEditor({row,products,groups,classes,suppliers,modifiers,branches
 
 function AttributeEditor({attribute,onName,onAdd,onRemoveValue,onRemove}:{attribute:GradeAttribute;onName:(v:string)=>void;onAdd:(v:string)=>void;onRemoveValue:(v:string)=>void;onRemove:()=>void}){const [value,setValue]=useState('');return <article className="studio-attribute"><div><input value={attribute.name} onChange={e=>onName(e.target.value)} aria-label="Nome do atributo"/><button type="button" onClick={onRemove}>×</button></div><div className="studio-chips">{attribute.values.map(v=><span key={v}>{v}<button type="button" onClick={()=>onRemoveValue(v)}>×</button></span>)}</div><form onSubmit={e=>{e.preventDefault();onAdd(value);setValue('')}}><input value={value} onChange={e=>setValue(e.target.value)} placeholder="Novo valor, ex.: Preto"/><button>Adicionar</button></form></article>}
 
-export function ProductStudioWorkspace({initialProducts,groups,classes,suppliers,modifiers,branches}:{initialProducts:Row[];groups:Row[];classes:Row[];suppliers:Row[];modifiers:Row[];branches:Row[]}){
-  const [products,setProducts]=useState(initialProducts);const [search,setSearch]=useState('');const [editing,setEditing]=useState<Row|null|undefined>(undefined);const [message,setMessage]=useState('');const [pending,startTransition]=useTransition();
-  const refresh=async()=>{const result=await productStudioList(search);if(result.ok)setProducts(result.data);else setMessage(text(result.error||'Não foi possível atualizar a lista.'));};
-  if(editing!==undefined)return <ProductEditor key={editing?text(editing.id):'new'} row={editing} products={products} groups={groups} classes={classes} suppliers={suppliers} modifiers={modifiers} branches={branches} onClose={()=>setEditing(undefined)} onSaved={refresh}/>;
-  return <div className="product-studio-list"><section className="product-studio-card studio-list-card"><div className="studio-list-toolbar"><form onSubmit={e=>{e.preventDefault();startTransition(refresh)}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Pesquisar por descrição, SKU, EAN ou código..."/><button type="submit" aria-label="Pesquisar">↻</button></form><div><button type="button" className="studio-primary" onClick={()=>setEditing(null)}>+ Novo</button><button type="button" className="studio-secondary" onClick={()=>startTransition(refresh)}>Atualizar</button></div></div>{message&&<div className="studio-message">{message}</div>}<div className="studio-list-table-wrap"><table className="studio-list-table"><thead><tr><th>Ações</th><th>Descrição</th><th>SKU</th><th>Venda</th><th>Estoque</th><th>UN</th><th>Categoria</th><th>Alteração</th><th>Tipo</th><th>Ativo</th></tr></thead><tbody>{products.length===0?<tr><td colSpan={10} className="studio-empty">Nenhum produto encontrado.</td></tr>:products.map(p=><tr key={text(p.id)}><td><button type="button" className="studio-icon-action" onClick={()=>setEditing(p)}>✎</button></td><td><div className="studio-product-name">{p.image_url?<img src={text(p.image_url)} alt=""/>:<span className="studio-no-photo">▦</span>}<div><strong>{text(p.name)}</strong><small>{p.product_structure==='grade'?`${num(p.variant_count)} variações`:`Código ${text(p.product_code)||'—'}`}</small></div></div></td><td>{text(p.sku)||text(p.product_code)||'—'}</td><td><strong className="studio-sale-price">{p.product_structure==='grade'&&p.variant_price_min!=null?`${money(p.variant_price_min)}${num(p.variant_price_max)!==num(p.variant_price_min)?` — ${money(p.variant_price_max)}`:''}`:money(p.sale_price)}</strong></td><td><span className="studio-stock-pill">{num(p.stock).toLocaleString('pt-BR',{maximumFractionDigits:3})}</span></td><td>{text(p.unit)||'UN'}</td><td>{text(p.group_name)||productTypeLabel(p.product_type)}</td><td>{p.updated_at?new Date(text(p.updated_at)).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'—'}</td><td><span className={`studio-kind ${p.product_structure==='grade'?'grade':''}`}>{p.product_structure==='grade'?'Grade':'Simples'}</span></td><td><span className={`studio-active-dot ${p.active===false?'off':''}`}><i/>{p.active===false?'Não':'Sim'}</span></td></tr>)}</tbody></table></div><div className="studio-list-footer"><span>{products.length} produto(s)</span><span>{pending?'Atualizando...':'Cadastro integrado ao ThorPDV'}</span></div></section></div>;
+type BulkState={ncmEnabled:boolean;ncm:string;group_id:string;brand_id:string;tax_situation:string;is_weighable:string};
+const emptyBulk=():BulkState=>({ncmEnabled:false,ncm:'',group_id:'__keep__',brand_id:'__keep__',tax_situation:'__keep__',is_weighable:'__keep__'});
+
+export function ProductStudioWorkspace({initialProducts,initialTotal=initialProducts.length,groups,classes,suppliers,modifiers,branches,brands=[],categories=[]}:{initialProducts:Row[];initialTotal?:number;groups:Row[];classes:Row[];suppliers:Row[];modifiers:Row[];branches:Row[];brands?:Row[];categories?:Row[]}){
+  const pageSize=100;
+  const [products,setProducts]=useState(initialProducts);
+  const [total,setTotal]=useState(initialTotal);
+  const [search,setSearch]=useState('');
+  const [appliedSearch,setAppliedSearch]=useState('');
+  const [filters,setFilters]=useState<ProductListFilters>({});
+  const [appliedFilters,setAppliedFilters]=useState<ProductListFilters>({});
+  const [offset,setOffset]=useState(0);
+  const [editing,setEditing]=useState<Row|null|undefined>(undefined);
+  const [editorProducts,setEditorProducts]=useState(initialProducts);
+  const [selected,setSelected]=useState<Set<string>>(()=>new Set());
+  const [bulkOpen,setBulkOpen]=useState(false);
+  const [bulk,setBulk]=useState<BulkState>(()=>emptyBulk());
+  const [message,setMessage]=useState('');
+  const [pending,startTransition]=useTransition();
+
+  const pageIds=products.map(p=>text(p.id)).filter(Boolean);
+  const allPageSelected=pageIds.length>0&&pageIds.every(id=>selected.has(id));
+  const from=total===0?0:offset+1;
+  const to=Math.min(offset+products.length,total);
+
+  const load=async(nextSearch=appliedSearch,nextFilters=appliedFilters,nextOffset=offset)=>{
+    const result=await productStudioList(nextSearch,nextFilters,pageSize,nextOffset);
+    if(result.ok){setProducts(result.data);setTotal(result.total);setOffset(result.offset);return result.data;}
+    setMessage(text(result.error||'Não foi possível atualizar a lista.'));
+    return products;
+  };
+
+  const refresh=async()=>{await load();};
+  const resetSelection=()=>setSelected(new Set());
+  const applySearchAndFilters=()=>startTransition(async()=>{
+    setMessage('');setAppliedSearch(search);setAppliedFilters(filters);resetSelection();
+    await load(search,filters,0);
+  });
+  const clearFilters=()=>startTransition(async()=>{
+    const clean:ProductListFilters={};setSearch('');setFilters(clean);setAppliedSearch('');setAppliedFilters(clean);resetSelection();setMessage('');await load('',clean,0);
+  });
+  const changePage=(nextOffset:number)=>startTransition(async()=>{resetSelection();await load(appliedSearch,appliedFilters,Math.max(0,nextOffset));});
+
+  const openEditor=(row:Row|null)=>startTransition(async()=>{
+    const catalog=await productStudioList(undefined,{},500,0);
+    if(catalog.ok)setEditorProducts(catalog.data);else setEditorProducts(products);
+    setEditing(row);
+  });
+
+  const toggleRow=(id:string)=>setSelected(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next;});
+  const togglePage=()=>setSelected(current=>{const next=new Set(current);if(allPageSelected)pageIds.forEach(id=>next.delete(id));else pageIds.forEach(id=>next.add(id));return next;});
+  const selectAllFiltered=()=>startTransition(async()=>{
+    const result=await productStudioFilteredIds(appliedSearch,appliedFilters);
+    if(!result.ok)return setMessage(text(result.error||'Não foi possível selecionar todos os produtos filtrados.'));
+    setSelected(new Set(result.ids));setMessage(`${result.total} produto(s) filtrado(s) selecionado(s).`);
+  });
+
+  const toggleActive=(row:Row)=>startTransition(async()=>{
+    const id=text(row.id);const active=row.active===false;
+    const result=await productStudioSetActive(id,active);
+    if(!result.ok)return setMessage(text(result.error||'Não foi possível alterar o status do produto.'));
+    setProducts(current=>current.map(p=>text(p.id)===id?{...p,active,updated_at:new Date().toISOString()}:p));
+    setMessage(`${text(row.name)} ${active?'ativado':'desativado'} com sucesso.`);
+  });
+
+  const applyBulk=()=>startTransition(async()=>{
+    if(selected.size===0)return setMessage('Selecione pelo menos um produto.');
+    const patch:Record<string,unknown>={};
+    if(bulk.ncmEnabled)patch.ncm=bulk.ncm.replace(/\D/g,'').slice(0,8);
+    if(bulk.group_id!=='__keep__')patch.group_id=bulk.group_id;
+    if(bulk.brand_id!=='__keep__')patch.brand_id=bulk.brand_id;
+    if(bulk.tax_situation!=='__keep__')patch.tax_situation=bulk.tax_situation;
+    if(bulk.is_weighable!=='__keep__')patch.is_weighable=bulk.is_weighable==='true';
+    if(Object.keys(patch).length===0)return setMessage('Escolha pelo menos um campo para alterar em massa.');
+    if(bulk.ncmEnabled&&patch.ncm&&text(patch.ncm).length!==8)return setMessage('O NCM deve possuir 8 dígitos.');
+    const result=await productStudioBulkUpdate([...selected],patch);
+    if(!result.ok)return setMessage(text(result.error||'Não foi possível aplicar a alteração em massa.'));
+    setBulkOpen(false);setBulk(emptyBulk());resetSelection();await load();
+    setMessage(`${num(result.selected)} produto(s) alterado(s) em massa com sucesso.`);
+  });
+
+  if(editing!==undefined)return <ProductEditor key={editing?text(editing.id):'new'} row={editing} products={editorProducts} groups={groups} classes={classes} suppliers={suppliers} modifiers={modifiers} branches={branches} onClose={()=>setEditing(undefined)} onSaved={refresh}/>;
+
+  return <div className="product-studio-list enhanced-product-list">
+    <section className="product-studio-card studio-list-card">
+      <div className="studio-list-toolbar">
+        <form onSubmit={e=>{e.preventDefault();applySearchAndFilters();}}><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Pesquisar por descrição, SKU, EAN ou código..."/><button type="submit" aria-label="Pesquisar">Buscar</button></form>
+        <div><button type="button" className="studio-primary" onClick={()=>openEditor(null)}>+ Novo</button><button type="button" className="studio-secondary" onClick={()=>startTransition(refresh)}>Atualizar</button></div>
+      </div>
+
+      <div className="product-filter-panel">
+        <label>Categoria<select value={filters.category_id||''} onChange={e=>setFilters(c=>({...c,category_id:e.target.value}))}><option value="">Todas</option>{categories.filter(x=>x.active!==false).map(x=><option key={text(x.id)} value={text(x.id)}>{text(x.name)}</option>)}</select></label>
+        <label>Marca<select value={filters.brand_id||''} onChange={e=>setFilters(c=>({...c,brand_id:e.target.value}))}><option value="">Todas</option>{brands.filter(x=>x.active!==false).map(x=><option key={text(x.id)} value={text(x.id)}>{text(x.name)}</option>)}</select></label>
+        <label>Grupo<select value={filters.group_id||''} onChange={e=>setFilters(c=>({...c,group_id:e.target.value}))}><option value="">Todos</option>{groups.filter(x=>x.active!==false).map(x=><option key={text(x.id)} value={text(x.id)}>{text(x.name)}</option>)}</select></label>
+        <label>NCM<input inputMode="numeric" value={filters.ncm||''} onChange={e=>setFilters(c=>({...c,ncm:e.target.value.replace(/\D/g,'').slice(0,8)}))} placeholder="Ex.: 22021000"/></label>
+        <label>Situação tributária<select value={filters.tax_situation||''} onChange={e=>setFilters(c=>({...c,tax_situation:e.target.value}))}><option value="">Todas</option>{taxOptions.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+        <label>Tipo<select value={filters.product_structure||''} onChange={e=>setFilters(c=>({...c,product_structure:e.target.value}))}><option value="">Simples + grade</option><option value="simple">Simples</option><option value="grade">Com grade</option></select></label>
+        <label>Status<select value={filters.active||''} onChange={e=>setFilters(c=>({...c,active:e.target.value}))}><option value="">Ativos + inativos</option><option value="true">Ativos</option><option value="false">Inativos</option></select></label>
+        <div className="product-filter-actions"><button type="button" className="studio-primary" onClick={applySearchAndFilters}>Filtrar</button><button type="button" className="studio-secondary" onClick={clearFilters}>Limpar</button></div>
+      </div>
+
+      {selected.size>0&&<div className="product-selection-bar"><div><strong>{selected.size}</strong><span>produto(s) selecionado(s)</span>{total>selected.size&&<button type="button" onClick={selectAllFiltered}>Selecionar todos os {total} filtrados</button>}</div><div><button type="button" className="studio-secondary" onClick={resetSelection}>Limpar seleção</button><button type="button" className="studio-primary" onClick={()=>setBulkOpen(true)}>Alterar em massa</button></div></div>}
+      {message&&<div className="studio-message">{message}</div>}
+
+      <div className="studio-list-table-wrap"><table className="studio-list-table enhanced-product-table"><thead><tr><th className="select-col"><input type="checkbox" checked={allPageSelected} onChange={togglePage} aria-label="Selecionar todos desta página"/></th><th>Ações</th><th>Descrição</th><th>SKU</th><th>Venda</th><th>Estoque</th><th>UN</th><th>Categoria</th><th>Marca</th><th>Grupo</th><th>NCM</th><th>Situação tributária</th><th>Tipo</th><th>Ativo</th></tr></thead><tbody>
+        {products.length===0?<tr><td colSpan={14} className="studio-empty">Nenhum produto encontrado.</td></tr>:products.map(p=>{const id=text(p.id);return <tr key={id} className={selected.has(id)?'selected-row':''}><td className="select-col"><input type="checkbox" checked={selected.has(id)} onChange={()=>toggleRow(id)} aria-label={`Selecionar ${text(p.name)}`}/></td><td><button type="button" className="studio-icon-action" onClick={()=>openEditor(p)}>✎</button></td><td><div className="studio-product-name">{p.image_url?<img src={text(p.image_url)} alt=""/>:<span className="studio-no-photo">▦</span>}<div><strong>{text(p.name)}</strong><small>{p.product_structure==='grade'?`${num(p.variant_count)} variações`:`Código ${text(p.product_code)||'—'}`}</small></div></div></td><td>{text(p.sku)||text(p.product_code)||'—'}</td><td><strong className="studio-sale-price">{p.product_structure==='grade'&&p.variant_price_min!=null?`${money(p.variant_price_min)}${num(p.variant_price_max)!==num(p.variant_price_min)?` — ${money(p.variant_price_max)}`:''}`:money(p.sale_price)}</strong></td><td><span className="studio-stock-pill">{num(p.stock).toLocaleString('pt-BR',{maximumFractionDigits:3})}</span></td><td>{text(p.unit)||'UN'}</td><td>{text(p.category_name)||'—'}</td><td>{text(p.brand_name)||'—'}</td><td>{text(p.group_name)||'—'}</td><td>{text(p.ncm)||'—'}</td><td><span className="tax-situation-cell">{taxLabel(p)}</span></td><td><span className={`studio-kind ${p.product_structure==='grade'?'grade':''}`}>{p.product_structure==='grade'?'Grade':'Simples'}</span></td><td><button type="button" className={`studio-active-toggle ${p.active===false?'off':'on'}`} onClick={()=>toggleActive(p)} disabled={pending} aria-pressed={p.active!==false}><i/>{p.active===false?'Inativo':'Ativo'}</button></td></tr>})}
+      </tbody></table></div>
+
+      <div className="studio-list-footer enhanced-list-footer"><span>{total} produto(s) • exibindo {from}–{to}</span><div className="product-pagination"><button type="button" disabled={offset===0||pending} onClick={()=>changePage(offset-pageSize)}>← Anterior</button><span>Página {Math.floor(offset/pageSize)+1} de {Math.max(1,Math.ceil(total/pageSize))}</span><button type="button" disabled={offset+pageSize>=total||pending} onClick={()=>changePage(offset+pageSize)}>Próxima →</button></div><span>{pending?'Atualizando...':'Filtros processados no servidor'}</span></div>
+    </section>
+
+    {bulkOpen&&<div className="product-bulk-backdrop" onMouseDown={()=>setBulkOpen(false)}><section className="product-bulk-modal" onMouseDown={e=>e.stopPropagation()}><header><div><small>ALTERAÇÃO EM MASSA</small><h2>{selected.size} produto(s) selecionado(s)</h2><p>Somente os campos escolhidos abaixo serão alterados. Os demais dados permanecem como estão.</p></div><button type="button" onClick={()=>setBulkOpen(false)}>×</button></header><div className="product-bulk-grid">
+      <label className="bulk-ncm"><span><input type="checkbox" checked={bulk.ncmEnabled} onChange={e=>setBulk(c=>({...c,ncmEnabled:e.target.checked}))}/> Alterar NCM</span><input disabled={!bulk.ncmEnabled} inputMode="numeric" maxLength={8} value={bulk.ncm} onChange={e=>setBulk(c=>({...c,ncm:e.target.value.replace(/\D/g,'').slice(0,8)}))} placeholder="8 dígitos"/></label>
+      <label>Grupo<select value={bulk.group_id} onChange={e=>setBulk(c=>({...c,group_id:e.target.value}))}><option value="__keep__">Não alterar</option><option value="">Remover grupo</option>{groups.filter(x=>x.active!==false).map(x=><option key={text(x.id)} value={text(x.id)}>{text(x.name)}</option>)}</select></label>
+      <label>Marca<select value={bulk.brand_id} onChange={e=>setBulk(c=>({...c,brand_id:e.target.value}))}><option value="__keep__">Não alterar</option><option value="">Remover marca</option>{brands.filter(x=>x.active!==false).map(x=><option key={text(x.id)} value={text(x.id)}>{text(x.name)}</option>)}</select></label>
+      <label>Situação tributária<select value={bulk.tax_situation} onChange={e=>setBulk(c=>({...c,tax_situation:e.target.value}))}><option value="__keep__">Não alterar</option>{taxOptions.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+      <label>Produto pesável<select value={bulk.is_weighable} onChange={e=>setBulk(c=>({...c,is_weighable:e.target.value}))}><option value="__keep__">Não alterar</option><option value="true">Sim, pesável</option><option value="false">Não pesável</option></select></label>
+    </div><footer><button type="button" className="studio-secondary" onClick={()=>setBulkOpen(false)}>Cancelar</button><button type="button" className="studio-primary" disabled={pending} onClick={applyBulk}>{pending?'Aplicando...':`Aplicar em ${selected.size} produto(s)`}</button></footer></section></div>}
+  </div>;
 }
