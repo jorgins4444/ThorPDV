@@ -12,3 +12,289 @@
   .thor-boleto-bank strong{background:#ec7000!important;color:#fff!important}
   @page{size:A4 portrait;margin:0}
 }
+
+/* Product Studio image isolation fix.
+   The legacy Product Master .image-field:first-child selector must never turn
+   a grade variation gallery into the large "Imagem principal" card. */
+.product-studio-editor .studio-variant-image.image-field,
+.product-studio-editor .studio-variant-image.image-field:first-child{
+  position:relative!important;
+  display:inline-flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:4px!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:86px!important;
+  height:28px!important;
+  min-height:28px!important;
+  max-height:28px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+  white-space:nowrap!important;
+}
+.product-studio-editor .studio-variant-image.image-field::before,
+.product-studio-editor .studio-variant-image.image-field:first-child::before,
+.product-studio-editor .studio-variant-image.image-field::after{
+  content:none!important;
+  display:none!important;
+}
+.product-studio-editor .studio-variant-image .studio-variant-image-actions{
+  order:1!important;
+  display:inline-flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  gap:3px!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:28px!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  flex-wrap:nowrap!important;
+  overflow:visible!important;
+}
+.product-studio-editor .studio-variant-image .studio-variant-image-actions label{
+  display:grid!important;
+  place-items:center!important;
+  width:26px!important;
+  min-width:26px!important;
+  max-width:26px!important;
+  height:26px!important;
+  min-height:26px!important;
+  max-height:26px!important;
+  margin:0!important;
+  padding:0!important;
+  border:1px dashed #8650dc!important;
+  border-radius:6px!important;
+  background:#fff!important;
+  color:#8650dc!important;
+  font-size:0!important;
+  line-height:1!important;
+  overflow:hidden!important;
+  cursor:pointer!important;
+}
+.product-studio-editor .studio-variant-image .studio-variant-image-actions label::before{
+  content:'+'!important;
+  display:block!important;
+  font-size:16px!important;
+  font-weight:400!important;
+  line-height:1!important;
+}
+.product-studio-editor .studio-variant-image .studio-variant-image-actions label input{display:none!important}
+.product-studio-editor .studio-variant-image .studio-variant-image-actions small{display:none!important}
+.product-studio-editor .studio-variant-image .studio-variant-image-actions button{
+  display:grid!important;
+  place-items:center!important;
+  width:20px!important;
+  min-width:20px!important;
+  max-width:20px!important;
+  height:26px!important;
+  min-height:26px!important;
+  max-height:26px!important;
+  margin:0!important;
+  padding:0!important;
+  border:1px solid #eadadd!important;
+  border-radius:6px!important;
+  background:#fff!important;
+  color:#9b5560!important;
+  font-size:0!important;
+  line-height:1!important;
+  box-shadow:none!important;
+}
+.product-studio-editor .studio-variant-image .studio-variant-image-actions button::before{
+  content:'×'!important;
+  display:block!important;
+  font-size:12px!important;
+  line-height:1!important;
+}
+.product-studio-editor .studio-variant-image .studio-variant-thumb,
+.product-studio-editor .studio-variant-image .studio-variant-thumb.inherited,
+.product-studio-editor .studio-variant-image .studio-variant-thumb.custom{
+  order:2!important;
+  display:grid!important;
+  place-items:center!important;
+  flex:0 0 26px!important;
+  width:26px!important;
+  min-width:26px!important;
+  max-width:26px!important;
+  height:26px!important;
+  min-height:26px!important;
+  max-height:26px!important;
+  margin:0!important;
+  padding:0!important;
+  border:1px solid #d7d1df!important;
+  border-radius:6px!important;
+  background:#faf9fc!important;
+  box-shadow:0 1px 2px rgba(40,31,52,.05)!important;
+  overflow:hidden!important;
+}
+.product-studio-editor .studio-variant-image .studio-variant-thumb img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:0!important;
+  object-fit:cover!important;
+  object-position:center!important;
+}
+.product-studio-editor .studio-variant-image .studio-variant-thumb span{font-size:0!important}
+.product-studio-editor .studio-variant-table td:nth-child(3){
+  min-height:42px!important;
+  align-items:center!important;
+  overflow:visible!important;
+}
+
+/* Restore the main product image as the large preview card.
+   Keep its title hidden, as requested previously, but keep + / remove controls compact. */
+.product-studio-editor .studio-main-grid{
+  grid-template-columns:minmax(0,3fr) minmax(235px,.9fr)!important;
+  align-items:stretch!important;
+}
+.product-studio-editor .studio-cover{
+  display:flex!important;
+  align-items:stretch!important;
+  justify-content:stretch!important;
+  align-self:stretch!important;
+  justify-self:stretch!important;
+  width:auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  padding:14px!important;
+  overflow:hidden!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main,
+.product-studio-editor .studio-cover .studio-image-field.main:first-child{
+  position:relative!important;
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+  white-space:normal!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main::before,
+.product-studio-editor .studio-cover .studio-image-field.main:first-child::before,
+.product-studio-editor .studio-cover .studio-image-field.main::after{
+  content:none!important;
+  display:none!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-preview,
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-preview:has(>span){
+  display:grid!important;
+  place-items:center!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:185px!important;
+  min-height:185px!important;
+  max-height:185px!important;
+  margin:0!important;
+  padding:0!important;
+  border:1px dashed #d6cee1!important;
+  border-radius:10px!important;
+  background:#faf9fb!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-preview img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  margin:0!important;
+  padding:5px!important;
+  box-sizing:border-box!important;
+  object-fit:contain!important;
+  object-position:center!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-preview span{
+  display:block!important;
+  color:#aaa5b0!important;
+  font-size:9px!important;
+  letter-spacing:.06em!important;
+  text-transform:uppercase!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-meta{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:4px!important;
+  width:100%!important;
+  margin-top:7px!important;
+  padding:0!important;
+  flex-wrap:nowrap!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-meta strong{display:none!important}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-meta label{
+  display:grid!important;
+  place-items:center!important;
+  width:28px!important;
+  min-width:28px!important;
+  max-width:28px!important;
+  height:28px!important;
+  min-height:28px!important;
+  max-height:28px!important;
+  margin:0!important;
+  padding:0!important;
+  border:1px dashed #8650dc!important;
+  border-radius:6px!important;
+  background:#fff!important;
+  color:#8650dc!important;
+  font-size:0!important;
+  line-height:1!important;
+  cursor:pointer!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-meta label::before{
+  content:'+'!important;
+  display:block!important;
+  font-size:17px!important;
+  line-height:1!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-meta label input{display:none!important}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-meta button{
+  display:grid!important;
+  place-items:center!important;
+  width:24px!important;
+  min-width:24px!important;
+  max-width:24px!important;
+  height:28px!important;
+  min-height:28px!important;
+  max-height:28px!important;
+  margin:0!important;
+  padding:0!important;
+  border:1px solid #eadadd!important;
+  border-radius:6px!important;
+  background:#fff!important;
+  color:#9b5560!important;
+  font-size:0!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main .studio-image-meta button::before{
+  content:'×'!important;
+  display:block!important;
+  font-size:13px!important;
+  line-height:1!important;
+}
+.product-studio-editor .studio-cover .studio-image-field.main>small{display:none!important}
+
+@media(max-width:820px){
+  .product-studio-editor .studio-main-grid{grid-template-columns:1fr!important}
+  .product-studio-editor .studio-cover .studio-image-field.main .studio-image-preview,
+  .product-studio-editor .studio-cover .studio-image-field.main .studio-image-preview:has(>span){height:160px!important;min-height:160px!important;max-height:160px!important}
+}
