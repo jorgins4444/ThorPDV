@@ -19,6 +19,29 @@
 .hom-modal>header>button{color:#273342!important;background:transparent!important}
 .hom-studio .primary-link{display:inline-block;padding:10px 15px;border:1px solid #273342;border-radius:8px;background:#273342;color:#fff!important;text-decoration:none;font-size:12px;font-weight:800;font-family:Arial,Helvetica,sans-serif}
 
+/* Construtor de boleto teste dentro da homologacao. */
+.hom-test-builder{display:grid;gap:14px;padding:18px 20px}
+.hom-test-builder>form{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(190px,.65fr);gap:12px;align-items:end}
+.hom-test-builder label{display:grid;gap:6px;font-size:11px;font-weight:800;color:#596273}
+.hom-test-builder label>span{font-size:11px}
+.hom-test-builder label small{font-size:9px;line-height:1.45;color:#7a8490;font-weight:400}
+.hom-test-builder .search>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}
+.hom-test-builder input{width:100%;height:40px;border:1px solid #ccd4df;border-radius:8px;background:#fff;color:#202938;padding:8px 10px;font:inherit;outline:none}
+.hom-test-builder input:focus{border-color:#788da8;box-shadow:0 0 0 3px rgba(80,103,132,.08)}
+.hom-test-builder .search button{height:40px;min-height:40px}
+.hom-customer-results{display:grid;gap:7px}
+.hom-customer-results>button{width:100%;min-height:58px!important;display:flex!important;align-items:center;justify-content:space-between;gap:16px;text-align:left;border:1px solid #e0e5eb!important;border-radius:9px!important;padding:10px 12px!important;background:#fff!important;color:#273342!important}
+.hom-customer-results>button:hover:not(:disabled){border-color:#92a4bb!important;background:#f8fafc!important}
+.hom-customer-results>button.selected{border-color:#627b9a!important;background:#f2f6fb!important;box-shadow:inset 3px 0 #627b9a}
+.hom-customer-results>button:disabled{opacity:.62!important;background:#f7f7f8!important;cursor:not-allowed}
+.hom-customer-results>button>span{display:grid;gap:3px}
+.hom-customer-results>button>span:last-child{text-align:right;justify-items:end}
+.hom-customer-results b{font-size:12px}
+.hom-customer-results small{font-size:9px;color:#76808c;font-weight:500}
+.hom-customer-results strong{font-size:9px;color:#526a86}
+.hom-test-help{display:grid;gap:3px;padding:11px 12px;border:1px solid #e6e9ed;border-radius:9px;background:#f7f9fb;font-size:11px}
+.hom-test-help span{color:#6b7581}
+
 /* Remessa / Retorno: elimina texto branco sobre fundo branco em botoes/links. */
 .cnab-studio button,.cnab-modal button{color:#202833!important;font-family:Arial,Helvetica,sans-serif!important;font-weight:750!important}
 .cnab-studio button.primary,.cnab-modal button.primary{background:#202833!important;border-color:#202833!important;color:#fff!important}
@@ -38,4 +61,7 @@
 @media(max-width:760px){
   .hom-records article,.hom-field-head,.hom-field{min-width:0}
   .hom-records{overflow-x:visible!important}
+  .hom-test-builder>form{grid-template-columns:1fr}
+  .hom-customer-results>button{align-items:flex-start;flex-direction:column}
+  .hom-customer-results>button>span:last-child{text-align:left;justify-items:start}
 }
