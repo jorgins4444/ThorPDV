@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 
 const SESSION_COOKIE='thorpdv_test_session';
-type RpcResult={ok?:boolean;error?:string;data?:Record<string,unknown>[]|Record<string,unknown>;id?:string;[key:string]:unknown};
+type RpcResult={ok?:boolean;error?:string;data?:Record<string,unknown>[]|Record<string,unknown>;id?:string;total?:number;ids?:unknown;limit?:number;offset?:number;[key:string]:unknown};
+export type ProductListFilters={category_id?:string;brand_id?:string;group_id?:string;ncm?:string;tax_situation?:string;product_structure?:string;active?:string};
 
 async function token(){const store=await cookies();const value=store.get(SESSION_COOKIE)?.value;if(!value)redirect('/login');return value;}
 async function rpc(name:string,args:Record<string,unknown>){
@@ -20,7 +21,19 @@ async function rpc(name:string,args:Record<string,unknown>){
   return result;
 }
 
-export async function productStudioList(search?:string){const p=await token();const r=await rpc('erp_product_list_v3',{p_token:p,p_search:search?.trim()||null});return {ok:Boolean(r.ok),error:r.error,data:Array.isArray(r.data)?r.data:[],branch_id:r.branch_id};}
+export async function productStudioList(search?:string,filters:ProductListFilters={},limit=100,offset=0){
+  const p=await token();
+  const r=await rpc('erp_product_list_v4',{p_token:p,p_search:search?.trim()||null,p_filters:filters,p_limit:limit,p_offset:offset});
+  return {ok:Boolean(r.ok),error:r.error,data:Array.isArray(r.data)?r.data:[],branch_id:r.branch_id,total:Number(r.total||0),limit:Number(r.limit||limit),offset:Number(r.offset||offset)};
+}
+export async function productStudioFilteredIds(search?:string,filters:ProductListFilters={}){
+  const p=await token();
+  const r=await rpc('erp_product_filtered_ids_v1',{p_token:p,p_search:search?.trim()||null,p_filters:filters});
+  const ids=Array.isArray(r.ids)?r.ids.map(String):[];
+  return {ok:Boolean(r.ok),error:r.error,ids,total:Number(r.total||ids.length)};
+}
+export async function productStudioSetActive(productId:string,active:boolean){const p=await token();return rpc('erp_product_set_active_v1',{p_token:p,p_product:productId,p_active:active});}
+export async function productStudioBulkUpdate(productIds:string[],patch:Record<string,unknown>){const p=await token();return rpc('erp_product_bulk_update_v1',{p_token:p,p_product_ids:productIds,p_patch:patch});}
 export async function productStudioDetail(productId:string){const p=await token();return rpc('erp_product_detail_v2',{p_token:p,p_product:productId});}
 export async function productStudioSave(payload:Record<string,unknown>){const p=await token();return rpc('erp_product_save_v5',{p_token:p,p_payload:payload});}
 export async function productStudioCompositionSet(productId:string,items:Record<string,unknown>[]){const p=await token();return rpc('erp_product_composition_set',{p_token:p,p_product:productId,p_items:items});}
