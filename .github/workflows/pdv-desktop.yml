@@ -126,7 +126,8 @@ jobs:
           Set-Content -Path ($exe.FullName + '.sha256') -Value ($hash + '  ' + $exe.Name) -Encoding ascii
           Write-Host ('SHA256 ' + $hash)
 
-      - name: Upload installer
+      - name: Upload temporary installer artifact
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ThorPDV-Desktop-Windows
