@@ -3,14 +3,16 @@ import '../[...slug]/module.css';
 import '../[...slug]/advanced.css';
 import '../[...slug]/product-master.css';
 import '../[...slug]/product-studio.css';
+import '../[...slug]/product-list-enhanced.css';
 import { AdvancedShell } from '../[...slug]/advanced-shell';
 import { erpLoad } from '../[...slug]/actions';
 import { productStudioList } from '../[...slug]/product-studio-actions';
+import { productReferenceList } from '../[...slug]/product-reference-actions';
 import { ProductStudioWorkspace } from '../[...slug]/product-studio-workspace';
 
 export default async function ProductsPage(){
-  const [products,groups,classes,suppliers,modifiers,branches]=await Promise.all([
-    productStudioList(),erpLoad('groups'),erpLoad('classes'),erpLoad('suppliers'),erpLoad('modifiers'),erpLoad('branches'),
+  const [products,groups,classes,suppliers,modifiers,branches,brands,categories]=await Promise.all([
+    productStudioList(undefined,{},100,0),erpLoad('groups'),erpLoad('classes'),erpLoad('suppliers'),erpLoad('modifiers'),erpLoad('branches'),productReferenceList('brands'),productReferenceList('categories'),
   ]);
   return <AdvancedShell
     title="Cadastro de Produtos"
@@ -29,11 +31,14 @@ export default async function ProductsPage(){
     </nav>
     <ProductStudioWorkspace
       initialProducts={products.data}
+      initialTotal={products.total}
       groups={groups.data}
       classes={classes.data}
       suppliers={suppliers.data}
       modifiers={modifiers.data}
       branches={branches.data}
+      brands={brands.data}
+      categories={categories.data}
     />
   </AdvancedShell>;
 }
