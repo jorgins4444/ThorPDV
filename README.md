@@ -71,3 +71,5 @@ A partir da versão 0.8.2, o Desktop possui atualização assistida com validaç
 8. Pagamentos Pix/cartão
 9. Relatórios
 10. Hardening de segurança e produção
+
+<!-- vercel-rebuild: 2026-08-15T17:59-03:00 -->
