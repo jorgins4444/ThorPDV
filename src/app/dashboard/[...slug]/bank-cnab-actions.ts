@@ -16,6 +16,7 @@ export async function bankHomologationData(){return rpc('erp_bank_homologation_d
 export async function bankLayoutProfile(configId:string){return rpc('erp_bank_layout_profile_get',{p_token:await token(),p_config:configId})}
 export async function saveBankLayoutProfile(configId:string,direction:BankFileDirection,model:unknown[]){return rpc('erp_bank_layout_profile_save',{p_token:await token(),p_config:configId,p_direction:direction,p_model:model})}
 export async function resetBankLayoutProfile(configId:string){return rpc('erp_bank_layout_profile_reset',{p_token:await token(),p_config:configId})}
+export async function confirmBankLayout(configId:string){return rpc('erp_bank_homologation_confirm_layout',{p_token:await token(),p_config:configId})}
 export async function selectHomologationTest(configId:string,financialEntryId:string){return rpc('erp_bank_homologation_select_test',{p_token:await token(),p_config:configId,p_financial_entry:financialEntryId})}
 export async function bindHomologationRemittance(configId:string,remittanceId:string){return rpc('erp_bank_homologation_bind_remittance',{p_token:await token(),p_config:configId,p_remittance:remittanceId})}
 export async function markHomologationRemittanceSent(configId:string){return rpc('erp_bank_homologation_mark_sent',{p_token:await token(),p_config:configId})}
