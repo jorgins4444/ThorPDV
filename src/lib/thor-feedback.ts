@@ -1,5 +1,6 @@
 'use client';
 
+// Global ThorGestao feedback API v1.
 export type ThorFeedbackKind='success'|'info'|'warning'|'error';
 export type ThorFeedbackPayload={kind?:ThorFeedbackKind;title?:string;message?:string;duration?:number};
 
