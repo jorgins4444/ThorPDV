@@ -1,7 +1,7 @@
 const { SyncEngine } = require('./sync');
 
 const BLOCK_CODES=new Set(['license_blocked','license_inactive','license_expired','license_not_found','pdv_module_disabled','device_blocked']);
-const RECONNECT_CODES=new Set(['invalid_device','invalid_device_token','device_credential_revoked']);
+const RECONNECT_CODES=new Set(['invalid_device','invalid_device_token','device_credential_revoked','device_reconnect_required']);
 const LICENSE_MESSAGE='Licença de uso bloqueada, por favor entrar em contato com o Administrador do Sistema';
 const RECONNECT_MESSAGE='A conexão deste terminal foi refeita no ThorGestão. Informe o novo código de ativação para reconectar.';
 
@@ -123,7 +123,6 @@ function installLicenseGuardV107(ThorAgent){
     if(this.deviceToken?.()){
       clearInterval(this._licenseGuardTimerV107);
       const tick=()=>this.checkLicenseOnline().catch(()=>{});
-      // Reconexão feita no ThorGestão precisa ser percebida rapidamente pelo caixa.
       this._licenseGuardTimerV107=setInterval(tick,3000);
       setTimeout(tick,200);
     }
@@ -147,15 +146,14 @@ function installLicenseGuardV107(ThorAgent){
   };
 
   ThorAgent.prototype.enroll=async function(payload={}){
-    const result=await originalEnroll.call(this,payload);
+    await originalEnroll.call(this,payload);
     clearPairingInvalidated(this.store);
     clearBlocked(this.store);
-    // O enroll inicia o sync; reinicia também a vigilância da credencial nova.
     clearInterval(this._licenseGuardTimerV107);
     const tick=()=>this.checkLicenseOnline().catch(()=>{});
     this._licenseGuardTimerV107=setInterval(tick,3000);
     setTimeout(tick,250);
-    return result;
+    return this.status();
   };
 
   ThorAgent.prototype.loginOperator=async function(payload={}){
