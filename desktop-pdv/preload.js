@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('thor', {
   cancelSale: (payload) => ipcRenderer.invoke('thor:cancel-sale', payload),
   returnSale: (payload) => ipcRenderer.invoke('thor:return-sale', payload),
   storeCreditVoucher: (number) => ipcRenderer.invoke('thor:store-credit-voucher', number),
+  storeCreditVouchers: (query = '', limit = 50) => ipcRenderer.invoke('thor:store-credit-vouchers', query, limit),
   printStoreCreditVoucher: (voucher) => ipcRenderer.invoke('thor:print-store-credit-voucher', voucher),
   requestNfce: (payload) => ipcRenderer.invoke('thor:request-nfce', payload),
   fiscalSales: (query = '') => ipcRenderer.invoke('thor:fiscal-sales', query),
