@@ -2,10 +2,6 @@ function getPath(obj, path, fallback = undefined) {
   return path.split('.').reduce((value, key) => (value && Object.prototype.hasOwnProperty.call(value, key) ? value[key] : undefined), obj) ?? fallback;
 }
 
-function timeoutResult(ms) {
-  return new Promise((resolve) => setTimeout(() => resolve({ ok: false, pending: true, error: 'sync_continuing' }), ms));
-}
-
 function installProfilePermissions(ThorAgent) {
   const originalFinalizeSale = ThorAgent.prototype.finalizeSale;
   const originalBeginPayment = ThorAgent.prototype.beginIntegratedPayment;
@@ -37,50 +33,43 @@ function installProfilePermissions(ThorAgent) {
   };
 
   ThorAgent.prototype.loginOperator = async function (payload = {}) {
-    // A autenticação local precisa ser imediata. A sincronização de entrada é
-    // importante, mas nunca deve manter a tela presa indefinidamente em 100%.
+    // Login do caixa é local e precisa liberar a operação imediatamente.
+    // A sincronização nunca pode fazer parte do caminho crítico de entrada.
     const localLogin = await originalLoginOperator.call(this, payload);
 
-    // O ThorPDV já inicia um sync automático ao abrir. Antes, o login forçava um
-    // segundo sync e ficava esperando o primeiro terminar, criando a corrida que
-    // deixava a tela presa. Se já existe uma sincronização ativa, reutilizamos
-    // esse ciclo e liberamos o operador sem disparar outro.
-    if (this.sync?.running) {
-      return {
-        ...localLogin,
-        sync: { ok: false, pending: true, background: true, reused: true, error: 'sync_continuing' },
-      };
-    }
-
-    const syncPromise = Promise.resolve(this.sync.run(true)).catch((error) => ({ ok: false, error: error?.message || 'sync_unavailable' }));
-    const sync = await Promise.race([syncPromise, timeoutResult(12000)]);
-
-    if (sync?.pending) {
-      // O sync real continua em segundo plano. Se ele descobrir um bloqueio de
-      // licença, o license-guard derruba a sessão imediatamente.
-      syncPromise.catch(() => {});
-      return {
-        ...localLogin,
-        sync: { ok: false, pending: true, background: true, error: 'sync_continuing' },
-      };
-    }
-
-    if (sync?.ok) {
+    const runBackgroundSync = async () => {
       try {
-        const refreshedLogin = await originalLoginOperator.call(this, payload);
-        return {
-          ...refreshedLogin,
-          sync: { ok: true, at: this.store.get('last_sync_at') || null },
-        };
+        const sync = await this.sync.run(true);
+        if (!sync?.ok) return sync;
+
+        // Depois do pull, valida novamente o mesmo PIN contra o perfil recém
+        // sincronizado. Se o usuário tiver sido removido, desativado ou o PIN
+        // alterado, a sessão local é encerrada sem travar a tela de login.
+        try {
+          await originalLoginOperator.call(this, payload);
+        } catch (error) {
+          this.store.set('current_operator_id', '');
+          return { ok: false, error: error?.message || 'operator_revalidation_failed' };
+        }
+        return sync;
       } catch (error) {
-        this.store.set('current_operator_id', '');
-        throw error;
+        return { ok: false, error: error?.message || 'sync_unavailable' };
       }
+    };
+
+    if (!this.sync?.running) {
+      void runBackgroundSync();
     }
 
     return {
       ...localLogin,
-      sync: { ok: false, offline: true, error: sync?.error || 'sync_unavailable' },
+      sync: {
+        ok: true,
+        pending: true,
+        background: true,
+        reused: Boolean(this.sync?.running),
+        at: this.store.get('last_sync_at') || null,
+      },
     };
   };
 
