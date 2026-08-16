@@ -101,8 +101,6 @@
         document.getElementById('setupConnection').textContent='Terminal ativado';
         ensureRuntimePolling();
 
-        // A confirmação fica visível por alguns milissegundos e a navegação não
-        // aguarda download de produtos, usuários, caixa ou qualquer sincronização.
         setTimeout(()=>{
           try{render();}catch(error){console.error('[ThorPDV activation render]',error);}
           setTimeout(async()=>{
@@ -139,12 +137,36 @@
   function toggleLoginTerminalSettings(){
     const gate=document.getElementById('thorOperatorGate');
     if(!gate)return false;
-    gate.classList.toggle('show-terminal-config');
+    const existing=gate.querySelector('#gateTerminalSettingsPanel');
+    if(existing){existing.remove();return true;}
+
+    const context=state.status?.context||{};
+    const settings=state.status?.settings||state.settings||{};
+    const panel=document.createElement('div');
+    panel.id='gateTerminalSettingsPanel';
+    panel.className='operator-terminal-settings-overlay';
+    panel.innerHTML=`
+      <section class="operator-terminal-settings-card">
+        <header><div><small>CONFIGURAÇÕES DO TERMINAL</small><h3>Informações deste caixa</h3></div><button type="button" id="gateTerminalSettingsClose">×</button></header>
+        <div class="operator-terminal-settings-grid">
+          <span><small>Empresa</small><b>${esc(context.company_name||'—')}</b></span>
+          <span><small>Filial</small><b>${esc(context.branch_name||'—')}</b></span>
+          <span><small>Terminal</small><b>${esc(context.pos_name||context.pos_code||'PDV')}</b></span>
+          <span><small>Impressora</small><b>${esc(settings.printerName||state.status?.printer||'Não configurada')}</b></span>
+        </div>
+        <p>Essas informações ficam ocultas durante o login e só aparecem quando Configurações / F10 é aberto.</p>
+        <div class="actions"><button type="button" class="primary" id="gateTerminalSettingsDone">Fechar</button></div>
+      </section>`;
+    gate.appendChild(panel);
+    const close=()=>panel.remove();
+    panel.querySelector('#gateTerminalSettingsClose').onclick=close;
+    panel.querySelector('#gateTerminalSettingsDone').onclick=close;
+    panel.onclick=(event)=>{if(event.target===panel)close();};
     return true;
   }
 
   document.addEventListener('click',event=>{
-    const item=event.target?.closest?.('.operator-gate-shortcuts span:first-child');
+    const item=event.target?.closest?.('.operator-gate-shortcuts [data-terminal-config], .operator-gate-shortcuts span:first-child');
     if(!item)return;
     event.preventDefault();
     event.stopPropagation();
@@ -163,7 +185,5 @@
     document.getElementById('setupTerminalSettings')?.click();
   },true);
 
-  // Se o boot assíncrono antigo já tiver desenhado a ativação antes deste patch
-  // carregar, redesenha uma única vez no fluxo novo.
   setTimeout(()=>{try{if(state.status&&!state.status.enrolled)renderSetup();}catch{}},0);
 })();
