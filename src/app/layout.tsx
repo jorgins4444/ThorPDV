@@ -8,6 +8,7 @@ import './thor-universal-polish.css';
 import './thor-responsive-layout.css';
 import './fiscal-compact.css';
 import './cash-closure-history.css';
+import './cash-closure-practical.css';
 import { ThorFeedbackCenter } from './thor-feedback-center';
 
 export const metadata: Metadata = {
