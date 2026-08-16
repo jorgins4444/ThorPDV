@@ -79,52 +79,71 @@ function installLicenseGuardV107(ThorAgent){
     };
   };
 
-  ThorAgent.prototype.checkLicenseOnline=async function(){
+  ThorAgent.prototype.checkLicenseOnline=function(options={}){
+    const force=Boolean(options.force);
+    const timeoutMs=Math.max(1200,Math.min(Number(options.timeoutMs||2800),6000));
     const token=this.deviceToken?.();
-    if(!token)return {ok:false,error:'not_enrolled',reconnectRequired:pairingInvalidated(this.store)};
-    const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),6000);
-    try{
-      const response=await fetch(`${String(this.apiBase||'').replace(/\/$/,'')}/api/pdv/license/status`,{
-        method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:'{}',signal:controller.signal,
-      });
-      const data=await response.json().catch(()=>({ok:false,error:`http_${response.status}`}));
-      if(response.ok&&data.ok){
-        clearBlocked(this.store);
-        clearPairingInvalidated(this.store);
-        this.state.licenseBlocked=false;
-        this.state.licenseBlockCode=null;
-        this.state.pairingInvalidated=false;
-        return {ok:true,status:data.status||null};
-      }
-      const code=text(data.error||`http_${response.status}`);
-      if(RECONNECT_CODES.has(code)){
-        invalidatePairing(this.store,this.sync,code);
-        this.state.pairingInvalidated=true;
-        this.state.online=true;
-        return {ok:false,reconnectRequired:true,error:code};
-      }
-      if(BLOCK_CODES.has(code)){
-        setBlocked(this.store,code,text(data.blocked_reason));
-        this.state.licenseBlocked=true;
-        this.state.licenseBlockCode=code;
-        this.state.online=true;
-        return {ok:false,blocked:true,error:code,reason:text(data.blocked_reason)||null};
-      }
-      return {ok:false,error:code,serverRejected:true};
-    }catch(error){
-      const code=error?.name==='AbortError'?'sync_timeout':text(error?.message)||'network_unavailable';
-      return {ok:false,offline:true,error:code};
-    }finally{clearTimeout(timeout)}
+    if(!token)return Promise.resolve({ok:false,error:'not_enrolled',reconnectRequired:pairingInvalidated(this.store)});
+
+    const now=Date.now();
+    if(!force&&this._licenseGuardLastResult&&now-Number(this._licenseGuardLastAt||0)<5000){
+      return Promise.resolve(this._licenseGuardLastResult);
+    }
+    if(this._licenseGuardPromise)return this._licenseGuardPromise;
+
+    this._licenseGuardPromise=(async()=>{
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),timeoutMs);
+      try{
+        const response=await fetch(`${String(this.apiBase||'').replace(/\/$/,'')}/api/pdv/license/status`,{
+          method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:'{}',signal:controller.signal,
+        });
+        const data=await response.json().catch(()=>({ok:false,error:`http_${response.status}`}));
+        if(response.ok&&data.ok){
+          clearBlocked(this.store);
+          clearPairingInvalidated(this.store);
+          this.state.licenseBlocked=false;
+          this.state.licenseBlockCode=null;
+          this.state.pairingInvalidated=false;
+          return {ok:true,status:data.status||null};
+        }
+        const code=text(data.error||`http_${response.status}`);
+        if(RECONNECT_CODES.has(code)){
+          invalidatePairing(this.store,this.sync,code);
+          this.state.pairingInvalidated=true;
+          this.state.online=true;
+          return {ok:false,reconnectRequired:true,error:code};
+        }
+        if(BLOCK_CODES.has(code)){
+          setBlocked(this.store,code,text(data.blocked_reason));
+          this.state.licenseBlocked=true;
+          this.state.licenseBlockCode=code;
+          this.state.online=true;
+          return {ok:false,blocked:true,error:code,reason:text(data.blocked_reason)||null};
+        }
+        return {ok:false,error:code,serverRejected:true};
+      }catch(error){
+        const code=error?.name==='AbortError'?'license_check_timeout':text(error?.message)||'network_unavailable';
+        return {ok:false,offline:true,error:code};
+      }finally{clearTimeout(timeout)}
+    })().then((result)=>{
+      this._licenseGuardLastResult=result;
+      this._licenseGuardLastAt=Date.now();
+      return result;
+    }).finally(()=>{
+      this._licenseGuardPromise=null;
+    });
+
+    return this._licenseGuardPromise;
   };
 
   ThorAgent.prototype.start=async function(...args){
     const result=await originalStart.apply(this,args);
     if(this.deviceToken?.()){
       clearInterval(this._licenseGuardTimerV107);
-      const tick=()=>this.checkLicenseOnline().catch(()=>{});
-      this._licenseGuardTimerV107=setInterval(tick,3000);
-      setTimeout(tick,200);
+      const tick=()=>this.checkLicenseOnline({force:true,timeoutMs:2500}).catch(()=>{});
+      this._licenseGuardTimerV107=setInterval(tick,10000);
+      setTimeout(tick,900);
     }
     return result;
   };
@@ -146,25 +165,32 @@ function installLicenseGuardV107(ThorAgent){
   };
 
   ThorAgent.prototype.enroll=async function(payload={}){
-    await originalEnroll.call(this,payload);
+    const result=await originalEnroll.call(this,payload);
     clearPairingInvalidated(this.store);
     clearBlocked(this.store);
+    this._licenseGuardLastResult=null;
+    this._licenseGuardLastAt=0;
     clearInterval(this._licenseGuardTimerV107);
-    const tick=()=>this.checkLicenseOnline().catch(()=>{});
-    this._licenseGuardTimerV107=setInterval(tick,3000);
-    setTimeout(tick,250);
-    return this.status();
+    const tick=()=>this.checkLicenseOnline({force:true,timeoutMs:2500}).catch(()=>{});
+    this._licenseGuardTimerV107=setInterval(tick,10000);
+    setTimeout(tick,1000);
+    return {...result,licenseValidation:'background'};
   };
 
   ThorAgent.prototype.loginOperator=async function(payload={}){
     if(pairingInvalidated(this.store))throw new Error('pairing_reconnect_required');
     const wasBlocked=isBlocked(this.store);
-    const license=await this.checkLicenseOnline();
+
+    // Uma consulta online curta confirma bloqueios reais sem transformar a rede
+    // em pré-requisito para abrir o caixa. Em indisponibilidade, vale a última
+    // decisão conhecida; bloqueio já confirmado continua impedindo o acesso.
+    const license=await this.checkLicenseOnline({force:true,timeoutMs:2200});
     if(license.reconnectRequired)throw new Error('pairing_reconnect_required');
-    if(license.blocked||wasBlocked&&license.offline){
+    if(license.blocked||(wasBlocked&&license.offline)){
       this.logoutOperator?.();
       throw new Error('license_blocked');
     }
+
     const result=await originalLogin.call(this,payload);
     const syncError=text(result?.sync?.error);
     if(RECONNECT_CODES.has(syncError)||pairingInvalidated(this.store)){
