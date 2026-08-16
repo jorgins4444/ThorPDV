@@ -2,6 +2,10 @@ function getPath(obj, path, fallback = undefined) {
   return path.split('.').reduce((value, key) => (value && Object.prototype.hasOwnProperty.call(value, key) ? value[key] : undefined), obj) ?? fallback;
 }
 
+function timeoutResult(ms) {
+  return new Promise((resolve) => setTimeout(() => resolve({ ok: false, pending: true, error: 'sync_continuing' }), ms));
+}
+
 function installProfilePermissions(ThorAgent) {
   const originalFinalizeSale = ThorAgent.prototype.finalizeSale;
   const originalBeginPayment = ThorAgent.prototype.beginIntegratedPayment;
@@ -33,8 +37,21 @@ function installProfilePermissions(ThorAgent) {
   };
 
   ThorAgent.prototype.loginOperator = async function (payload = {}) {
+    // A autenticação local precisa ser imediata. A sincronização de entrada é
+    // importante, mas nunca deve manter a tela presa indefinidamente em 100%.
     const localLogin = await originalLoginOperator.call(this, payload);
-    const sync = await this.sync.run(true);
+    const syncPromise = Promise.resolve(this.sync.run(true)).catch((error) => ({ ok: false, error: error?.message || 'sync_unavailable' }));
+    const sync = await Promise.race([syncPromise, timeoutResult(14000)]);
+
+    if (sync?.pending) {
+      // O sync real continua em segundo plano. Se ele descobrir um bloqueio de
+      // licença, o license-guard derruba a sessão imediatamente.
+      syncPromise.catch(() => {});
+      return {
+        ...localLogin,
+        sync: { ok: false, pending: true, background: true, error: 'sync_continuing' },
+      };
+    }
 
     if (sync?.ok) {
       try {
