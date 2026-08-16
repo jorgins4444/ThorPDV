@@ -1,6 +1,7 @@
 import '../../[...slug]/module.css';
 import '../../[...slug]/advanced.css';
 import '../../[...slug]/sales-options.css';
+import '../../[...slug]/sales-session-rules.css';
 import { AdvancedShell } from '../../[...slug]/advanced-shell';
 import { SalesOptionsTabs } from '../../[...slug]/sales-options-tabs';
 import { salesOptionsGet } from '../../[...slug]/sales-options-actions';
