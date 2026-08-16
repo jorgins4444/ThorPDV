@@ -22,6 +22,8 @@ export default async function ProductsPage(){
     title="Cadastro de Produtos"
     subtitle="Produtos simples e com grade, preços, estoque, fiscal, imagens e configurações do ThorPDV em um único cadastro."
     activePath="/dashboard/produtos"
+    backHref="/dashboard/produtos"
+    backLabel="Produtos"
   >
     <nav className="studio-catalog-nav" aria-label="Cadastros de produtos">
       <Link href="/dashboard/produtos/marcas">Marcas</Link>
