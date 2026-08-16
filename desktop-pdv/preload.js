@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('thor', {
   saveTermDuplicatesPdf: (payload) => ipcRenderer.invoke('thor:save-term-duplicates-pdf', payload),
   cancelSale: (payload) => ipcRenderer.invoke('thor:cancel-sale', payload),
   returnSale: (payload) => ipcRenderer.invoke('thor:return-sale', payload),
+  storeCreditVoucher: (number) => ipcRenderer.invoke('thor:store-credit-voucher', number),
+  printStoreCreditVoucher: (voucher) => ipcRenderer.invoke('thor:print-store-credit-voucher', voucher),
   requestNfce: (payload) => ipcRenderer.invoke('thor:request-nfce', payload),
   fiscalSales: (query = '') => ipcRenderer.invoke('thor:fiscal-sales', query),
   fiscalSale: (key) => ipcRenderer.invoke('thor:fiscal-sale', key),
