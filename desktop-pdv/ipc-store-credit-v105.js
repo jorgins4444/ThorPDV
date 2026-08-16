@@ -16,10 +16,11 @@ function installStoreCreditVoucherIpcV105(ThorAgent) {
     return instance;
   };
 
-  for (const channel of ['thor:store-credit-voucher', 'thor:print-store-credit-voucher']) {
+  for (const channel of ['thor:store-credit-voucher', 'thor:store-credit-vouchers', 'thor:print-store-credit-voucher']) {
     try { ipcMain.removeHandler(channel); } catch {}
   }
   ipcMain.handle('thor:store-credit-voucher', async (_event, number) => agent().storeCreditVoucher(number));
+  ipcMain.handle('thor:store-credit-vouchers', async (_event, query = '', limit = 50) => agent().storeCreditVouchers(query, limit));
   ipcMain.handle('thor:print-store-credit-voucher', async (_event, voucher) => agent().printStoreCreditVoucher(voucher));
 }
 
