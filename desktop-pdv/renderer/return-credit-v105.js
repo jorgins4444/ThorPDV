@@ -1,6 +1,9 @@
 (function () {
   const digits = (value) => String(value || '').replace(/\D/g, '');
   const n = (value) => Number(value || 0);
+  const allowsFraction = (item) => Boolean(item?.is_weighable || item?.fractioned || item?.label_scale);
+  const remainingFor = (item) => Math.max(n(item?.quantity) - n(item?.returned_quantity), 0);
+  const qtyLabel = (value) => n(value).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 
   v3PaymentLabels.store_credit_voucher = 'Vale Crédito';
 
@@ -19,15 +22,45 @@
     return `<div class="v105-beneficiary selected"><span>${automatic ? 'CLIENTE IDENTIFICADO NA VENDA' : 'CLIENTE SELECIONADO'}</span><b>${esc(customer?.name || 'Cliente')}</b><small>${esc(customer?.document || '')}${customer?.store_credit_balance != null ? ` • Crédito atual ${money(customer.store_credit_balance)}` : ''}</small></div>`;
   }
 
+  function returnItemRow(item, index) {
+    const remaining = remainingFor(item);
+    const fractional = allowsFraction(item);
+    const unavailable = remaining <= 0.000001;
+    const editableQuantity = fractional || remaining > 1.000001;
+    const initialQuantity = fractional ? Math.min(1, remaining) : 1;
+    const name = item.name || item.description || item.sku || 'Item';
+    const unit = item.unit || (fractional ? 'kg' : 'un');
+
+    return `<div class="v105-return-line ${unavailable ? 'unavailable' : ''}" data-return-line="${index}">
+      <label class="v105-return-choice">
+        <input type="checkbox" data-return-select="${index}" ${unavailable ? 'disabled' : ''}>
+        <span class="v105-return-check">✓</span>
+        <span class="v105-return-product">
+          <b>${esc(name)}</b>
+          <small>Vendido: ${qtyLabel(item.quantity)} • Já devolvido: ${qtyLabel(item.returned_quantity)} • Disponível: ${qtyLabel(remaining)} ${esc(unit)}</small>
+        </span>
+        <em>${unavailable ? 'Já devolvido' : 'Selecionar'}</em>
+      </label>
+      ${unavailable ? '' : editableQuantity ? `
+        <div class="v105-return-qty" data-return-qty-panel="${index}" hidden>
+          <label><span>Quantidade a devolver</span><input type="number" min="${fractional ? '0.001' : '1'}" max="${remaining}" step="${fractional ? '0.001' : '1'}" value="${initialQuantity}" data-return-qty="${index}"></label>
+          <small>Máximo disponível: ${qtyLabel(remaining)} ${esc(unit)}</small>
+        </div>` : `
+        <div class="v105-return-qty v105-return-fixed" data-return-qty-panel="${index}" hidden>
+          <span>Quantidade a devolver</span><b>1</b><small>Única unidade disponível</small>
+        </div>`}
+    </div>`;
+  }
+
   returnSaleModal = function (sale) {
-    const items = sale.items || [];
+    const items = Array.isArray(sale.items) ? sale.items : [];
     const automaticCustomer = sale.customer_id ? { id:sale.customer_id, name:sale.customer_name || sale.customer || 'Cliente da venda', document:sale.customer_document || '', store_credit_balance:sale.customer_store_credit_balance } : null;
     let selectedCustomer = automaticCustomer;
     let guest = null;
     let searchTimer = null;
 
-    const m = modal(`<div class="v105-return-head"><div><small>DEVOLUÇÃO</small><h3>Venda ${sale.number ? `#${esc(sale.number)}` : ''}</h3><p>Selecione os itens. A restituição será sempre em Crédito em loja.</p></div><div class="v105-credit-only"><span>RESTITUIÇÃO</span><b>Crédito em loja</b><small>Não movimenta dinheiro do caixa</small></div></div>
-      <div class="return-items v105-return-items">${items.map((i,index)=>{const max=Math.max(n(i.quantity)-n(i.returned_quantity),0);return `<label><span><b>${esc(i.name||i.description||i.sku||'Item')}</b><small>Vendido: ${n(i.quantity)} • Já devolvido: ${n(i.returned_quantity)}</small></span><input type="number" min="0" max="${max}" step="0.001" value="0" data-return-index="${index}"></label>`}).join('')}</div>
+    const m = modal(`<div class="v105-return-head"><div><small>DEVOLUÇÃO</small><h3>Venda ${sale.number ? `#${esc(sale.number)}` : ''}</h3><p>Selecione primeiro o produto que será devolvido. A quantidade só será solicitada quando necessário.</p></div><div class="v105-credit-only"><span>RESTITUIÇÃO</span><b>Crédito em loja</b><small>Não movimenta dinheiro do caixa</small></div></div>
+      <div class="return-items v105-return-items">${items.map(returnItemRow).join('')}</div>
       <div class="v105-return-total"><span>Crédito estimado</span><b id="v105ReturnTotal">${money(0)}</b></div>
       <section class="v105-beneficiary-section"><div class="v105-section-title"><b>Quem receberá o crédito?</b><small>${automaticCustomer ? 'O cliente já foi identificado na venda original.' : 'Localize o cliente antes de concluir a devolução.'}</small></div>
         <div id="v105Beneficiary">${automaticCustomer ? customerCard(automaticCustomer,true) : `<div class="v105-customer-search"><div class="v105-search-line"><input id="v105CustomerQuery" placeholder="Digite CPF ou nome do cliente..." autocomplete="off"><button type="button" id="v105SearchCustomer">Buscar</button></div><div id="v105CustomerResults" class="v105-customer-results"><small>Digite o CPF ou o nome para localizar o cadastro.</small></div></div>`}</div>
@@ -39,9 +72,71 @@
 
     const totalEl = m.querySelector('#v105ReturnTotal');
     const errorEl = m.querySelector('#v105ReturnError');
-    const selectedRows = () => [...m.querySelectorAll('[data-return-index]')].map(input=>({index:Number(input.dataset.returnIndex),quantity:n(input.value)})).filter(row=>row.quantity>0);
-    const refreshTotal = () => { totalEl.textContent = money(returnValue(items, selectedRows())); };
-    m.querySelectorAll('[data-return-index]').forEach(input => input.addEventListener('input', refreshTotal));
+
+    const selectedRows = () => [...m.querySelectorAll('[data-return-select]:checked')].map((check) => {
+      const index = Number(check.dataset.returnSelect);
+      const original = items[index] || {};
+      const remaining = remainingFor(original);
+      const editableQuantity = allowsFraction(original) || remaining > 1.000001;
+      const quantityInput = m.querySelector(`[data-return-qty="${index}"]`);
+      return { index, quantity: editableQuantity ? n(quantityInput?.value) : Math.min(1, remaining) };
+    }).filter((row) => row.quantity > 0);
+
+    const validateRows = (rows) => {
+      for (const row of rows) {
+        const original = items[row.index] || {};
+        const name = original.name || original.description || original.sku || 'produto';
+        const remaining = remainingFor(original);
+        const quantity = n(row.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) return { index:row.index, message:`Informe uma quantidade válida para ${name}.` };
+        if (quantity > remaining + 0.0001) return { index:row.index, message:`A quantidade informada para ${name} é maior que a quantidade disponível para devolução (${qtyLabel(remaining)}).` };
+        if (!allowsFraction(original) && Math.abs(quantity - Math.round(quantity)) > 0.000001) return { index:row.index, message:`${name} aceita somente quantidade inteira.` };
+      }
+      return null;
+    };
+
+    const refreshTotal = () => {
+      const rows = selectedRows();
+      const validation = validateRows(rows);
+      totalEl.textContent = money(validation ? 0 : returnValue(items, rows));
+      if (!validation && errorEl.dataset.returnValidation === 'true') {
+        errorEl.textContent = '';
+        delete errorEl.dataset.returnValidation;
+      }
+    };
+
+    m.querySelectorAll('[data-return-select]').forEach((check) => {
+      check.addEventListener('change', () => {
+        const index = Number(check.dataset.returnSelect);
+        const line = m.querySelector(`[data-return-line="${index}"]`);
+        const panel = m.querySelector(`[data-return-qty-panel="${index}"]`);
+        line?.classList.toggle('selected', check.checked);
+        if (panel) panel.hidden = !check.checked;
+        if (check.checked) setTimeout(() => m.querySelector(`[data-return-qty="${index}"]`)?.focus(), 20);
+        refreshTotal();
+      });
+    });
+
+    m.querySelectorAll('[data-return-qty]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const index = Number(input.dataset.returnQty);
+        const original = items[index] || {};
+        const remaining = remainingFor(original);
+        const quantity = n(input.value);
+        if (quantity > remaining + 0.0001) {
+          errorEl.textContent = `Quantidade máxima disponível para ${original.name || original.description || 'este produto'}: ${qtyLabel(remaining)}.`;
+          errorEl.dataset.returnValidation = 'true';
+        } else if (!allowsFraction(original) && quantity > 0 && Math.abs(quantity - Math.round(quantity)) > 0.000001) {
+          errorEl.textContent = 'Produto unitário aceita somente quantidade inteira.';
+          errorEl.dataset.returnValidation = 'true';
+        } else if (errorEl.dataset.returnValidation === 'true') {
+          errorEl.textContent = '';
+          delete errorEl.dataset.returnValidation;
+        }
+        refreshTotal();
+      });
+    });
+
     m.querySelector('#back').onclick = () => m.remove();
 
     async function searchCustomers() {
@@ -87,10 +182,18 @@
 
     m.querySelector('#confirmReturn').onclick = async () => {
       errorEl.textContent='';
+      delete errorEl.dataset.returnValidation;
       const rows = selectedRows();
-      if (!rows.length) { errorEl.textContent='Informe ao menos uma quantidade para devolver.'; return; }
+      if (!rows.length) { errorEl.textContent='Selecione ao menos um produto para devolver.'; return; }
+      const validation = validateRows(rows);
+      if (validation) {
+        errorEl.textContent = validation.message;
+        errorEl.dataset.returnValidation = 'true';
+        m.querySelector(`[data-return-qty="${validation.index}"]`)?.focus();
+        return;
+      }
       if (!automaticCustomer && !selectedCustomer && !guest) { errorEl.textContent='Localize um cliente ou escolha emitir Vale Crédito para pessoa sem cadastro.'; return; }
-      const selected = rows.map(row=>{const original=items[row.index];return {sale_item_id:original.sale_item_id||null,product_id:original.product_id||null,quantity:row.quantity};});
+      const selected = rows.map(row=>{const original=items[row.index];return {sale_item_id:original.sale_item_id||null,product_id:original.product_id||null,line_index:row.index,quantity:row.quantity};});
       const button = m.querySelector('#confirmReturn'); button.disabled=true; button.textContent='Processando devolução...';
       try {
         const result = await window.thor.returnSale({
@@ -146,6 +249,9 @@
       return_only_store_credit_allowed:'Devoluções do ThorPDV são restituídas somente como Crédito em loja.',
       return_customer_identification_required:'Identifique o cliente por CPF/nome ou escolha emitir Vale Crédito.',
       return_customer_not_found:'O cliente selecionado não está disponível no cadastro deste caixa.',
+      return_quantity_exceeds_remaining:'A quantidade informada é maior que a quantidade disponível para devolução.',
+      return_item_ambiguous:'Não foi possível identificar com segurança o item da venda. Sincronize a venda e tente novamente.',
+      fractional_quantity_not_allowed:'Este produto aceita somente quantidade inteira.',
       store_credit_voucher_number_required:'Informe o número do Vale Crédito.',
       store_credit_voucher_not_found:'Vale Crédito não localizado.',
       store_credit_voucher_not_active:'Este Vale Crédito não possui saldo disponível.',
