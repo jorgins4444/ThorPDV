@@ -4,6 +4,7 @@ import '../[...slug]/advanced.css';
 import '../[...slug]/product-master.css';
 import '../[...slug]/product-studio.css';
 import '../[...slug]/product-list-enhanced.css';
+import '../[...slug]/product-list-columns.css';
 import '../[...slug]/product-grade-gallery.css';
 import '../[...slug]/product-main-image.css';
 import { AdvancedShell } from '../[...slug]/advanced-shell';
@@ -11,6 +12,7 @@ import { erpLoad } from '../[...slug]/actions';
 import { productStudioList } from '../[...slug]/product-studio-actions';
 import { productReferenceList } from '../[...slug]/product-reference-actions';
 import { ProductStudioWorkspace } from '../[...slug]/product-studio-workspace';
+import { ProductListColumns } from '../[...slug]/product-list-columns';
 
 export default async function ProductsPage(){
   const [products,groups,classes,suppliers,modifiers,branches,brands,categories]=await Promise.all([
@@ -31,6 +33,7 @@ export default async function ProductsPage(){
       <Link href="/dashboard/classes">Classes</Link>
       <Link href="/dashboard/modificadores">Modificadores</Link>
     </nav>
+    <ProductListColumns/>
     <ProductStudioWorkspace
       initialProducts={products.data}
       initialTotal={products.total}
