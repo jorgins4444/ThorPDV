@@ -16,12 +16,14 @@ const saleStatusLabels:Record<string,string>={completed:'Concluída',cancelled:'
 const fiscalStatusLabels:Record<string,string>={authorized:'Autorizada',cancelled:'Cancelada',rejected:'Rejeitada',pending:'Pendente',processing:'Processando',draft:'Rascunho',prepared:'Preparada',sending:'Enviando',error:'Erro',contingency:'Contingência'};
 const statusLabel=(value:unknown,labels:Record<string,string>)=>{const raw=text(value);return labels[raw]||raw.replaceAll('_',' ');};
 const hasValue=(v:unknown)=>Math.abs(num(v))>.009;
+const saleItems=(sale:Row)=>Array.isArray(sale.items)?sale.items as Row[]:[];
 
 export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];onReload:()=>Promise<void>;onMessage:(message:string)=>void}){
   const [detail,setDetail]=useState<Detail|null>(null);
   const [detailLoading,setDetailLoading]=useState('');
   const [correcting,setCorrecting]=useState(false);
   const [reopening,setReopening]=useState(false);
+  const [expandedSale,setExpandedSale]=useState('');
   const [closing,setClosing]=useState('');
   const [reason,setReason]=useState('');
   const [reopenReason,setReopenReason]=useState('');
@@ -30,7 +32,7 @@ export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];on
   async function openDetail(row:Row){
     const id=text(row.cash_session_id);if(!id)return;
     const key=`${id}:${text(row.closure_audit_id)}`;
-    setDetailLoading(key);
+    setDetailLoading(key);setExpandedSale('');
     const r=await cashClosureDetail(id,text(row.closure_audit_id)||undefined);
     setDetailLoading('');
     if(!r.ok){onMessage(text(r.error||'Não foi possível carregar o fechamento.'));return;}
@@ -134,6 +136,38 @@ export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];on
         </div>:<div className="closure-practical-payment-cards">{visiblePayments.map((p,i)=><article key={`${text(p.method)}-${i}`}><span>{paymentLabels[text(p.method)]||text(p.method)}</span><strong>{money(p.amount)}</strong>{num(p.payment_count||p.count)>0?<small>{num(p.payment_count||p.count)} lançamento(s)</small>:null}</article>)}</div>}
       </section>:null}
 
+      {detail.sales.length>0?<section className="closure-practical-section closure-practical-sales-section">
+        <div className="closure-practical-section-title"><div><small>VENDAS</small><h3>Vendas deste fechamento</h3></div><span>{detail.sales.length} venda(s)</span></div>
+        <div className="closure-sales-list">{detail.sales.map((s,i)=>{const sid=text(s.id)||String(i);const items=saleItems(s);const expanded=expandedSale===sid;return <article className={`closure-sale-card ${expanded?'expanded':''}`} key={sid}>
+          <div className="closure-sale-main">
+            <div className="closure-sale-identity"><strong>Venda #{text(s.number)||'—'}</strong><small>{dt(s.occurred_at)} · {text(s.operator)||'Operador não identificado'}</small></div>
+            <div className="closure-sale-status-cell"><span>Status</span><b className={`closure-sale-status status-${text(s.status)}`}>{statusLabel(s.status,saleStatusLabels)}</b></div>
+            <div className="closure-sale-fiscal"><span>Fiscal</span><b>{text(s.document_type)?`${text(s.document_type).toUpperCase()} · ${statusLabel(s.fiscal_status,fiscalStatusLabels)}`:'Não fiscal'}</b></div>
+            <div className="closure-sale-total"><span>Total</span><strong>{money(s.total)}</strong></div>
+            <button type="button" className="closure-sale-operation-button" onClick={()=>setExpandedSale(expanded?'':sid)}>{expanded?'Fechar operação':'Ver operação'}</button>
+          </div>
+          {expanded?<div className="closure-sale-operation">
+            <div className="closure-sale-operation-summary">
+              <span>Subtotal <b>{money(s.subtotal)}</b></span>
+              {hasValue(s.discount)?<span>Desconto <b>- {money(s.discount)}</b></span>:null}
+              {hasValue(s.surcharge)?<span>Acréscimo <b>{money(s.surcharge)}</b></span>:null}
+              <span>Total da operação <b>{money(s.total)}</b></span>
+            </div>
+            <div className="closure-sale-items-title"><strong>Produtos vendidos</strong><span>{items.length} item(ns)</span></div>
+            {items.length>0?<div className="closure-sale-items-table">
+              <div className="head"><span>Produto</span><span>Qtd.</span><span>Unitário</span><span>Desconto</span><span>Total</span></div>
+              {items.map((item,itemIndex)=><div key={text(item.id)||`${sid}-${itemIndex}`}>
+                <span className="product"><strong>{text(item.description)||'Produto'}</strong><small>{text(item.sku)?`SKU ${text(item.sku)}`:''}{text(item.unit)?`${text(item.sku)?' · ':''}${text(item.unit)}`:''}</small></span>
+                <span>{num(item.quantity).toLocaleString('pt-BR',{maximumFractionDigits:3})}</span>
+                <span>{money(item.unit_price)}</span>
+                <span>{hasValue(item.discount)?money(item.discount):'—'}</span>
+                <strong>{money(item.total)}</strong>
+              </div>)}
+            </div>:<div className="closure-sale-items-empty">Nenhum item de produto foi encontrado para esta operação.</div>}
+          </div>:null}
+        </article>})}</div>
+      </section>:null}
+
       {visibleMovements.length>0?<section className="closure-practical-section">
         <div className="closure-practical-section-title"><div><small>MOVIMENTAÇÃO</small><h3>Entradas e saídas do caixa</h3></div><span>{visibleMovements.length} movimento(s)</span></div>
         <div className="closure-practical-movements">{visibleMovements.map((m,i)=><article key={text(m.id)||String(i)}><div><strong>{movementLabels[text(m.movement_type)]||text(m.movement_type)}</strong><small>{dt(m.created_at)}{text(m.notes)?` · ${text(m.notes)}`:''}</small></div><b className={['withdrawal','sangria','expense','refund'].includes(text(m.movement_type))?'negative':''}>{money(m.amount)}</b></article>)}</div>
@@ -155,8 +189,6 @@ export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];on
         <div className="closure-practical-section-title"><div><small>AUDITORIA</small><h3>Alterações neste fechamento</h3></div><span>{visibleAudit.length} registro(s)</span></div>
         <div className="closure-practical-audit">{visibleAudit.map((a,i)=><article key={text(a.id)||String(i)}><div><strong>{text(a.action_label)||text(a.action)}</strong><small>{dt(a.created_at)} · {text(a.actor_email)||'Sistema'}</small></div><p>{text(a.reason)||'Sem observação.'}</p></article>)}</div>
       </section>:null}
-
-      {detail.sales.length>0?<details className="closure-practical-sales"><summary>Ver vendas deste fechamento <b>{detail.sales.length}</b></summary><div className="closure-detail-table"><table><thead><tr><th>Venda</th><th>Data</th><th>Operador</th><th>Status</th><th>Fiscal</th><th>Total</th></tr></thead><tbody>{detail.sales.map((s,i)=><tr key={text(s.id)||String(i)}><td>#{text(s.number)}</td><td>{dt(s.occurred_at)}</td><td>{text(s.operator)||'—'}</td><td><span className={`closure-sale-status status-${text(s.status)}`}>{statusLabel(s.status,saleStatusLabels)}</span></td><td>{text(s.document_type)?`${text(s.document_type).toUpperCase()} · ${statusLabel(s.fiscal_status,fiscalStatusLabels)}`:'Não fiscal'}</td><td>{money(s.total)}</td></tr>)}</tbody></table></div></details>:null}
 
       {notes?<div className="closure-practical-notes"><strong>Observação</strong><span>{notes}</span></div>:null}
     </aside></div>}
