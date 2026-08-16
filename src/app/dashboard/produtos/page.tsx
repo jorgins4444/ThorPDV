@@ -5,6 +5,7 @@ import '../[...slug]/product-master.css';
 import '../[...slug]/product-studio.css';
 import '../[...slug]/product-list-enhanced.css';
 import '../[...slug]/product-grade-gallery.css';
+import '../[...slug]/product-main-image.css';
 import { AdvancedShell } from '../[...slug]/advanced-shell';
 import { erpLoad } from '../[...slug]/actions';
 import { productStudioList } from '../[...slug]/product-studio-actions';
