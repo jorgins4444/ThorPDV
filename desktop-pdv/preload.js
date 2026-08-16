@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('thor', {
   supervisorAuthorize: (payload) => ipcRenderer.invoke('thor:supervisor-authorize', payload),
   openCash: (payload) => ipcRenderer.invoke('thor:open-cash', payload),
   cashMovement: (payload) => ipcRenderer.invoke('thor:cash-movement', payload),
+  printCashMovement44: (receipt) => ipcRenderer.invoke('thor:print-cash-movement-44', receipt),
   cashPreview: (options = {}) => ipcRenderer.invoke('thor:cash-preview', options),
   cashSessions: (filters = {}) => ipcRenderer.invoke('thor:cash-sessions', filters),
   closeHistoricalCash: (payload) => ipcRenderer.invoke('thor:close-historical-cash', payload),
