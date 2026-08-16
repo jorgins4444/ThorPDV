@@ -6,11 +6,12 @@ import { createClient } from '@/lib/supabase/server';
 
 const SESSION_COOKIE='thorpdv_test_session';
 type Row=Record<string,unknown>;
-type RpcResult={ok?:boolean;error?:string;payment_methods?:Row[];payment_terms?:Row[];card_brands?:Row[];card_acquirers?:Row[];credit_installments?:Row[];id?:string;branch_id?:string;settings?:Row;[key:string]:unknown};
+type RpcResult={ok?:boolean;error?:string;payment_methods?:Row[];payment_terms?:Row[];card_brands?:Row[];card_acquirers?:Row[];credit_installments?:Row[];data?:Row[];id?:string;branch_id?:string;settings?:Row;[key:string]:unknown};
 
 async function token(){const store=await cookies();const value=store.get(SESSION_COOKIE)?.value;if(!value)redirect('/login');return value;}
 async function rpc(name:string,args:Record<string,unknown>){const supabase=await createClient();const {data,error}=await supabase.rpc(name,args);if(error)return {ok:false,error:error.message} as RpcResult;return (data??{ok:false,error:'empty_response'}) as RpcResult;}
 function obj(value:unknown):Row{return value&&typeof value==='object'&&!Array.isArray(value)?value as Row:{};}
+function text(value:unknown){return String(value??'').trim();}
 
 async function branchPaymentParameters(pToken:string){
   const context=await rpc('erp_context',{p_token:pToken});
@@ -34,7 +35,16 @@ export async function salesOptionsGet(){
     const acq=acquirerByCnpj.get(cnpj);
     return {...b,acquirer_cnpj:cnpj,acquirer_name:acq?String(acq.name??''):''};
   });
-  return {ok:Boolean(r.ok),error:r.error,payment_methods:Array.isArray(r.payment_methods)?r.payment_methods:[],payment_terms:Array.isArray(r.payment_terms)?r.payment_terms:[],card_brands:cardBrands,card_acquirers:acquirers,credit_installments:Array.isArray(r.credit_installments)?r.credit_installments:[],branch_id:branch.branchId};
+  return {
+    ok:Boolean(r.ok),error:r.error,
+    payment_methods:Array.isArray(r.payment_methods)?r.payment_methods:[],
+    payment_terms:Array.isArray(r.payment_terms)?r.payment_terms:[],
+    card_brands:cardBrands,
+    card_acquirers:acquirers,
+    credit_installments:Array.isArray(r.credit_installments)?r.credit_installments:[],
+    session_rules:obj(parameters.sales_session),
+    branch_id:branch.branchId
+  };
 }
 export async function salesPaymentMethodSave(payload:Row){const pToken=await token();return rpc('erp_sales_payment_method_save',{p_token:pToken,p_payload:payload});}
 export async function salesCardBrandSave(payload:Row){const pToken=await token();return rpc('erp_sales_card_brand_save',{p_token:pToken,p_payload:payload});}
@@ -58,4 +68,47 @@ export async function salesCardBrandAcquirerSave(payload:Row){
   if(cnpj)map[code]=cnpj;else delete map[code];
   const next={...branch.parameters,card_brand_acquirers:map};
   return rpc('erp_branch_configuration_save',{p_token:pToken,p_branch:branch.branchId,p_section:'parameters',p_payload:next});
+}
+
+export async function salesSessionCustomerSearch(search:string){
+  const pToken=await token();
+  const r=await rpc('erp_party_list',{p_token:pToken,p_resource:'customers',p_search:text(search)||null});
+  return {ok:Boolean(r.ok),error:r.error,data:Array.isArray(r.data)?r.data:[]};
+}
+
+export async function salesSessionRulesSave(payload:Row){
+  const pToken=await token();
+  const branch=await branchPaymentParameters(pToken);
+  if(!branch.ok)return {ok:false,error:branch.error};
+
+  const mode=['free','default','fixed'].includes(text(payload.customer_mode))?text(payload.customer_mode):'free';
+  const requireSeller=Boolean(payload.require_seller);
+  const requireCustomer=mode==='fixed'?true:Boolean(payload.require_customer);
+  let defaultCustomer:Row|null=null;
+
+  if(mode!=='free'){
+    const candidate=obj(payload.default_customer);
+    const customerId=text(candidate.id);
+    if(!customerId)return {ok:false,error:'default_customer_required'};
+    const lookup=text(candidate.document)||text(candidate.name);
+    const result=await rpc('erp_party_list',{p_token:pToken,p_resource:'customers',p_search:lookup||null});
+    if(!result.ok)return {ok:false,error:result.error||'customer_lookup_failed'};
+    const customer=(Array.isArray(result.data)?result.data:[]).find(row=>text(row.id)===customerId);
+    if(!customer)return {ok:false,error:'default_customer_not_found'};
+    defaultCustomer={
+      id:text(customer.id),name:text(customer.name),document:text(customer.document),
+      email:text(customer.email),phone:text(customer.phone)
+    };
+  }
+
+  const rules={
+    require_seller:requireSeller,
+    require_customer:requireCustomer,
+    customer_mode:mode,
+    default_customer:defaultCustomer,
+    updated_at:new Date().toISOString()
+  };
+  const next={...branch.parameters,sales_session:rules};
+  const saved=await rpc('erp_branch_configuration_save',{p_token:pToken,p_branch:branch.branchId,p_section:'parameters',p_payload:next});
+  return {...saved,session_rules:rules};
 }
