@@ -8,3 +8,4 @@ require('./agent/queue-reconcile-v104').installQueueReconcileV104(Store);
 require('./agent/receipt-print-v829').installReceiptPrintingV829(ThorAgent, Store);
 require('./agent/sale-identity-v830').installSaleIdentityV830(ThorAgent, Store);
 require('./agent/store-credit-return-v105').installStoreCreditReturnV105(ThorAgent, Store);
+require('./ipc-store-credit-v105').installStoreCreditVoucherIpcV105(ThorAgent);
