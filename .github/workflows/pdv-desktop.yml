@@ -77,6 +77,8 @@ jobs:
             'renderer/validation-v3.js',
             'renderer/sync-recovery.js',
             'renderer/operator-gate.js',
+            'renderer/login-entry-v108.js',
+            'renderer/setup-flow-v109.js',
             'renderer/cash-closing.js',
             'renderer/ux-v038.js',
             'renderer/ux-v039.js',
