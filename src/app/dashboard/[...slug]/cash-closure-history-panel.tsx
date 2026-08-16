@@ -12,6 +12,9 @@ const dt=(v:unknown)=>v?new Date(String(v)).toLocaleString('pt-BR'):'—';
 const duration=(v:unknown)=>{const m=Math.max(0,Math.round(num(v)));const h=Math.floor(m/60);const mm=m%60;return h?`${h}h ${mm}min`:`${mm} min`;};
 const paymentLabels:Record<string,string>={cash:'Dinheiro',pix:'Pix',credit_card:'Cartão de crédito',debit_card:'Cartão de débito',voucher:'Voucher',store_credit:'Crédito da loja',term_sale:'Venda a prazo',other:'Outros'};
 const movementLabels:Record<string,string>={supply:'Suprimento',receivable:'Recebimento',withdrawal:'Sangria',sangria:'Sangria',expense:'Despesa',refund:'Devolução'};
+const saleStatusLabels:Record<string,string>={completed:'Concluída',cancelled:'Cancelada',pending:'Pendente',open:'Aberta',draft:'Rascunho',processing:'Processando',failed:'Falhou',rejected:'Rejeitada',pending_sync:'Pendente de sincronização',fiscal_pending:'Pendência fiscal'};
+const fiscalStatusLabels:Record<string,string>={authorized:'Autorizada',cancelled:'Cancelada',rejected:'Rejeitada',pending:'Pendente',processing:'Processando',draft:'Rascunho',prepared:'Preparada',sending:'Enviando',error:'Erro',contingency:'Contingência'};
+const statusLabel=(value:unknown,labels:Record<string,string>)=>{const raw=text(value);return labels[raw]||raw.replaceAll('_',' ');};
 const hasValue=(v:unknown)=>Math.abs(num(v))>.009;
 
 export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];onReload:()=>Promise<void>;onMessage:(message:string)=>void}){
@@ -153,7 +156,7 @@ export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];on
         <div className="closure-practical-audit">{visibleAudit.map((a,i)=><article key={text(a.id)||String(i)}><div><strong>{text(a.action_label)||text(a.action)}</strong><small>{dt(a.created_at)} · {text(a.actor_email)||'Sistema'}</small></div><p>{text(a.reason)||'Sem observação.'}</p></article>)}</div>
       </section>:null}
 
-      {detail.sales.length>0?<details className="closure-practical-sales"><summary>Ver vendas deste fechamento <b>{detail.sales.length}</b></summary><div className="closure-detail-table"><table><thead><tr><th>Venda</th><th>Data</th><th>Operador</th><th>Status</th><th>Fiscal</th><th>Total</th></tr></thead><tbody>{detail.sales.map((s,i)=><tr key={text(s.id)||String(i)}><td>#{text(s.number)}</td><td>{dt(s.occurred_at)}</td><td>{text(s.operator)||'—'}</td><td>{text(s.status)}</td><td>{text(s.document_type)?`${text(s.document_type).toUpperCase()} · ${text(s.fiscal_status)}`:'Não fiscal'}</td><td>{money(s.total)}</td></tr>)}</tbody></table></div></details>:null}
+      {detail.sales.length>0?<details className="closure-practical-sales"><summary>Ver vendas deste fechamento <b>{detail.sales.length}</b></summary><div className="closure-detail-table"><table><thead><tr><th>Venda</th><th>Data</th><th>Operador</th><th>Status</th><th>Fiscal</th><th>Total</th></tr></thead><tbody>{detail.sales.map((s,i)=><tr key={text(s.id)||String(i)}><td>#{text(s.number)}</td><td>{dt(s.occurred_at)}</td><td>{text(s.operator)||'—'}</td><td><span className={`closure-sale-status status-${text(s.status)}`}>{statusLabel(s.status,saleStatusLabels)}</span></td><td>{text(s.document_type)?`${text(s.document_type).toUpperCase()} · ${statusLabel(s.fiscal_status,fiscalStatusLabels)}`:'Não fiscal'}</td><td>{money(s.total)}</td></tr>)}</tbody></table></div></details>:null}
 
       {notes?<div className="closure-practical-notes"><strong>Observação</strong><span>{notes}</span></div>:null}
     </aside></div>}
