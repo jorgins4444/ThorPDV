@@ -30,7 +30,7 @@ function resolveReturnLine(items, requested = {}) {
 }
 
 function installReturnFix(ThorAgent) {
-  ThorAgent.prototype.returnSale = async function ({
+  ThorAgent.prototype._returnSaleCore = async function ({
     saleKey,
     items,
     refundMethod = 'store_credit',
@@ -92,8 +92,9 @@ function installReturnFix(ThorAgent) {
       });
     }
 
-    // Registra a devolução na fila antes de alterar estoque/saldo local. Se a fila
-    // falhar por autorização, licença ou consistência, nada fica parcialmente devolvido.
+    // O núcleo da devolução não decide como o crédito será materializado. Ele apenas
+    // valida a venda, registra o evento e devolve o estoque. A camada de Crédito/Vale
+    // escolhe se o valor vai para um cliente cadastrado ou para um Vale Crédito.
     const event = this.event('sale_return', {
       sale_id: sale.id || null,
       sale_client_event_id: sale.client_event_id || null,
@@ -125,6 +126,10 @@ function installReturnFix(ThorAgent) {
     });
 
     return { ok: true, eventId: event.id, estimatedTotal: Math.round(localValue * 100) / 100 };
+  };
+
+  ThorAgent.prototype.returnSale = async function (payload = {}) {
+    return this._returnSaleCore(payload);
   };
 }
 
