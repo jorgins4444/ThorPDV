@@ -3,7 +3,17 @@ function getPath(obj, path, fallback = undefined) {
 }
 
 function installReturnFix(ThorAgent) {
-  ThorAgent.prototype.returnSale = async function ({ saleKey, items, refundMethod = 'cash', reason = '', supervisorAuthorization = null }) {
+  ThorAgent.prototype.returnSale = async function ({
+    saleKey,
+    items,
+    refundMethod = 'store_credit',
+    reason = '',
+    supervisorAuthorization = null,
+    returnCustomerId = null,
+    guestName = '',
+    guestDocument = '',
+    voucherNumber = '',
+  }) {
     const operator = this.currentOperator();
     if (!operator) throw new Error('operator_required');
     const allowed = getPath(operator, 'permissions.sale.return', false);
@@ -11,8 +21,8 @@ function installReturnFix(ThorAgent) {
 
     const sale = this.fiscalSale(saleKey);
     if (String(sale.status) === 'cancelled' || String(sale.status) === 'cancel_pending') throw new Error('sale_cancelled');
-    if (refundMethod === 'cash' && !this.store.get('cash_open_event_id')) throw new Error('cash_required_for_cash_refund');
     if (!Array.isArray(items) || !items.length) throw new Error('return_without_items');
+    if (refundMethod !== 'store_credit') throw new Error('return_only_store_credit_allowed');
 
     const normalized = [];
     const increments = new Map();
@@ -45,12 +55,15 @@ function installReturnFix(ThorAgent) {
       items: patchedItems,
     });
 
-    // Operador e autorização já entram no payload ANTES de event() disparar a sincronização.
     const event = this.event('sale_return', {
       sale_id: sale.id || null,
       sale_client_event_id: sale.client_event_id || null,
       items: normalized,
-      refund_method: refundMethod,
+      refund_method: 'store_credit',
+      return_customer_id: returnCustomerId || null,
+      guest_name: String(guestName || '').trim() || null,
+      guest_document: String(guestDocument || '').replace(/\D/g, '') || null,
+      voucher_number: String(voucherNumber || '').trim() || null,
       reason,
       operator_user_id: operator.id,
       supervisor_authorization: supervisorAuthorization,
