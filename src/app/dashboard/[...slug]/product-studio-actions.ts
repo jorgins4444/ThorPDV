@@ -21,6 +21,29 @@ async function rpc(name:string,args:Record<string,unknown>){
   return result;
 }
 
+function objectValue(value:unknown):Record<string,unknown>{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};}
+function sourceLabel(value:unknown){
+  const key=String(value??'').trim();
+  const labels:Record<string,string>={
+    stock_movement:'Movimentação de estoque',product_update:'Cadastro do produto',product_studio:'Cadastro do produto',product_master:'Cadastro do produto',
+    price_table:'Tabela de preços',bulk_price:'Alteração de preços em lote',sale_return:'Devolução de venda',sale:'Venda',manual:'Movimentação manual',transfer:'Transferência',purchase:'Compra/entrada',production:'Produção',
+  };
+  return labels[key]||key;
+}
+function enrichProductHistory(data:Record<string,unknown>){
+  const history=Array.isArray(data.history)?data.history:[];
+  return {...data,history:history.map(value=>{
+    const row=objectValue(value);const metadata=objectValue(row.metadata);
+    const description=String(row.description??'').trim();
+    const actor=String(row.actor_name??'').trim()||'Sistema';
+    const document=String(metadata.notes??'').trim();
+    const source=sourceLabel(metadata.reference_type??row.source_type);
+    const details=[`Responsável: ${actor}`];
+    if(document)details.push(`Documento/origem: ${document}`);else if(source)details.push(`Origem: ${source}`);
+    return {...row,description:[description,...details].filter(Boolean).join(' • ')};
+  })};
+}
+
 export async function productStudioList(search?:string,filters:ProductListFilters={},limit=100,offset=0){
   const p=await token();
   const r=await rpc('erp_product_list_v4',{p_token:p,p_search:search?.trim()||null,p_filters:filters,p_limit:limit,p_offset:offset});
@@ -34,7 +57,11 @@ export async function productStudioFilteredIds(search?:string,filters:ProductLis
 }
 export async function productStudioSetActive(productId:string,active:boolean){const p=await token();return rpc('erp_product_set_active_v1',{p_token:p,p_product:productId,p_active:active});}
 export async function productStudioBulkUpdate(productIds:string[],patch:Record<string,unknown>){const p=await token();return rpc('erp_product_bulk_update_v1',{p_token:p,p_product_ids:productIds,p_patch:patch});}
-export async function productStudioDetail(productId:string){const p=await token();return rpc('erp_product_detail_v2',{p_token:p,p_product:productId});}
+export async function productStudioDetail(productId:string){
+  const p=await token();const r=await rpc('erp_product_detail_v2',{p_token:p,p_product:productId});
+  if(r.ok&&r.data&&!Array.isArray(r.data))r.data=enrichProductHistory(r.data);
+  return r;
+}
 export async function productStudioSave(payload:Record<string,unknown>){const p=await token();return rpc('erp_product_save_v5',{p_token:p,p_payload:payload});}
 export async function productStudioCompositionSet(productId:string,items:Record<string,unknown>[]){const p=await token();return rpc('erp_product_composition_set',{p_token:p,p_product:productId,p_items:items});}
 export async function productStudioBarcode(){const p=await token();return rpc('erp_generate_product_barcode',{p_token:p});}
