@@ -11,5 +11,7 @@ require('./agent/store-credit-return-v105').installStoreCreditReturnV105(ThorAge
 require('./agent/return-quantity-guard-v106').installReturnQuantityGuardV106(ThorAgent);
 require('./agent/store-credit-payment-v106').installStoreCreditPaymentV106(ThorAgent, Store);
 require('./agent/cash-movement-receipt-v106').installCashMovementReceiptV106(ThorAgent);
+require('./agent/sales-session-v107').installSalesSessionV107(ThorAgent);
+require('./agent/license-guard-v107').installLicenseGuardV107(ThorAgent);
 require('./ipc-store-credit-v105').installStoreCreditVoucherIpcV105(ThorAgent);
 require('./ipc-cash-movement-v106').installCashMovementIpcV106(ThorAgent);
