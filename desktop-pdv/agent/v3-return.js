@@ -87,6 +87,7 @@ function installReturnFix(ThorAgent) {
       normalized.push({
         sale_item_id: original.sale_item_id || null,
         product_id: original.product_id || null,
+        line_index: index,
         quantity: qty,
       });
     }
