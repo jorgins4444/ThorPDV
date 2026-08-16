@@ -40,8 +40,20 @@ function installProfilePermissions(ThorAgent) {
     // A autenticação local precisa ser imediata. A sincronização de entrada é
     // importante, mas nunca deve manter a tela presa indefinidamente em 100%.
     const localLogin = await originalLoginOperator.call(this, payload);
+
+    // O ThorPDV já inicia um sync automático ao abrir. Antes, o login forçava um
+    // segundo sync e ficava esperando o primeiro terminar, criando a corrida que
+    // deixava a tela presa. Se já existe uma sincronização ativa, reutilizamos
+    // esse ciclo e liberamos o operador sem disparar outro.
+    if (this.sync?.running) {
+      return {
+        ...localLogin,
+        sync: { ok: false, pending: true, background: true, reused: true, error: 'sync_continuing' },
+      };
+    }
+
     const syncPromise = Promise.resolve(this.sync.run(true)).catch((error) => ({ ok: false, error: error?.message || 'sync_unavailable' }));
-    const sync = await Promise.race([syncPromise, timeoutResult(14000)]);
+    const sync = await Promise.race([syncPromise, timeoutResult(12000)]);
 
     if (sync?.pending) {
       // O sync real continua em segundo plano. Se ele descobrir um bloqueio de
