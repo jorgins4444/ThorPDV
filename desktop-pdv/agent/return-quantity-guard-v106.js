@@ -1,3 +1,26 @@
+function resolveReturnLine(items, requested = {}) {
+  const rows = Array.isArray(items) ? items : [];
+
+  if (requested.sale_item_id) {
+    const index = rows.findIndex((row) => String(row.sale_item_id || '') === String(requested.sale_item_id));
+    if (index >= 0) return rows[index];
+  }
+
+  const lineIndex = Number(requested.line_index);
+  if (Number.isInteger(lineIndex) && lineIndex >= 0 && lineIndex < rows.length) {
+    const candidate = rows[lineIndex];
+    if (!requested.product_id || String(candidate.product_id || '') === String(requested.product_id)) return candidate;
+  }
+
+  if (requested.product_id) {
+    const matches = rows.filter((row) => String(row.product_id || '') === String(requested.product_id));
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) throw new Error('return_item_ambiguous');
+  }
+
+  return null;
+}
+
 function installReturnQuantityGuardV106(ThorAgent) {
   if (ThorAgent.prototype.__returnQuantityGuardV106) return;
   ThorAgent.prototype.__returnQuantityGuardV106 = true;
@@ -37,13 +60,14 @@ function installReturnQuantityGuardV106(ThorAgent) {
     if (!sale) throw new Error('sale_not_found');
 
     for (const requested of Array.isArray(payload.items) ? payload.items : []) {
-      const original = (sale.items || []).find((item) =>
-        String(item.sale_item_id || item.product_id) === String(requested.sale_item_id || requested.product_id)
-      );
+      const original = resolveReturnLine(sale.items || [], requested);
       if (!original) throw new Error('sale_item_not_found');
 
       const quantity = Number(requested.quantity || 0);
       if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('invalid_return_quantity');
+
+      const remaining = Math.max(Number(original.quantity || 0) - Number(original.returned_quantity || 0), 0);
+      if (quantity > remaining + 0.0001) throw new Error('return_quantity_exceeds_remaining');
 
       const product = original.product_id ? this.store.product(String(original.product_id)) : null;
       const allowsFraction = Boolean(product?.is_weighable || product?.fractioned || original.is_weighable || original.fractioned);
