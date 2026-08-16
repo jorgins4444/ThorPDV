@@ -137,13 +137,28 @@ function installLicenseGuardV107(ThorAgent){
     return this._licenseGuardPromise;
   };
 
+  ThorAgent.prototype._applyLicenseDecision=function(result={}){
+    if(result.reconnectRequired){
+      invalidatePairing(this.store,this.sync,result.error||'device_reconnect_required');
+      this.state.pairingInvalidated=true;
+      this.logoutOperator?.();
+      return;
+    }
+    if(result.blocked){
+      setBlocked(this.store,result.error||'license_blocked',text(result.reason));
+      this.state.licenseBlocked=true;
+      this.state.licenseBlockCode=result.error||'license_blocked';
+      this.logoutOperator?.();
+    }
+  };
+
   ThorAgent.prototype.start=async function(...args){
     const result=await originalStart.apply(this,args);
     if(this.deviceToken?.()){
       clearInterval(this._licenseGuardTimerV107);
-      const tick=()=>this.checkLicenseOnline({force:true,timeoutMs:2500}).catch(()=>{});
+      const tick=()=>this.checkLicenseOnline({force:true,timeoutMs:2500}).then((decision)=>this._applyLicenseDecision(decision)).catch(()=>{});
       this._licenseGuardTimerV107=setInterval(tick,10000);
-      setTimeout(tick,900);
+      setTimeout(tick,350);
     }
     return result;
   };
@@ -171,37 +186,31 @@ function installLicenseGuardV107(ThorAgent){
     this._licenseGuardLastResult=null;
     this._licenseGuardLastAt=0;
     clearInterval(this._licenseGuardTimerV107);
-    const tick=()=>this.checkLicenseOnline({force:true,timeoutMs:2500}).catch(()=>{});
+    const tick=()=>this.checkLicenseOnline({force:true,timeoutMs:2500}).then((decision)=>this._applyLicenseDecision(decision)).catch(()=>{});
     this._licenseGuardTimerV107=setInterval(tick,10000);
-    setTimeout(tick,1000);
+    setTimeout(tick,350);
     return {...result,licenseValidation:'background'};
   };
 
   ThorAgent.prototype.loginOperator=async function(payload={}){
+    // A versão 0.8.35 tinha um único caminho de login. O travamento surgiu quando
+    // a validação de licença/sync passou a ser aguardada antes de liberar a UI.
+    // Aqui o login volta a ser estritamente local: PIN e perfil primeiro, rede depois.
     if(pairingInvalidated(this.store))throw new Error('pairing_reconnect_required');
-    const wasBlocked=isBlocked(this.store);
+    if(isBlocked(this.store))throw new Error('license_blocked');
 
-    // Uma consulta online curta confirma bloqueios reais sem transformar a rede
-    // em pré-requisito para abrir o caixa. Em indisponibilidade, vale a última
-    // decisão conhecida; bloqueio já confirmado continua impedindo o acesso.
-    const license=await this.checkLicenseOnline({force:true,timeoutMs:2200});
-    if(license.reconnectRequired)throw new Error('pairing_reconnect_required');
-    if(license.blocked||(wasBlocked&&license.offline)){
-      this.logoutOperator?.();
-      throw new Error('license_blocked');
-    }
+    const cached=this._licenseGuardLastResult||null;
+    if(cached?.reconnectRequired)throw new Error('pairing_reconnect_required');
+    if(cached?.blocked)throw new Error('license_blocked');
 
     const result=await originalLogin.call(this,payload);
-    const syncError=text(result?.sync?.error);
-    if(RECONNECT_CODES.has(syncError)||pairingInvalidated(this.store)){
-      invalidatePairing(this.store,this.sync,syncError||'invalid_device');
-      throw new Error('pairing_reconnect_required');
-    }
-    if(BLOCK_CODES.has(syncError)||isBlocked(this.store)){
-      setBlocked(this.store,syncError||this.store.get('license_block_code')||'license_blocked');
-      this.logoutOperator?.();
-      throw new Error('license_blocked');
-    }
+
+    // Confirma a licença imediatamente em segundo plano. Se o ThorControl responder
+    // bloqueado/reconexão, a sessão local é encerrada e o renderer mostra o bloqueio.
+    void this.checkLicenseOnline({force:true,timeoutMs:2500})
+      .then((decision)=>this._applyLicenseDecision(decision))
+      .catch(()=>{});
+
     return result;
   };
 
