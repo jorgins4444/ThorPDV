@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { authorizeNfceDocument } from '@/lib/fiscal/thorfiscal';
+import { pdvLicenseGuard } from '@/lib/pdv-license-guard';
 
 export const runtime = 'nodejs';
 
@@ -27,6 +28,10 @@ type PushResult = {
 export async function POST(request: Request) {
   const token = bearer(request);
   if (!token) return NextResponse.json({ ok: false, error: 'device_token_required' }, { status: 401 });
+
+  const license=await pdvLicenseGuard(token);
+  if(!license.ok)return NextResponse.json(license.result,{status:license.status});
+
   const body = await request.json().catch(() => null) as null | { events?: unknown[] };
   if (!Array.isArray(body?.events)) return NextResponse.json({ ok: false, error: 'events_required' }, { status: 400 });
 
