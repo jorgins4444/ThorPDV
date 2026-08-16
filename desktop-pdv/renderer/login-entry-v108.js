@@ -23,8 +23,25 @@
     });
   }
 
-  function loginTimeout(ms){
+  function timeoutAfter(ms){
     return new Promise((_,reject)=>setTimeout(()=>reject(new Error('operator_login_timeout')),ms));
+  }
+
+  function revealPdv(operator){
+    state.status={...(state.status||{}),operator};
+    try{
+      const v=v3State();
+      v.operator=operator;
+      v.operatorPromptOpen=false;
+    }catch{}
+
+    // O PDV já está renderizado atrás do login. Remover somente o overlay é mais
+    // seguro do que reconstruir a aplicação inteira e elimina a corrida que podia
+    // deixar a tela parada em "Validando acesso" ou "100%".
+    unlockedUntil=Date.now()+15000;
+    thorOperatorGateRemove();
+    try{renderWorkspace();}catch{}
+    try{updateTop();}catch{}
   }
 
   async function enterNow(){
@@ -46,51 +63,39 @@
     try{
       setGateError(gate,'');
       setFieldsDisabled(gate,true);
-      try{thorGateProgress(gate,22,'Validando acesso...','Conferindo licença, usuário e PIN.');}catch{}
+      try{thorGateProgress(gate,32,'Validando acesso...','Conferindo licença, usuário e PIN.');}catch{}
 
       const result=await Promise.race([
         window.thor.operatorLogin({userId:selected.id,pin:originalPin}),
-        loginTimeout(9000),
+        timeoutAfter(6000),
       ]);
       if(!result?.operator)throw new Error('operator_login_failed');
 
-      // O ponto crítico: depois que a autenticação local e a licença foram
-      // validadas, a tela de acesso sai imediatamente. Nenhuma sincronização,
-      // status remoto ou animação de 100% pode bloquear a abertura do caixa.
-      state.status={...(state.status||{}),operator:result.operator};
-      try{
-        const v=v3State();
-        v.operator=result.operator;
-        v.operatorPromptOpen=false;
-      }catch{}
-      unlockedUntil=Date.now()+8000;
-      thorOperatorGateRemove();
+      revealPdv(result.operator);
+      try{showToast(`Bem-vindo, ${result.operator.name}. Sincronização continua em segundo plano.`);}catch{}
 
-      try{render();}catch(error){
-        console.error('[ThorPDV immediate entry render]',error);
-        try{thorOperatorOriginalRender();}catch{}
-      }
-
-      try{showToast(`Operador ${result.operator.name} identificado. Sincronização em segundo plano.`);}catch{}
-
-      // Atualiza o estado depois, fora do caminho de entrada. Caso o sync remoto
-      // remova/desative o operador, a próxima leitura reabre o login normalmente.
+      // A leitura remota acontece depois que o caixa já foi liberado.
       setTimeout(async()=>{
         try{
           const fresh=await window.thor.status();
           state.status=fresh;
-          if(!fresh.operator&&!fresh.licenseBlocked){
+          if(fresh.licenseBlocked||fresh.pairingInvalidated){
+            unlockedUntil=0;
+            render();
+            return;
+          }
+          if(!fresh.operator){
             unlockedUntil=0;
             render();
             return;
           }
           try{updateTop();}catch{}
         }catch{}
-      },1200);
+      },1800);
     }catch(error){
       const raw=String(error?.message||error||'');
       const message=raw==='operator_login_timeout'
-        ? 'A validação demorou além do esperado. Tente novamente.'
+        ? 'A validação não respondeu no tempo esperado. Tente novamente.'
         : friendlyError(raw);
       setGateError(gate,message);
       setFieldsDisabled(gate,false);
@@ -106,7 +111,8 @@
 
   const previousShow=thorOperatorGateShow;
   thorOperatorGateShow=async function(message=''){
-    if(Date.now()<unlockedUntil){
+    const operator=state.status?.operator||(()=>{try{return v3State().operator}catch{return null}})();
+    if(operator||Date.now()<unlockedUntil){
       thorOperatorGateRemove();
       return;
     }
