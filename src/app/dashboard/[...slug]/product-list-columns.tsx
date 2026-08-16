@@ -39,16 +39,20 @@ export function ProductListColumns(){
   const [enabled,setEnabled]=useState<string[]>([]);
   const [ready,setReady]=useState(false);
   const [host,setHost]=useState<HTMLElement|null>(null);
+  const [filtersOpen,setFiltersOpen]=useState(false);
 
   useEffect(()=>{setEnabled(loadPreference());setReady(true);},[]);
 
   useEffect(()=>{
     let current:HTMLElement|null=null;
     const syncHost=()=>{
-      const actions=document.querySelector('.enhanced-product-list .studio-list-toolbar > div:last-child');
-      if(!(actions instanceof HTMLElement)){if(current){current.remove();current=null;setHost(null);}return;}
-      let next=actions.querySelector(':scope > .product-column-picker-host');
-      if(!(next instanceof HTMLElement)){
+      const actions=document.querySelector<HTMLElement>('.enhanced-product-list .studio-list-toolbar > div:last-child');
+      if(!actions){
+        if(current){current.remove();current=null;setHost(null);}
+        return;
+      }
+      let next=actions.querySelector<HTMLElement>(':scope > .product-column-picker-host');
+      if(!next){
         next=document.createElement('div');
         next.className='product-column-picker-host';
         actions.insertBefore(next,actions.firstChild);
@@ -60,6 +64,25 @@ export function ProductListColumns(){
     observer.observe(document.body,{childList:true,subtree:true});
     return()=>{observer.disconnect();current?.remove();};
   },[]);
+
+  useEffect(()=>{
+    const applyFilterVisibility=()=>{
+      document.querySelectorAll<HTMLElement>('.enhanced-product-list .product-filter-panel').forEach(panel=>{
+        panel.classList.toggle('product-filter-panel--hidden',!filtersOpen);
+        panel.setAttribute('aria-hidden',filtersOpen?'false':'true');
+      });
+    };
+    applyFilterVisibility();
+    const observer=new MutationObserver(applyFilterVisibility);
+    observer.observe(document.body,{childList:true,subtree:true});
+    return()=>{
+      observer.disconnect();
+      document.querySelectorAll<HTMLElement>('.enhanced-product-list .product-filter-panel').forEach(panel=>{
+        panel.classList.remove('product-filter-panel--hidden');
+        panel.removeAttribute('aria-hidden');
+      });
+    };
+  },[filtersOpen]);
 
   useEffect(()=>{
     if(!ready)return;
@@ -75,21 +98,32 @@ export function ProductListColumns(){
   },[enabled]);
 
   const toggle=(key:string)=>setEnabled(current=>current.includes(key)?current.filter(item=>item!==key):[...current,key]);
-  const picker=<details className="product-column-picker">
-    <summary title="Escolher colunas visíveis"><span>▥</span> Colunas <b>{REQUIRED.length+enabled.length}</b></summary>
-    <div className="product-column-popover">
-      <header><div><strong>Colunas da listagem</strong><small>Escolha quais informações complementares deseja exibir.</small></div></header>
-      <section>
-        <span className="product-column-section-title">Sempre visíveis</span>
-        <div className="product-column-options required">{REQUIRED.map(column=><label key={column.key}><input type="checkbox" checked disabled/><span>{column.label}</span><em>Obrigatória</em></label>)}</div>
-      </section>
-      <section>
-        <span className="product-column-section-title">Opcionais</span>
-        <div className="product-column-options">{OPTIONAL.map(column=><label key={column.key}><input type="checkbox" checked={enabled.includes(column.key)} onChange={()=>toggle(column.key)}/><span>{column.label}</span></label>)}</div>
-      </section>
-      <footer><button type="button" onClick={()=>setEnabled([])}>Somente essenciais</button><button type="button" onClick={()=>setEnabled(OPTIONAL.map(column=>column.key))}>Mostrar todas</button></footer>
-    </div>
-  </details>;
+  const controls=<>
+    <button
+      type="button"
+      className={`product-filter-toggle${filtersOpen?' active':''}`}
+      onClick={()=>setFiltersOpen(open=>!open)}
+      aria-expanded={filtersOpen}
+      title={filtersOpen?'Ocultar filtros':'Exibir filtros'}
+    >
+      <span>⌕</span> Filtros
+    </button>
+    <details className="product-column-picker">
+      <summary title="Escolher colunas visíveis"><span>▥</span> Colunas <b>{REQUIRED.length+enabled.length}</b></summary>
+      <div className="product-column-popover">
+        <header><div><strong>Colunas da listagem</strong><small>Escolha quais informações complementares deseja exibir.</small></div></header>
+        <section>
+          <span className="product-column-section-title">Sempre visíveis</span>
+          <div className="product-column-options required">{REQUIRED.map(column=><label key={column.key}><input type="checkbox" checked readOnly disabled/><span>{column.label}</span><em>Obrigatória</em></label>)}</div>
+        </section>
+        <section>
+          <span className="product-column-section-title">Opcionais</span>
+          <div className="product-column-options">{OPTIONAL.map(column=><label key={column.key}><input type="checkbox" checked={enabled.includes(column.key)} onChange={()=>toggle(column.key)}/><span>{column.label}</span></label>)}</div>
+        </section>
+        <footer><button type="button" onClick={()=>setEnabled([])}>Somente essenciais</button><button type="button" onClick={()=>setEnabled(OPTIONAL.map(column=>column.key))}>Mostrar todas</button></footer>
+      </div>
+    </details>
+  </>;
 
-  return <>{ready&&<style>{hiddenStyle}</style>}{host?createPortal(picker,host):null}</>;
+  return <>{ready&&<style>{hiddenStyle}</style>}{host?createPortal(controls,host):null}</>;
 }
