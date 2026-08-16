@@ -1,7 +1,9 @@
 const { SyncEngine } = require('./sync');
 
 const BLOCK_CODES=new Set(['license_blocked','license_inactive','license_expired','license_not_found','pdv_module_disabled','device_blocked']);
+const RECONNECT_CODES=new Set(['invalid_device','invalid_device_token','device_credential_revoked']);
 const LICENSE_MESSAGE='Licença de uso bloqueada, por favor entrar em contato com o Administrador do Sistema';
+const RECONNECT_MESSAGE='A conexão deste terminal foi refeita no ThorGestão. Informe o novo código de ativação para reconectar.';
 
 function text(value){return String(value??'').trim()}
 function setBlocked(store,code='license_blocked',reason=''){
@@ -18,6 +20,23 @@ function clearBlocked(store){
   store.set('license_blocked_at','');
 }
 function isBlocked(store){return store.get('license_blocked','false')==='true'}
+function invalidatePairing(store,sync,code='invalid_device'){
+  try{sync?.stop?.();}catch{}
+  store.set('pairing_invalidated','true');
+  store.set('pairing_invalidated_code',code);
+  store.set('pairing_invalidated_at',new Date().toISOString());
+  store.set('device_token','');
+  store.set('device_id','');
+  store.set('cursor','');
+  store.set('current_operator_id','');
+  store.set('last_sync_error',code);
+}
+function clearPairingInvalidated(store){
+  store.set('pairing_invalidated','false');
+  store.set('pairing_invalidated_code','');
+  store.set('pairing_invalidated_at','');
+}
+function pairingInvalidated(store){return store.get('pairing_invalidated','false')==='true'}
 
 function installLicenseGuardV107(ThorAgent){
   if(!SyncEngine.prototype.__licenseGuardV107){
@@ -29,6 +48,9 @@ function installLicenseGuardV107(ThorAgent){
       if(result?.ok){
         if(isBlocked(this.store))clearBlocked(this.store);
         this.onState?.({licenseBlocked:false,licenseBlockCode:null});
+      }else if(RECONNECT_CODES.has(code)){
+        invalidatePairing(this.store,this,code);
+        this.onState?.({online:true,syncing:false,pairingInvalidated:true,error:code});
       }else if(BLOCK_CODES.has(code)){
         setBlocked(this.store,code);
         this.onState?.({online:true,syncing:false,licenseBlocked:true,licenseBlockCode:code,error:code});
@@ -41,6 +63,7 @@ function installLicenseGuardV107(ThorAgent){
   const originalStop=ThorAgent.prototype.stop;
   const originalStatus=ThorAgent.prototype.status;
   const originalLogin=ThorAgent.prototype.loginOperator;
+  const originalEnroll=ThorAgent.prototype.enroll;
   const originalEvent=ThorAgent.prototype.event;
 
   ThorAgent.prototype._licenseGuardStatus=function(){
@@ -50,12 +73,15 @@ function installLicenseGuardV107(ThorAgent){
       reason:this.store.get('license_block_reason')||null,
       blockedAt:this.store.get('license_blocked_at')||null,
       message:isBlocked(this.store)?LICENSE_MESSAGE:null,
+      pairingInvalidated:pairingInvalidated(this.store),
+      pairingInvalidatedCode:this.store.get('pairing_invalidated_code')||null,
+      pairingInvalidatedAt:this.store.get('pairing_invalidated_at')||null,
     };
   };
 
   ThorAgent.prototype.checkLicenseOnline=async function(){
     const token=this.deviceToken?.();
-    if(!token)return {ok:false,error:'not_enrolled'};
+    if(!token)return {ok:false,error:'not_enrolled',reconnectRequired:pairingInvalidated(this.store)};
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),6000);
     try{
@@ -65,11 +91,19 @@ function installLicenseGuardV107(ThorAgent){
       const data=await response.json().catch(()=>({ok:false,error:`http_${response.status}`}));
       if(response.ok&&data.ok){
         clearBlocked(this.store);
+        clearPairingInvalidated(this.store);
         this.state.licenseBlocked=false;
         this.state.licenseBlockCode=null;
+        this.state.pairingInvalidated=false;
         return {ok:true,status:data.status||null};
       }
       const code=text(data.error||`http_${response.status}`);
+      if(RECONNECT_CODES.has(code)){
+        invalidatePairing(this.store,this.sync,code);
+        this.state.pairingInvalidated=true;
+        this.state.online=true;
+        return {ok:false,reconnectRequired:true,error:code};
+      }
       if(BLOCK_CODES.has(code)){
         setBlocked(this.store,code,text(data.blocked_reason));
         this.state.licenseBlocked=true;
@@ -89,8 +123,9 @@ function installLicenseGuardV107(ThorAgent){
     if(this.deviceToken?.()){
       clearInterval(this._licenseGuardTimerV107);
       const tick=()=>this.checkLicenseOnline().catch(()=>{});
-      this._licenseGuardTimerV107=setInterval(tick,10000);
-      setTimeout(tick,250);
+      // Reconexão feita no ThorGestão precisa ser percebida rapidamente pelo caixa.
+      this._licenseGuardTimerV107=setInterval(tick,3000);
+      setTimeout(tick,200);
     }
     return result;
   };
@@ -104,18 +139,40 @@ function installLicenseGuardV107(ThorAgent){
   ThorAgent.prototype.status=async function(...args){
     const result=await originalStatus.apply(this,args);
     const license=this._licenseGuardStatus();
-    return {...result,licenseBlocked:license.blocked,licenseBlockCode:license.code,licenseBlockReason:license.reason,licenseBlockedAt:license.blockedAt,licenseMessage:license.message};
+    return {...result,
+      licenseBlocked:license.blocked,licenseBlockCode:license.code,licenseBlockReason:license.reason,licenseBlockedAt:license.blockedAt,licenseMessage:license.message,
+      pairingInvalidated:license.pairingInvalidated,pairingInvalidatedCode:license.pairingInvalidatedCode,pairingInvalidatedAt:license.pairingInvalidatedAt,
+      pairingMessage:license.pairingInvalidated?RECONNECT_MESSAGE:null,
+    };
+  };
+
+  ThorAgent.prototype.enroll=async function(payload={}){
+    const result=await originalEnroll.call(this,payload);
+    clearPairingInvalidated(this.store);
+    clearBlocked(this.store);
+    // O enroll inicia o sync; reinicia também a vigilância da credencial nova.
+    clearInterval(this._licenseGuardTimerV107);
+    const tick=()=>this.checkLicenseOnline().catch(()=>{});
+    this._licenseGuardTimerV107=setInterval(tick,3000);
+    setTimeout(tick,250);
+    return result;
   };
 
   ThorAgent.prototype.loginOperator=async function(payload={}){
+    if(pairingInvalidated(this.store))throw new Error('pairing_reconnect_required');
     const wasBlocked=isBlocked(this.store);
     const license=await this.checkLicenseOnline();
+    if(license.reconnectRequired)throw new Error('pairing_reconnect_required');
     if(license.blocked||wasBlocked&&license.offline){
       this.logoutOperator?.();
       throw new Error('license_blocked');
     }
     const result=await originalLogin.call(this,payload);
     const syncError=text(result?.sync?.error);
+    if(RECONNECT_CODES.has(syncError)||pairingInvalidated(this.store)){
+      invalidatePairing(this.store,this.sync,syncError||'invalid_device');
+      throw new Error('pairing_reconnect_required');
+    }
     if(BLOCK_CODES.has(syncError)||isBlocked(this.store)){
       setBlocked(this.store,syncError||this.store.get('license_block_code')||'license_blocked');
       this.logoutOperator?.();
@@ -125,9 +182,10 @@ function installLicenseGuardV107(ThorAgent){
   };
 
   ThorAgent.prototype.event=function(type,payload){
+    if(pairingInvalidated(this.store))throw new Error('pairing_reconnect_required');
     if(isBlocked(this.store))throw new Error('license_blocked');
     return originalEvent.call(this,type,payload);
   };
 }
 
-module.exports={installLicenseGuardV107,LICENSE_MESSAGE};
+module.exports={installLicenseGuardV107,LICENSE_MESSAGE,RECONNECT_MESSAGE};
