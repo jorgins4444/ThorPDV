@@ -31,17 +31,19 @@ class ThorAgent {
     }
     const saleDiscount=Math.min(Math.max(Number(discount||0),0),subtotal); return {items:resolved,subtotal,discount:saleDiscount,total:Math.max(subtotal-saleDiscount,0)};
   }
-  event(type,payload){ const e={id:crypto.randomUUID(),type,payload:{...payload,occurred_at:new Date().toISOString()}}; this.store.enqueue(e); this.sync.run().catch(()=>{}); return e; }
+  event(type,payload){ const e={id:crypto.randomUUID(),type,payload:{...payload,occurred_at:new Date().toISOString()}}; this.store.enqueue(e); setImmediate(()=>this.sync.run().catch(()=>{})); return e; }
   async openCash({openingAmount=0,notes=''}){ if(this.store.get('cash_open_event_id')) throw new Error('cash_already_open'); const e=this.event('cash_open',{opening_amount:Number(openingAmount)||0,notes}); this.store.set('cash_open_event_id',e.id); return {ok:true,eventId:e.id}; }
   async cashMovement({movementType,amount,notes=''}){ if(!this.store.get('cash_open_event_id')) throw new Error('cash_not_open'); return {ok:true,eventId:this.event('cash_movement',{movement_type:movementType,amount:Number(amount)||0,notes}).id}; }
   async closeCash({closingAmount=0,notes=''}){ if(!this.store.get('cash_open_event_id')) throw new Error('cash_not_open'); const e=this.event('cash_close',{closing_amount:Number(closingAmount)||0,notes}); this.store.set('cash_open_event_id',''); return {ok:true,eventId:e.id}; }
   async finalizeSale({items,customerId=null,payments=[],discount=0,notes=''}){
+    const performanceStarted=Date.now();
     const cashOpenEventId=this.store.get('cash_open_event_id'); if(!cashOpenEventId) throw new Error('cash_not_open');
     const quote=this.quoteSale(items,discount); if(!quote.items.length) throw new Error('empty_cart');
     const normalizedPayments=(payments||[]).map(p=>({method:p.method,amount:Number(p.amount||0),provider:p.provider||null,external_id:p.externalId||null,txid:p.txid||null,metadata:p.metadata||{}})); const paid=normalizedPayments.reduce((s,p)=>s+p.amount,0); if(paid>quote.total+0.01) throw new Error('payment_exceeds_total');
     const payload={cash_open_event_id:cashOpenEventId,customer_id:customerId||null,items:quote.items.map(i=>({product_id:i.productId,quantity:i.quantity,unit_price:i.unitPrice,discount:i.discount})),payments:normalizedPayments,discount:quote.discount,notes}; const event=this.event('sale_completed',payload);
     for(const i of quote.items) this.store.adjustInventory(i.productId,-i.quantity);
     const receipt={eventId:event.id,items:quote.items.map(i=>({product_id:i.productId,quantity:i.quantity,returned_quantity:0,unit_price:i.unitPrice,discount:i.discount,name:i.name,sku:i.sku,unit:i.unit,total:i.total})),subtotal:quote.subtotal,discount:quote.discount,total:quote.total,payments:normalizedPayments,customerId,createdAt:new Date().toISOString(),context:JSON.parse(this.store.get('context','{}')||'{}'),local_status:'pending_sync',returned_total:0}; this.store.saveReceipt(event.id,quote.total,receipt);
+    this.store.metric('sale.finalize_local',Date.now()-performanceStarted,{items:quote.items.length,payments:normalizedPayments.length,total:quote.total});
     return {ok:true,eventId:event.id,subtotal:quote.subtotal,total:quote.total,paid,receipt};
   }
 
