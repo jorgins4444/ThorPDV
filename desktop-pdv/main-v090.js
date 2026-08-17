@@ -15,3 +15,4 @@ require('./agent/cash-close-print-layout-v113').installCashClosePrintLayoutV113(
 require('./agent/receivable-v115').installReceivableV115(ThorAgent);
 require('./agent/receivable-print-v115').installReceivablePrintV115(ThorAgent);
 require('./ipc-store-credit-v105').installStoreCreditVoucherIpcV105(ThorAgent);
+require('./ipc-receivable-v115').installReceivableIpcV115();
