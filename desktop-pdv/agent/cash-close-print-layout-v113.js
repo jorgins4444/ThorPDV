@@ -20,11 +20,10 @@ function installCashClosePrintLayoutV113(ThorAgent) {
     if (!doc || doc.kind !== 'text') return doc;
 
     // Impressoras térmicas podem anunciar ao Chromium um papel maior que o rolo
-    // efetivo. O layout anterior usava `margin: 0 auto`, o que centralizava os
-    // 72 mm dentro dessa página lógica e podia empurrar todo o conteúdo para a
-    // direita, chegando a imprimir um comprovante aparentemente em branco.
-    // Aqui o rolo fica ancorado no canto esquerdo da página lógica e somente o
-    // bloco de 44 colunas é centralizado dentro dos 80 mm físicos.
+    // efetivo. O rolo fica ancorado no canto esquerdo da página lógica e o bloco
+    // de 44 colunas é posicionado dentro dos 80 mm físicos. Após o teste real na
+    // impressora, aplicamos uma correção fina de 1 mm para a esquerda: mantemos
+    // a mesma largura útil, mas usamos 2 mm à esquerda e 4 mm à direita.
     const text = String(doc.text || '');
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
       @page { size: ${WIDTH_MM}mm auto; margin: 0; }
@@ -37,7 +36,7 @@ function installCashClosePrintLayoutV113(ThorAgent) {
       body {
         box-sizing: border-box !important;
         margin: 0 !important;
-        padding: 2mm 3mm 2mm 3mm !important;
+        padding: 2mm 4mm 2mm 2mm !important;
         width: ${WIDTH_MM}mm !important;
         min-width: ${WIDTH_MM}mm !important;
         max-width: ${WIDTH_MM}mm !important;
@@ -73,7 +72,7 @@ function installCashClosePrintLayoutV113(ThorAgent) {
       html,
       thermal_width_mm: WIDTH_MM,
       thermal_columns: 44,
-      print_layout: 'thermal_80mm_centered_v113',
+      print_layout: 'thermal_80mm_left_tuned_v114',
     };
   };
 }
