@@ -4,6 +4,7 @@ import './sales-returns.css';
 import { AdvancedShell } from '../../[...slug]/advanced-shell';
 import { SalesReturnWorkspace } from './sales-return-workspace';
 
+// Rebuild trigger: ThorGestao returns module rollout.
 export default function SalesReturnsPage(){
   return <AdvancedShell
     title="Devoluções"
