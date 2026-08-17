@@ -62,7 +62,8 @@ async function printThermalText(printerName,text) {
   const normalized=thermalAscii(text).replace(/\r?\n/g,'\n');
   const initialize=Buffer.from([0x1b,0x40,0x1b,0x61,0x00,0x1b,0x4d,0x00]);
   const body=Buffer.from(normalized,'ascii');
-  const finish=Buffer.from([0x0a,0x0a,0x0a,0x0a]);
+  // Feed five lines so the footer clears the cutter, then request a partial cut (GS V 66 0).
+  const finish=Buffer.from([0x1b,0x64,0x05,0x1d,0x56,0x42,0x00]);
   const payload=Buffer.concat([initialize,body,finish]);
   await powershell(rawPrinterScript(printerName,payload.toString('base64')));
   return true;
@@ -82,7 +83,7 @@ public class ThorRawPrinter {
  [DllImport("winspool.Drv", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool StartPagePrinter(IntPtr hPrinter);
  [DllImport("winspool.Drv", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool EndPagePrinter(IntPtr hPrinter);
  [DllImport("winspool.Drv", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, Int32 count, out Int32 written);
- public static bool Send(string printer, byte[] bytes) { IntPtr h; if(!OpenPrinter(printer,out h,IntPtr.Zero)) return false; var di=new DOCINFOA{pDocName="ThorPDV RAW",pDataType="RAW"}; bool ok=StartDocPrinter(h,1,di); if(ok){StartPagePrinter(h); IntPtr p=Marshal.AllocCoTaskMem(bytes.Length); Marshal.Copy(bytes,0,p,bytes.Length); int w=0; ok=WritePrinter(h,p,bytes.Length,out w); Marshal.FreeCoTaskMem(p); EndPagePrinter(h); EndDocPrinter(h);} ClosePrinter(h); return ok; }
+ public static bool Send(string printer, byte[] bytes) { IntPtr h; if(!OpenPrinter(printer,out h,IntPtr.Zero)) return false; var di=new DOCINFOA{pDocName="ThorPDV RAW",pDataType="RAW"}; bool ok=StartDocPrinter(h,1,di); if(ok){ok=StartPagePrinter(h); IntPtr p=Marshal.AllocCoTaskMem(bytes.Length); try{Marshal.Copy(bytes,0,p,bytes.Length); int total=0; while(ok && total<bytes.Length){int written=0; ok=WritePrinter(h,IntPtr.Add(p,total),bytes.Length-total,out written); if(!ok || written<=0){ok=false;break;} total+=written;} ok=ok && total==bytes.Length;}finally{Marshal.FreeCoTaskMem(p);} EndPagePrinter(h); EndDocPrinter(h);} ClosePrinter(h); return ok; }
 }
 '@; Add-Type -TypeDefinition $src -ErrorAction SilentlyContinue; $b=[Convert]::FromBase64String('${q(base64)}'); if(-not [ThorRawPrinter]::Send('${q(printerName)}',$b)){throw 'raw_print_failed'}`;
 }
