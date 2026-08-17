@@ -9,7 +9,8 @@ function installReceivablePrintV115(ThorAgent) {
     const target = this.settings().printerName;
     if (!target) throw new Error('printer_not_configured');
     if (target === '__PDF__') throw new Error('thermal_printer_required');
-    await hardware.printText(target, doc.text);
+    try { await hardware.printThermalText(target, doc.text); }
+    catch (rawError) { await hardware.printText(target, doc.text); }
     return { ok:true, target, receipt:doc.receipt };
   };
 }

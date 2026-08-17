@@ -47,6 +47,27 @@ async function printText(printerName,text) {
   return true;
 }
 
+
+function thermalAscii(value) {
+  return String(value ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[•·]/g, '-').replace(/[–—]/g, '-')
+    .replace(/[^\x0A\x0D\x20-\x7E]/g, '?');
+}
+
+async function printThermalText(printerName,text) {
+  if (printerName==='__PDF__') throw new Error('pdf_requires_ui');
+  if (process.platform !== 'win32') throw new Error('printing_requires_windows');
+  if (!printerName) throw new Error('printer_not_configured');
+  const normalized=thermalAscii(text).replace(/\r?\n/g,'\n');
+  const initialize=Buffer.from([0x1b,0x40,0x1b,0x61,0x00,0x1b,0x4d,0x00]);
+  const body=Buffer.from(normalized,'ascii');
+  const finish=Buffer.from([0x0a,0x0a,0x0a,0x0a]);
+  const payload=Buffer.concat([initialize,body,finish]);
+  await powershell(rawPrinterScript(printerName,payload.toString('base64')));
+  return true;
+}
+
 function rawPrinterScript(printerName, base64) {
   const q=(s)=>String(s).replace(/'/g,"''");
   return `$src=@'
@@ -95,4 +116,4 @@ async function readScale(portName, baudRate=9600, timeoutMs=1500) {
   return (await readScaleDetailed(portName,baudRate,timeoutMs)).value;
 }
 
-module.exports={ machineId,listPrinters,listSerialPorts,printText,openDrawer,readScale,readScaleDetailed };
+module.exports={ machineId,listPrinters,listSerialPorts,printText,printThermalText,openDrawer,readScale,readScaleDetailed };

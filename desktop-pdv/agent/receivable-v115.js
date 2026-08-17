@@ -128,62 +128,65 @@ function installReceivableV115(ThorAgent) {
     const terminal = first(context, ['pos_name','pos_code','terminal_name','terminal_code']) || 'PDV';
     const items = Array.isArray(receipt.items) ? receipt.items : [];
     const lines = [];
+    const receiptDate = brDateTime(receipt.created_at);
+    const pendingAfter = num(receipt.pending_total_after);
+    const balanceBefore = pendingAfter + num(receipt.total_amount);
 
+    lines.push(receiptDate);
     lines.push(center(company));
     if (legal && legal.toLowerCase() !== company.toLowerCase()) lines.push(...wrap(legal));
-    if (cnpj) lines.push(pair('CNPJ:', cnpj));
-    if (ie) lines.push(pair('IE:', ie));
     if (branch) lines.push(...wrap(`Filial: ${branch}`));
     if (issuerAddress) lines.push(...wrap(issuerAddress));
-    lines.push(rule('='));
-    lines.push(center('COMPROVANTE DE RECEBIMENTO'));
-    lines.push(center('CREDIÁRIO - DOCUMENTO NÃO FISCAL'));
+    if (cnpj) lines.push(pair('CNPJ:', cnpj));
+    if (ie) lines.push(pair('IE:', ie));
+    lines.push(pair('Caixa:', terminal));
+    lines.push(pair('Recebimento:', String(receipt.number || '-')));
     lines.push(rule('-'));
-    lines.push(pair('Recebimento nº', String(receipt.number || '-')));
-    lines.push(pair('Data/Hora', brDateTime(receipt.created_at)));
-    lines.push(pair('Operador', clean(receipt.operator_name || 'Operador')));
-    lines.push(pair('Terminal', terminal));
-    lines.push(pair('Forma', paymentLabel(receipt)));
+    lines.push(center('*** COMPROVANTE DE RECEBIMENTO ***'));
+    lines.push(rule('-'));
 
-    lines.push(rule('-'));
-    lines.push('CLIENTE');
-    lines.push(...wrap(clean(customer.name || 'Cliente')));
-    if (clean(customer.document)) lines.push(pair('CPF/CNPJ', clean(customer.document)));
-    if (clean(customer.phone)) lines.push(pair('Telefone', clean(customer.phone)));
+    lines.push(...wrap(`Cliente: ${clean(customer.name || 'Cliente')}`));
+    if (clean(customer.document)) lines.push(pair('CPF/CNPJ:', clean(customer.document)));
+    if (clean(customer.phone)) lines.push(pair('Telefone:', clean(customer.phone)));
     const customerAddr = customerAddress(customer);
-    if (customerAddr) lines.push(...wrap(customerAddr));
-
+    if (customerAddr) lines.push(...wrap(`Endereco: ${customerAddr}`));
+    lines.push(pair('Saldo anterior:', `R$ ${money(balanceBefore)}`));
     lines.push(rule('-'));
-    lines.push(center('PARCELAS RECEBIDAS'));
-    lines.push(`${padRight('PARC', 6)} ${padRight('VENC.', 8)} ${padLeft('SALDO', 12)} ${padLeft('RECEB.', 14)}`);
+
+    lines.push(`${padRight('VENC.', 8)} ${padRight('PARC', 6)} ${padLeft('ANTES', 12)} ${padLeft('RECEB.', 14)}`);
+    lines.push(rule('-'));
     for (const item of items) {
       const installment = item.installment && item.installments ? `${item.installment}/${item.installments}` : '-';
-      lines.push(`${padRight(installment, 6)} ${padRight(brDate(item.due_date), 8)} ${padLeft(money(item.remaining_before), 12)} ${padLeft(money(item.amount_applied), 14)}`);
-      const sale = item.sale_number ? `Venda #${item.sale_number}` : clean(item.description || 'Conta do crediário');
-      const remaining = num(item.remaining_after);
-      lines.push(...wrap(`${sale} • Saldo após: R$ ${money(remaining)}`));
+      lines.push(`${padRight(brDate(item.due_date), 8)} ${padRight(installment, 6)} ${padLeft(money(item.remaining_before), 12)} ${padLeft(money(item.amount_applied), 14)}`);
+      const sale = item.sale_number ? `Venda #${item.sale_number}` : clean(item.description || 'Conta do crediario');
+      lines.push(...wrap(`${sale} - Saldo: R$ ${money(item.remaining_after)}`));
     }
 
-    lines.push(rule('='));
-    lines.push(pair('TOTAL RECEBIDO', `R$ ${money(receipt.total_amount)}`));
+    lines.push(rule('-'));
+    lines.push(pair('TOTAL RECEBIDO:', `R$ ${money(receipt.total_amount)}`));
+    lines.push(pair('Forma:', paymentLabel(receipt)));
+    lines.push(pair('Operador:', clean(receipt.operator_name || 'Operador')));
+
     const paidCount = items.filter((item) => num(item.remaining_after) <= 0.009).length;
     const partialCount = items.length - paidCount;
-    lines.push(pair('Parcelas quitadas', String(paidCount)));
-    if (partialCount) lines.push(pair('Parcelas parciais', String(partialCount)));
+    lines.push(pair('Parcelas quitadas:', String(paidCount)));
+    if (partialCount) lines.push(pair('Parcelas parciais:', String(partialCount)));
 
     lines.push(rule('-'));
-    lines.push(center('SITUAÇÃO DO CREDIÁRIO APÓS O RECEBIMENTO'));
-    lines.push(pair('Parcelas pendentes', String(Number(receipt.pending_count_after || 0))));
-    lines.push(pair('Saldo total pendente', `R$ ${money(receipt.pending_total_after)}`));
-    if (clean(receipt.notes)) { lines.push(rule('-')); lines.push('OBSERVAÇÃO'); lines.push(...wrap(receipt.notes)); }
+    lines.push(center('SITUACAO APOS O RECEBIMENTO'));
+    lines.push(pair('Parcelas pendentes:', String(Number(receipt.pending_count_after || 0))));
+    lines.push(pair('Saldo pendente:', `R$ ${money(pendingAfter)}`));
+    if (clean(receipt.notes)) {
+      lines.push(rule('-'));
+      lines.push(...wrap(`Obs.: ${receipt.notes}`));
+    }
 
     lines.push(rule('-'));
-    lines.push(...wrap('Este comprovante registra o recebimento realizado no ThorPDV e a baixa das parcelas selecionadas.'));
+    lines.push(center('DOCUMENTO NAO FISCAL'));
     lines.push(center('GUARDE ESTE COMPROVANTE'));
-    lines.push(rule('-'));
-    lines.push(pair('Controle', clean(receipt.client_event_id || receipt.id).slice(0, 12).toUpperCase()));
+    lines.push(pair('Controle:', clean(receipt.client_event_id || receipt.id).slice(0, 12).toUpperCase()));
     lines.push(center(`ThorPDV v${DESKTOP_VERSION}`));
-    lines.push('', '', '');
+    lines.push('', '');
 
     const text = lines.join('\n');
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
