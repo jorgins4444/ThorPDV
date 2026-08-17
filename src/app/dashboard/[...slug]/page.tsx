@@ -96,7 +96,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   }
   if (slug === 'administrativo/auditoria') {
     const audit=await erpManagementAudit({});
-    return <AdvancedShell title="Auditoria Gerencial" subtitle="Rastreabilidade de descontos, cancelamentos, devoluções, estornos, autorizações, caixa e alterações de preço." activePath="/dashboard/administrativo/auditoria"><ManagementAuditWorkspace initialEvents={audit.data} initialSummary={audit.summary} branches={audit.branches} operators={audit.operators}/></AdvancedShell>;
+    return <AdvancedShell title="Auditoria Gerencial" subtitle="Rastreabilidade de descontos, cancelamentos, devoluções, estornos, autorizações, caixa e alterações de preço." activePath="/dashboard/administrativo/auditoria"><ManagementAuditWorkspace initialEvents={audit.data} initialSummary={audit.summary} initialPagination={audit.pagination} permissions={audit.permissions} branches={audit.branches} operators={audit.operators}/></AdvancedShell>;
   }
   if (slug === 'vendas') return <AdvancedShell title="Vendas" subtitle="Operações de caixa, vendas, fechamentos, histórico e correções por unidade, PDV e operador." activePath="/dashboard/vendas"><SalesCashWorkspace/></AdvancedShell>;
   if (slug === 'vendas/nova') return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard/vendas/nova"><SaleWorkspace customers={customers.data} priceTables={priceTables.data}/></AdvancedShell>;
