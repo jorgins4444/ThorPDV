@@ -7,7 +7,7 @@ import { SalesReturnWorkspace } from './sales-return-workspace';
 export default function SalesReturnsPage(){
   return <AdvancedShell
     title="Devoluções"
-    subtitle="Acompanhe devoluções do ThorPDV, créditos lançados em clientes, Vales Crédito emitidos e seus saldos."
+    subtitle="Acompanhe devoluções sincronizadas do ThorPDV, créditos lançados em clientes, Vales Crédito emitidos, utilização e saldo disponível."
     activePath="/dashboard/vendas/devolucoes"
     backHref="/dashboard/vendas"
     backLabel="Vendas"
