@@ -269,6 +269,7 @@ function registerIpc() {
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
   handle('thor:performance-metrics', (limit) => agent.store.recentMetrics(limit));
+  handle('thor:record-performance', (name, durationMs, metadata) => agent.store.metric(name, durationMs, metadata));
   handle('thor:recover-sync', () => agent.recoverSync());
   handle('thor:disconnect-device', () => agent.disconnectDevice());
   handle('thor:search-products', (query) => agent.searchProducts(query));
