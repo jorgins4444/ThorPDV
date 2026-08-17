@@ -38,7 +38,7 @@ begin
   return next;
 end
 $function$
-
+;
 
 CREATE OR REPLACE FUNCTION private.audit_redact_jsonb(p_value jsonb)
  RETURNS jsonb
@@ -76,7 +76,7 @@ begin
   return p_value;
 end
 $function$
-
+;
 
 CREATE OR REPLACE FUNCTION private.audit_entity_label(p_table text)
  RETURNS text
@@ -140,7 +140,7 @@ select case p_table
   else initcap(replace(p_table,'_',' '))
 end
 $function$
-
+;
 
 CREATE OR REPLACE FUNCTION private.capture_generic_management_audit()
  RETURNS trigger
@@ -258,7 +258,7 @@ begin
   return coalesce(new,old);
 end
 $function$
-
+;
 
 revoke all on function private.resolve_temp_context(text) from public;
 grant execute on function private.resolve_temp_context(text) to anon,authenticated,service_role;
