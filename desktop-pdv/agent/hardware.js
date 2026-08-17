@@ -56,6 +56,10 @@ async function printText(printerName,text) {
   return printRaw(printerName,escposText(text),'ThorPDV Texto');
 }
 
+async function printThermalText(printerName,text) {
+  return printRaw(printerName,escposText(text),'ThorPDV Comprovante');
+}
+
 function rawPrinterScript(printerName, base64) {
   const q=(s)=>String(s).replace(/'/g,"''");
   return `$src=@'
@@ -102,4 +106,4 @@ async function readScale(portName, baudRate=9600, timeoutMs=1500) {
   return (await readScaleDetailed(portName,baudRate,timeoutMs)).value;
 }
 
-module.exports={ machineId,listPrinters,listSerialPorts,printText,printThermalText,openDrawer,readScale,readScaleDetailed };
+module.exports={ machineId,listPrinters,listSerialPorts,printRaw,printText,printThermalText,openDrawer,readScale,readScaleDetailed };
