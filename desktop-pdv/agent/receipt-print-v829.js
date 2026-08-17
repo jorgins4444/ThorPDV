@@ -1,5 +1,6 @@
 const { execFile } = require('child_process');
 const QRCode = require('qrcode');
+const hardware = require('./hardware');
 
 function psQuote(value) {
   return String(value || '').replace(/'/g, "''");
@@ -313,7 +314,7 @@ async function printReceiptRaw(printerName, text, columns, options = {}) {
   if (process.platform !== 'win32') throw new Error('printing_requires_windows');
   if (!printerName || printerName === '__PDF__') throw new Error('printer_not_configured');
   const payload = escposPayload(text, columns, options.qrCodeUrl || '');
-  await powershell(rawPrinterScript(printerName, payload.toString('base64'), options.documentName || 'ThorPDV Cupom'));
+  await hardware.printRaw(printerName,payload,options.documentName || 'ThorPDV Cupom');
   return true;
 }
 
