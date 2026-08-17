@@ -12,7 +12,7 @@ const labels:Record<string,string>={
   sale_return:'Devolução',return_cancelled:'Devolução cancelada',receivable_received:'Recebimento',
   receivable_reversed:'Estorno de recebimento',manager_authorization:'Autorização gerencial',
   cash_management_close:'Fechamento gerencial',cash_management_reopen:'Reabertura de caixa',
-  cash_management_correct:'Correção de caixa',price_changed:'Alteração de preço',
+  cash_management_correct:'Correção de caixa',price_changed:'Alteração de preço',\n  record_created:'Cadastro realizado',record_updated:'Cadastro alterado',record_deleted:'Cadastro excluído',
 };
 const money=(value:unknown)=>Number(value||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const dateTime=(value:unknown)=>value?new Date(String(value)).toLocaleString('pt-BR'):'—';
