@@ -3,7 +3,7 @@ name: Build ThorPDV Desktop
 on:
   workflow_dispatch:
   push:
-    branches: [main, pdv-rebuild-from-0.8.44]
+    branches: [main, pdv-rebuild-from-0.8.44, pdv-performance-v0.8.55]
     paths:
       - 'desktop-pdv/**'
       - '.github/workflows/pdv-desktop.yml'
@@ -43,6 +43,9 @@ jobs:
             'ipc-receivable-v115.js',
             'updater.js',
             'agent/store.js',
+            'agent/print-service.js',
+            'agent/background-queue.js',
+            'agent/sync-request-worker.js',
             'agent/hardware.js',
             'agent/sync.js',
             'agent/index.js',
@@ -75,6 +78,7 @@ jobs:
             'agent/receipt-print-v829.js',
             'agent/sale-identity-v830.js',
             'renderer/app.js',
+            'scripts/build-renderer-bundle.js',
             'renderer/update-center.js',
             'renderer/checkout-v3.js',
             'renderer/hotfix-v042.js',
