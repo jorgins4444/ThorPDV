@@ -11,6 +11,7 @@ require('./agent/store-credit-return-v105').installStoreCreditReturnV105(ThorAge
 require('./agent/return-quantity-guard-v106').installReturnQuantityGuardV106(ThorAgent);
 require('./agent/store-credit-payment-v106').installStoreCreditPaymentV106(ThorAgent, Store);
 require('./agent/cash-close-receipt-v112').installCashCloseReceiptV112(ThorAgent);
+require('./agent/cash-close-receivable-v115').installCashCloseReceivableV115(ThorAgent);
 require('./agent/cash-close-print-layout-v113').installCashClosePrintLayoutV113(ThorAgent);
 require('./agent/receivable-v115').installReceivableV115(ThorAgent);
 require('./agent/receivable-print-v115').installReceivablePrintV115(ThorAgent);
