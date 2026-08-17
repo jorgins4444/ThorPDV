@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   if (!token) return NextResponse.json({ ok: false, error: 'device_token_required' }, { status: 401 });
   const body = await request.json().catch(() => ({})) as { cashOpenEventId?: string | null };
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('pdv_cash_preview_v2', {
+  const { data, error } = await supabase.rpc('pdv_cash_preview_v3', {
     p_device_token: token,
     p_cash_open_event_id: body.cashOpenEventId || null,
   });
