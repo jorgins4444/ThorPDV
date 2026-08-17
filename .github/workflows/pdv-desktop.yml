@@ -40,6 +40,7 @@ jobs:
             'main.js',
             'preload.js',
             'ipc-store-credit-v105.js',
+            'ipc-receivable-v115.js',
             'updater.js',
             'agent/store.js',
             'agent/hardware.js',
@@ -60,7 +61,10 @@ jobs:
             'agent/consistency.js',
             'agent/cash-closing.js',
             'agent/cash-close-receipt-v112.js',
+            'agent/cash-close-receivable-v115.js',
             'agent/cash-close-print-layout-v113.js',
+            'agent/receivable-v115.js',
+            'agent/receivable-print-v115.js',
             'agent/production.js',
             'agent/pre-sale-v064.js',
             'agent/commercial-v070.js',
@@ -116,7 +120,11 @@ jobs:
             'renderer/redesign-v101.js',
             'renderer/term-finalize-v102.js',
             'renderer/receipt-print-v829.js',
-            'renderer/sale-identity-v830.js'
+            'renderer/sale-identity-v830.js',
+            'renderer/receivable-cash-summary-v115.js',
+            'renderer/receivable-v115-pre.js',
+            'renderer/receivable-v115.js',
+            'renderer/receivable-v115-post.js'
           )
           foreach ($file in $files) {
             Write-Host "Checking $file"
