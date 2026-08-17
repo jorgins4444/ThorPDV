@@ -19,6 +19,7 @@ const { installSalesOptionsV071 } = require('./agent/sales-options-v071');
 const { installSalesSettlementV073 } = require('./agent/sales-settlement-v073');
 const { installDailyCashV083 } = require('./agent/daily-cash-v083');
 const { version: DESKTOP_VERSION } = require('./package.json');
+const { printService } = require('./agent/print-service');
 
 installThorAgentV3(ThorAgent);
 installReturnFix(ThorAgent);
@@ -267,6 +268,7 @@ function registerIpc() {
   handle('thor:enroll', (payload) => agent.enroll(payload));
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
+  handle('thor:performance-metrics', (limit) => agent.store.recentMetrics(limit));
   handle('thor:recover-sync', () => agent.recoverSync());
   handle('thor:disconnect-device', () => agent.disconnectDevice());
   handle('thor:search-products', (query) => agent.searchProducts(query));
@@ -325,6 +327,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async () => {
+  try { printService().stop(); } catch {}
   if (agent) await agent.stop();
   if (process.platform !== 'darwin') app.quit();
 });
