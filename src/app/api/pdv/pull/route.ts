@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({})) as { since?: string | null };
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc('pdv_pull_v9', { p_device_token: token, p_since: body.since || null });
+  const { data, error } = await supabase.rpc('pdv_pull_v10', { p_device_token: token, p_since: body.since || null });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   const result = data as { ok?: boolean; error?: string } | null;
   return NextResponse.json(result ?? { ok: false, error: 'empty_response' }, { status: result?.ok ? 200 : 401 });
