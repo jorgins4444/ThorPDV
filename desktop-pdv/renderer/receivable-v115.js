@@ -116,6 +116,7 @@
 
     body.innerHTML=`<div class="v115-customer-head"><button type="button" class="secondary" id="v115Back">← Voltar</button><div class="v115-selected-customer"><span class="v115-avatar">${esc(String(customer.name||'?').slice(0,1).toUpperCase())}</span><div><small>CLIENTE SELECIONADO</small><b>${esc(customer.name||'Cliente')}</b><span>${esc(formatDoc(customer.document))}${customerAddress(customer)?` • ${esc(customerAddress(customer))}`:''}</span></div></div><div class="v115-credit-total"><span>Saldo do crediário</span><b>${brMoney(result.open_total)}</b><small>${entries.length} parcela(s)${overdue?` • ${overdue} vencida(s)`:''}</small></div></div>
       <div class="v115-selection-tools"><label><input type="checkbox" id="v115SelectAll"><span>Selecionar todas as parcelas</span></label><div><span>Selecionado</span><b id="v115SelectedTotal">${brMoney(0)}</b></div></div>
+      <div class="v115-auto-payment"><div><small>PAGAMENTO AUTOMÁTICO</small><b>Quanto o cliente quer pagar?</b><span>Distribuímos primeiro nas parcelas mais antigas e deixamos somente a última alcançada como parcial.</span></div><label><span>Valor disponível</span><div><em>R$</em><input id="v115AutoAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00"></div></label><button type="button" class="primary" id="v115AutoApply">Distribuir valor</button></div>
       <div class="v115-entry-list">${entries.map((row,index)=>`<div class="v115-entry ${row.overdue?'overdue':''}" data-v115-entry="${index}"><label class="v115-check"><input type="checkbox" data-v115-check="${index}"><span></span></label><div class="v115-entry-id"><b>${row.installment&&row.installments?`${row.installment}/${row.installments}`:'Parcela'}</b><small>${row.sale_number?`Venda #${esc(row.sale_number)}`:esc(row.description||'Crediário')}</small></div><div><span>Vencimento</span><b>${brDate(row.due_date)}</b>${row.overdue?'<small class="bad">Vencida</small>':'<small>Em aberto</small>'}</div><div><span>Valor original</span><b>${brMoney(row.amount)}</b><small>Recebido ${brMoney(row.paid_amount)}</small></div><div><span>Saldo atual</span><b>${brMoney(row.remaining)}</b><small>${String(row.status)==='partial'?'Pagamento parcial':'A receber'}</small></div><label class="v115-amount"><span>Receber agora</span><div><em>R$</em><input data-v115-amount="${index}" type="number" min="0.01" max="${Number(row.remaining).toFixed(2)}" step="0.01" value="${Number(row.remaining).toFixed(2)}" disabled></div></label></div>`).join('')}</div>
       <section class="v115-payment"><div class="v115-section-title"><div><small>FORMA DE RECEBIMENTO</small><b>Como o cliente está pagando?</b></div><span>O recebimento será registrado no fechamento deste caixa.</span></div><div class="v115-methods">${allowedMethods.length?allowedMethods.map((method,index)=>`<button type="button" data-v115-method="${esc(method.code)}" class="${index===0?'active':''}"><i>${methodIcon(method.code)}</i><b>${esc(methodLabel(method.code,method.name))}</b><small>${method.code==='cash'?'Entra no dinheiro físico da gaveta':method.code==='pix'?'Recebimento eletrônico':method.code.includes('card')?'Pagamento por cartão':'Outra forma'}</small></button>`).join(''):'<div class="v115-method-empty">Nenhuma forma de pagamento compatível está habilitada no ThorGestão.</div>'}</div></section>
       <div class="v115-footer"><label class="v115-notes"><span>Observação</span><input id="v115Notes" maxlength="160" placeholder="Opcional: referência, observação do recebimento..."></label><div class="v115-receive-summary"><span>Total a receber</span><b id="v115FooterTotal">${brMoney(0)}</b><small id="v115AfterHint">Selecione as parcelas.</small></div><button class="primary" id="v115Receive" disabled>Confirmar recebimento</button></div>`;
@@ -143,6 +144,38 @@
     };
     checks.forEach((check,index)=>check.onchange=()=>{if(check.checked&&n(amounts[index].value)<=0)amounts[index].value=Number(entries[index].remaining).toFixed(2);recalc();});
     amounts.forEach(input=>input.oninput=recalc);
+    const autoAmount=body.querySelector('#v115AutoAmount');
+    const parseAutoAmount=(value)=>{
+      const clean=String(value||'').trim().replace(/\s/g,'');
+      if(!clean)return 0;
+      const normalized=clean.includes(',')?clean.replace(/\./g,'').replace(',','.'):clean;
+      return n(normalized);
+    };
+    const applyAutomaticPayment=()=>{
+      const requestedCents=Math.round(parseAutoAmount(autoAmount.value)*100);
+      const openCents=entries.reduce((sum,row)=>sum+Math.round(n(row.remaining)*100),0);
+      if(requestedCents<=0){infoModal('Valor do recebimento','Informe um valor maior que zero para distribuir entre as parcelas.');autoAmount.focus();return;}
+      if(requestedCents>openCents){infoModal('Valor acima do saldo',`O cliente possui ${brMoney(openCents/100)} em aberto. Informe um valor igual ou menor que esse saldo.`);autoAmount.focus();return;}
+      let availableCents=requestedCents;
+      const order=entries.map((row,index)=>({row,index})).sort((a,b)=>{
+        const dateA=String(a.row.due_date||'9999-12-31');
+        const dateB=String(b.row.due_date||'9999-12-31');
+        return dateA.localeCompare(dateB)||(n(a.row.installment)-n(b.row.installment))||(a.index-b.index);
+      });
+      checks.forEach((check,index)=>{check.checked=false;amounts[index].value=Number(entries[index].remaining).toFixed(2);});
+      order.forEach(({row,index})=>{
+        if(availableCents<=0)return;
+        const balanceCents=Math.round(n(row.remaining)*100);
+        const appliedCents=Math.min(availableCents,balanceCents);
+        if(appliedCents>0){checks[index].checked=true;amounts[index].value=(appliedCents/100).toFixed(2);availableCents-=appliedCents;}
+      });
+      autoAmount.value=(requestedCents/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const summary=recalc();
+      const partial=checks.some((check,index)=>check.checked&&Math.round(n(amounts[index].value)*100)<Math.round(n(entries[index].remaining)*100));
+      body.querySelector('#v115AfterHint').textContent=`${summary.count} parcela(s) • mais antigas primeiro${partial?' • última com baixa parcial':''}`;
+    };
+    body.querySelector('#v115AutoApply').onclick=applyAutomaticPayment;
+    autoAmount.onkeydown=(event)=>{if(event.key==='Enter'){event.preventDefault();applyAutomaticPayment();}};
     body.querySelector('#v115SelectAll').onchange=(event)=>{checks.forEach((check,index)=>{check.checked=event.target.checked;if(check.checked)amounts[index].value=Number(entries[index].remaining).toFixed(2);});recalc();};
     body.querySelectorAll('[data-v115-method]').forEach(button=>button.onclick=()=>{selectedMethod=button.dataset.v115Method;body.querySelectorAll('[data-v115-method]').forEach(x=>x.classList.toggle('active',x===button));recalc();});
     body.querySelector('#v115Back').onclick=()=>m.querySelector('#v115Search').click();
