@@ -28,6 +28,7 @@ const money=(value:unknown)=>Number(value||0).toLocaleString('pt-BR',{style:'cur
 const dateTime=(value:unknown)=>value?new Date(String(value)).toLocaleString('pt-BR'):'—';
 const str=(value:unknown)=>value==null?'':String(value);
 const isoDate=(date:Date)=>date.toISOString().slice(0,10);
+const friendlyReason=(row:Row)=>str(row.reason||row.title||'Registro automático').replaceAll('Usuário ERP',str(row.responsible_name||row.operator_name||'Usuário identificado'));
 const record=(value:unknown):Row=>value&&typeof value==='object'&&!Array.isArray(value)?value as Row:{};
 const formatValue=(value:unknown)=>{
   if(value==null||value==='')return 'Não informado';
@@ -113,7 +114,7 @@ export function ManagementAuditWorkspace({initialEvents,initialSummary,initialPa
             <td><span className={`audit-badge ${str(row.risk_level||row.severity)}`}>{labels[operation]||str(row.title)}</span><small>{str(row.title)}{Number(row.event_count||1)>1?` • ${Number(row.event_count)} eventos relacionados`:''}</small></td>
             <td><b className="audit-entity-name">{str(row.entity_name)||(row.sale_number?`Venda #${str(row.sale_number)}`:'Registro sem nome')}</b><small>{str(row.entity_label)||str(row.entity_type)}{row.entity_id?` • ID ${str(row.entity_id).slice(0,8)}`:''}</small></td>
             <td><b>{str(row.responsible_name)||str(row.operator_name)||'Sistema'}</b><small>{row.responsible_email&&str(row.responsible_email)!==str(row.responsible_name)?str(row.responsible_email):row.supervisor_name?`Autorizado por ${str(row.supervisor_name)}`:'Identidade confirmada'}</small></td>
-            <td className="audit-reason"><span>{str(row.reason)||'Registro automático'}</span>
+            <td className="audit-reason"><span>{friendlyReason(row)}</span>
               {fields.length?<details className="audit-details"><summary>Ver detalhes ({fields.length} campo{fields.length===1?'':'s'})</summary>
                 <div className="audit-change-list">{fields.map(field=><div className="audit-change" key={field.key}>
                   <b>{field.label}</b>
@@ -144,7 +145,7 @@ export function ManagementAuditWorkspace({initialEvents,initialSummary,initialPa
           <article><span>Loja / terminal</span><b>{str(selected.branch_name)||'Sem loja informada'}</b><small>{str(selected.device_name)}</small></article>
           <article><span>Registro</span><b>{str(selected.entity_name)||'Sem nome disponível'}</b><small>ID {str(selected.entity_id)||'não informado'}</small></article>
         </div>
-        <section className="audit-modal-reason"><span>O que foi feito</span><p>{str(selected.reason)||str(selected.title)||'Registro automático'}</p></section>
+        <section className="audit-modal-reason"><span>O que foi feito</span><p>{friendlyReason(selected)}</p></section>
         <section className="audit-modal-changes">
           <div className="audit-modal-section-title"><span>Dados envolvidos na operação</span><strong>{auditFields(selected).length} campo(s)</strong></div>
           {auditFields(selected).length?<div className="audit-modal-change-list">{auditFields(selected).map(field=><div className="audit-modal-change" key={field.key}>
