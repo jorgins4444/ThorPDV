@@ -71,7 +71,7 @@ export function ManagementAuditWorkspace({initialEvents,initialSummary,branches,
           <td><b>{dateTime(row.occurred_at)}</b><small>{str(row.branch_name)||'Sem loja informada'}{row.device_name?` • ${str(row.device_name)}`:''}</small></td>
           <td><span className={`audit-badge ${str(row.severity)}`}>{labels[str(row.event_type)]||str(row.title)}</span><small>{str(row.title)}</small></td>
           <td><b>{row.sale_number?`Venda #${str(row.sale_number)}`:str(row.entity_type)}</b><small>{str(row.entity_id).slice(0,8)}</small></td>
-          <td><b>{str(row.operator_name)||'Sistema'}</b><small>{row.supervisor_name?`Autorizado por ${str(row.supervisor_name)}`:'Sem autorização vinculada'}</small></td>
+          <td><b>{str(row.responsible_name)||str(row.operator_name)||'Sistema'}</b><small>{row.responsible_email&&str(row.responsible_email)!==str(row.responsible_name)?str(row.responsible_email):row.supervisor_name?`Autorizado por ${str(row.supervisor_name)}`:'Identidade vinculada ao evento'}</small></td>
           <td><span>{str(row.reason)||'Registro automático'}</span></td>
           <td className="right"><b className={Number(row.amount_delta||0)<0?'negative':''}>{row.amount_delta==null?'—':money(row.amount_delta)}</b><small>{row.amount_before!=null&&row.amount_after!=null?`${money(row.amount_before)} → ${money(row.amount_after)}`:''}</small></td>
         </tr>)}</tbody>
