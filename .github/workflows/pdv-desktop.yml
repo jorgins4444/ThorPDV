@@ -3,7 +3,7 @@ name: Build ThorPDV Desktop
 on:
   workflow_dispatch:
   push:
-    branches: [main, pdv-rebuild-from-0.8.34]
+    branches: [main, pdv-rebuild-from-0.8.44]
     paths:
       - 'desktop-pdv/**'
       - '.github/workflows/pdv-desktop.yml'
@@ -12,8 +12,8 @@ permissions:
   contents: write
 
 # ThorPDV Desktop build + durable release assets for ThorControl rollouts.
-# Rebuild releases use a separate tag namespace so the archived 0.8.35+ artifacts
-# can remain available for diagnostics without being reused accidentally.
+# Rebuild releases use a separate tag namespace so archived artifacts remain
+# available for diagnostics without being reused accidentally.
 jobs:
   windows-installer:
     runs-on: windows-latest
@@ -59,6 +59,8 @@ jobs:
             'agent/recovery.js',
             'agent/consistency.js',
             'agent/cash-closing.js',
+            'agent/cash-close-receipt-v112.js',
+            'agent/cash-close-print-layout-v113.js',
             'agent/production.js',
             'agent/pre-sale-v064.js',
             'agent/commercial-v070.js',
@@ -91,6 +93,8 @@ jobs:
             'renderer/store-credit-v050.js',
             'renderer/return-credit-v105.js',
             'renderer/return-quantity-guard-v106.js',
+            'renderer/store-credit-payment-v106.js',
+            'renderer/store-credit-finalizer-v111.js',
             'renderer/scale-label-v060.js',
             'renderer/scale-label-v061.js',
             'renderer/quick-entry-v063.js',
@@ -152,10 +156,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $pkg = Get-Content package.json | ConvertFrom-Json
-          $isRebuild = $env:GITHUB_REF_NAME -eq 'pdv-rebuild-from-0.8.34'
+          $isRebuild = $env:GITHUB_REF_NAME -eq 'pdv-rebuild-from-0.8.44'
           $tag = if ($isRebuild) { 'pdv-rebuild-v' + $pkg.version } else { 'pdv-v' + $pkg.version }
           $title = if ($isRebuild) { 'ThorPDV Desktop Rebuild ' + $pkg.version } else { 'ThorPDV Desktop ' + $pkg.version }
-          $notes = if ($isRebuild) { 'ThorPDV Desktop ' + $pkg.version + ' reconstruído a partir da base estável 0.8.34. Distribuição somente por piloto no ThorControl.' } else { 'ThorPDV Desktop ' + $pkg.version + '. A distribuição aos clientes é controlada pelo ThorControl.' }
+          $notes = if ($isRebuild) { 'ThorPDV Desktop ' + $pkg.version + ' reconstruído a partir da base estável 0.8.44. Distribuição somente por piloto no ThorControl.' } else { 'ThorPDV Desktop ' + $pkg.version + '. A distribuição aos clientes é controlada pelo ThorControl.' }
           $exe = Get-ChildItem dist\ThorPDV-Desktop-*-x64.exe | Select-Object -First 1
           $sha = $exe.FullName + '.sha256'
           gh release view $tag 2>$null | Out-Null
