@@ -58,3 +58,22 @@ export async function erpFiscalSettingsGet(){const token=await getSessionToken()
 export async function erpFiscalSettingsSave(payload:Record<string,unknown>){const token=await getSessionToken();return rpc('erp_fiscal_settings_save',{p_token:token,p_payload:payload});}
 export async function erpFiscalPrepare(saleId:string,documentType:'nfe'|'nfce'){const token=await getSessionToken();return rpc('erp_fiscal_prepare',{p_token:token,p_sale_id:saleId,p_document_type:documentType});}
 export async function erpFiscalSend(documentId:string){const token=await getSessionToken();return rpc('erp_fiscal_send',{p_token:token,p_document_id:documentId});}
+
+
+export async function erpManagementAudit(filters:{start?:string;end?:string;branchId?:string;operatorId?:string;eventType?:string;search?:string;risk?:string;cursorAt?:string;cursorId?:string;pageSize?:number}={}){
+  const token=await getSessionToken();
+  const result=await rpc('erp_management_audit_list',{
+    p_token:token,p_start:filters.start||null,p_end:filters.end||null,p_branch:filters.branchId||null,
+    p_operator:filters.operatorId||null,p_event_type:filters.eventType||null,p_search:filters.search?.trim()||null,
+    p_risk:filters.risk||null,p_cursor_at:filters.cursorAt||null,p_cursor_id:filters.cursorId||null,p_page_size:filters.pageSize||10,
+  });
+  return {
+    ok:Boolean(result.ok),error:typeof result.error==='string'?result.error:undefined,
+    data:Array.isArray(result.data)?result.data:[],
+    summary:(result.summary&&typeof result.summary==='object'&&!Array.isArray(result.summary)?result.summary:{}) as Record<string,unknown>,
+    branches:Array.isArray(result.branches)?result.branches:[],
+    operators:Array.isArray(result.operators)?result.operators:[],
+    pagination:(result.pagination&&typeof result.pagination==='object'&&!Array.isArray(result.pagination)?result.pagination:{}) as Record<string,unknown>,
+    permissions:(result.permissions&&typeof result.permissions==='object'&&!Array.isArray(result.permissions)?result.permissions:{}) as Record<string,unknown>,
+  };
+}
