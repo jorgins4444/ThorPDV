@@ -11,6 +11,7 @@ import './fiscal-center.css';
 import './reconciliation.css';
 import './cash.css';
 import './sales-cash.css';
+import './management-audit.css';
 import './operator-admin.css';
 import './pdv-profile.css';
 import './product-workspace.css';
@@ -41,13 +42,14 @@ import { erpFiscalDocuments } from './fiscal-transmit-actions';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
 import { CashWorkspace } from './cash-workspace';
 import { SalesCashWorkspace } from './sales-cash-workspace';
+import { ManagementAuditWorkspace } from './management-audit-workspace';
 import { OperatorWorkspace } from './operator-workspace';
 import { PdvProfileWorkspace } from './pdv-profile-workspace';
 import { ProductMasterWorkspace } from './product-master-workspace';
 import { ProductionWorkspace } from './production-workspace';
 import { reconciliationData } from './reconciliation-actions';
 import { listPdvOperators } from './operator-actions';
-import { erpFiscalSettingsGet, erpLoad, erpProductList, erpProductionOrders } from './actions';
+import { erpFiscalSettingsGet, erpLoad, erpManagementAudit, erpProductList, erpProductionOrders } from './actions';
 
 const resourceBySlug: Record<string, string> = {
   'clientes': 'customers', 'clientes/novo': 'customers', 'fornecedores': 'suppliers',
@@ -91,6 +93,10 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (slug === 'estoque/producao') {
     const orders=await erpProductionOrders();
     return <AdvancedShell title="Produção / Cozinha" subtitle="Comandas geradas automaticamente pelas vendas de produtos configurados como produção sob demanda." activePath="/dashboard/estoque/producao"><ProductionWorkspace initial={orders.data}/></AdvancedShell>;
+  }
+  if (slug === 'administrativo/auditoria') {
+    const audit=await erpManagementAudit({});
+    return <AdvancedShell title="Auditoria Gerencial" subtitle="Rastreabilidade de descontos, cancelamentos, devoluções, estornos, autorizações, caixa e alterações de preço." activePath="/dashboard/administrativo/auditoria"><ManagementAuditWorkspace initialEvents={audit.data} initialSummary={audit.summary} initialPagination={audit.pagination} permissions={audit.permissions} branches={audit.branches} operators={audit.operators}/></AdvancedShell>;
   }
   if (slug === 'vendas') return <AdvancedShell title="Vendas" subtitle="Operações de caixa, vendas, fechamentos, histórico e correções por unidade, PDV e operador." activePath="/dashboard/vendas"><SalesCashWorkspace/></AdvancedShell>;
   if (slug === 'vendas/nova') return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard/vendas/nova"><SaleWorkspace customers={customers.data} priceTables={priceTables.data}/></AdvancedShell>;
