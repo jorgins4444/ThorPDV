@@ -4,19 +4,20 @@ import { useState,useTransition } from 'react';
 import { cashClosureCorrect,cashClosureDetail,cashClosureReopen } from './cash-closure-actions';
 
 type Row=Record<string,unknown>;
-type Detail={session:Row;payments:Row[];movements:Row[];sales:Row[];audit:Row[];fiscal:Row;snapshot:Row;canCorrect:boolean;canReopen:boolean;permission:string};
+type Detail={session:Row;payments:Row[];movements:Row[];sales:Row[];returns:Row[];audit:Row[];fiscal:Row;snapshot:Row;canCorrect:boolean;canReopen:boolean;permission:string};
 const text=(v:unknown)=>v==null?'':String(v);
 const num=(v:unknown)=>Number(v||0);
 const money=(v:unknown)=>num(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const dt=(v:unknown)=>v?new Date(String(v)).toLocaleString('pt-BR'):'—';
 const duration=(v:unknown)=>{const m=Math.max(0,Math.round(num(v)));const h=Math.floor(m/60);const mm=m%60;return h?`${h}h ${mm}min`:`${mm} min`;};
-const paymentLabels:Record<string,string>={cash:'Dinheiro',pix:'Pix',credit_card:'Cartão de crédito',debit_card:'Cartão de débito',voucher:'Voucher',store_credit:'Crédito da loja',term_sale:'Venda a prazo',other:'Outros'};
+const paymentLabels:Record<string,string>={cash:'Dinheiro',pix:'Pix',credit_card:'Cartão de crédito',debit_card:'Cartão de débito',voucher:'Voucher',store_credit:'Crédito da loja',store_credit_voucher:'Vale Crédito',term_sale:'Venda a prazo',other:'Outros'};
 const movementLabels:Record<string,string>={supply:'Suprimento',receivable:'Recebimento',withdrawal:'Sangria',sangria:'Sangria',expense:'Despesa',refund:'Devolução'};
 const saleStatusLabels:Record<string,string>={completed:'Concluída',cancelled:'Cancelada',pending:'Pendente',open:'Aberta',draft:'Rascunho',processing:'Processando',failed:'Falhou',rejected:'Rejeitada',pending_sync:'Pendente de sincronização',fiscal_pending:'Pendência fiscal'};
 const fiscalStatusLabels:Record<string,string>={authorized:'Autorizada',cancelled:'Cancelada',rejected:'Rejeitada',pending:'Pendente',processing:'Processando',draft:'Rascunho',prepared:'Preparada',sending:'Enviando',error:'Erro',contingency:'Contingência'};
 const statusLabel=(value:unknown,labels:Record<string,string>)=>{const raw=text(value);return labels[raw]||raw.replaceAll('_',' ');};
 const hasValue=(v:unknown)=>Math.abs(num(v))>.009;
 const saleItems=(sale:Row)=>Array.isArray(sale.items)?sale.items as Row[]:[];
+const returnItems=(row:Row)=>Array.isArray(row.items)?row.items as Row[]:[];
 
 export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];onReload:()=>Promise<void>;onMessage:(message:string)=>void}){
   const [detail,setDetail]=useState<Detail|null>(null);
@@ -36,7 +37,7 @@ export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];on
     const r=await cashClosureDetail(id,text(row.closure_audit_id)||undefined);
     setDetailLoading('');
     if(!r.ok){onMessage(text(r.error||'Não foi possível carregar o fechamento.'));return;}
-    setDetail({session:r.session,payments:r.payments,movements:r.movements,sales:r.sales,audit:r.audit,fiscal:r.fiscal,snapshot:r.snapshot,canCorrect:r.canCorrect,canReopen:r.canReopen,permission:r.permission});
+    setDetail({session:r.session,payments:r.payments,movements:r.movements,sales:r.sales,returns:r.returns,audit:r.audit,fiscal:r.fiscal,snapshot:r.snapshot,canCorrect:r.canCorrect,canReopen:r.canReopen,permission:r.permission});
   }
 
   function openCorrection(){if(!detail)return;setClosing(num(detail.session.closing_amount).toFixed(2));setReason('');setCorrecting(true);}
@@ -55,7 +56,7 @@ export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];on
     onMessage(`Fechamento corrigido. Anterior: ${money(r.previous_closing)} · Novo contado: ${money(r.closing)} · Diferença: ${money(r.difference)}.`);
     setCorrecting(false);await onReload();
     const fresh=await cashClosureDetail(text(detail.session.id));
-    if(fresh.ok)setDetail({session:fresh.session,payments:fresh.payments,movements:fresh.movements,sales:fresh.sales,audit:fresh.audit,fiscal:fresh.fiscal,snapshot:fresh.snapshot,canCorrect:fresh.canCorrect,canReopen:fresh.canReopen,permission:fresh.permission});
+    if(fresh.ok)setDetail({session:fresh.session,payments:fresh.payments,movements:fresh.movements,sales:fresh.sales,returns:fresh.returns,audit:fresh.audit,fiscal:fresh.fiscal,snapshot:fresh.snapshot,canCorrect:fresh.canCorrect,canReopen:fresh.canReopen,permission:fresh.permission});
   }
 
   async function saveReopen(){
@@ -123,6 +124,7 @@ export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];on
       <section className="closure-practical-summary">
         <article><span>Vendas</span><strong>{money(detail.session.sales_total)}</strong><small>{num(detail.session.sales_count)} venda(s)</small></article>
         <article><span>Total recebido</span><strong>{money(detail.session.received_total)}</strong></article>
+        {num(detail.session.returns_count)>0?<article><span>Devoluções</span><strong>{money(detail.session.returns_total)}</strong><small>{num(detail.session.returns_count)} operação(ões) · crédito/vale</small></article>:null}
         <article><span>Dinheiro esperado</span><strong>{money(detail.session.expected_cash)}</strong></article>
         <article><span>Dinheiro contado</span><strong>{money(detail.session.closing_amount)}</strong></article>
         <article className={Math.abs(num(detail.session.difference))>.009?'difference':'balanced'}><span>Diferença</span><strong>{money(detail.session.difference)}</strong><small>{Math.abs(num(detail.session.difference))>.009?'Divergência no fechamento':'Caixa conferido'}</small></article>
@@ -165,6 +167,17 @@ export function CashClosureHistoryPanel({rows,onReload,onMessage}:{rows:Row[];on
               </div>)}
             </div>:<div className="closure-sale-items-empty">Nenhum item de produto foi encontrado para esta operação.</div>}
           </div>:null}
+        </article>})}</div>
+      </section>:null}
+
+      {detail.returns.length>0?<section className="closure-practical-section">
+        <div className="closure-practical-section-title"><div><small>DEVOLUÇÕES</small><h3>Devoluções deste fechamento</h3></div><span>{detail.returns.length} devolução(ões)</span></div>
+        <div className="closure-return-list">{detail.returns.map((r,i)=>{const items=returnItems(r);return <article key={text(r.id)||String(i)} className="closure-return-card">
+          <div className="closure-return-main"><div><strong>Venda #{text(r.sale_number)}</strong><small>{dt(r.created_at)} · {text(r.operator)||'Operador não identificado'}</small></div><div><span>{text(r.credit_type)==='store_credit_voucher'?'Vale Crédito':'Crédito no cliente'}</span><b>{money(r.total)}</b></div></div>
+          <div className="closure-return-beneficiary"><span>Beneficiário</span><strong>{text(r.customer_name)||text(r.guest_name)||text(r.guest_document)||'Pessoa sem cadastro'}</strong></div>
+          {text(r.voucher_number)?<div className="closure-return-voucher"><span>Vale {text(r.voucher_number)}</span><span>Saldo {money(r.voucher_remaining)}</span><span>Status {text(r.voucher_status)==='active'?'Ativo':text(r.voucher_status)}</span></div>:null}
+          {items.length>0?<div className="closure-return-items">{items.map((item,j)=><span key={`${text(r.id)}-${j}`}><b>{text(item.description)||text(item.sku)||'Produto'}</b> · {num(item.quantity).toLocaleString('pt-BR',{maximumFractionDigits:3})} {text(item.unit)} · {money(item.total)}</span>)}</div>:null}
+          <small className="closure-return-note">Operação de crédito. Não altera o dinheiro físico esperado do caixa.</small>
         </article>})}</div>
       </section>:null}
 
