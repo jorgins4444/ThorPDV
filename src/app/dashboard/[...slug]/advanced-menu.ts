@@ -2,7 +2,7 @@ export type MenuItem=[string,string];
 export type MenuGroup=[string,string,MenuItem[]];
 export const advancedMenu:MenuGroup[]=[
 ['Pessoas','◎',[['Clientes','/dashboard/clientes'],['Fornecedores','/dashboard/fornecedores'],['Perfis PDV','/dashboard/perfis-pdv'],['Usuários PDV','/dashboard/usuarios-pdv'],['Perfis ADM','/dashboard/perfis-adm'],['Usuários ADM','/dashboard/usuarios-adm']]],
-['Vendas','▤',[['Operações de Caixa','/dashboard/vendas'],['Nova Venda','/dashboard/vendas/nova'],['Pedidos de Venda','/dashboard/vendas/pedidos']]],
+['Vendas','▤',[['Operações de Caixa','/dashboard/vendas'],['Nova Venda','/dashboard/vendas/nova'],['Pedidos de Venda','/dashboard/vendas/pedidos'],['Devoluções','/dashboard/vendas/devolucoes']]],
 ['Produtos','▦',[['Produtos','/dashboard/produtos'],['Arquivos','/dashboard/produtos/arquivos'],['Marcas','/dashboard/produtos/marcas'],['Categorias','/dashboard/produtos/categorias'],['Atributos','/dashboard/produtos/atributos'],['Unidades de Medida','/dashboard/produtos/unidades'],['Grupos','/dashboard/grupos'],['Classes','/dashboard/classes'],['Modificadores','/dashboard/modificadores']]],
 ['Tabela de Preços','◇',[['Tabelas','/dashboard/tabelas-precos'],['Copiar','/dashboard/tabelas-precos/copiar'],['Ajustes Programados','/dashboard/tabelas-precos/ajustes'],['Promoções','/dashboard/promocoes']]],
 ['Estoque','▥',[['Movimentações','/dashboard/estoque'],['Locais de Estoque','/dashboard/estoque/locais'],['Compras / Entradas','/dashboard/compras'],['Inventário','/dashboard/estoque/inventario'],['Produção / Cozinha','/dashboard/estoque/producao'],['Ajustes','/dashboard/estoque/ajustes'],['Transferências','/dashboard/estoque/transferencias']]],
