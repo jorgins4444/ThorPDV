@@ -51,6 +51,7 @@ export function ManagementAuditWorkspace({initialEvents,initialSummary,branches,
   const [summary,setSummary]=useState(initialSummary);
   const [filters,setFilters]=useState({start:startDefault,end:isoDate(today),branchId:'',operatorId:'',eventType:'',search:''});
   const [error,setError]=useState('');
+  const [selected,setSelected]=useState<Row|null>(null);
   const [pending,startTransition]=useTransition();
 
   const update=(name:string,value:string)=>setFilters(current=>({...current,[name]:value}));
@@ -91,7 +92,7 @@ export function ManagementAuditWorkspace({initialEvents,initialSummary,branches,
     <section className="audit-list">
       <header><div><b>Linha do tempo gerencial</b><span>Quem fez, o que fez, em qual cadastro e quais dados foram modificados.</span></div><strong>{events.length} resultado(s)</strong></header>
       {events.length?<div className="audit-table-wrap"><table>
-        <thead><tr><th>Data e hora</th><th>Ação</th><th>Registro afetado</th><th>Responsável</th><th>Motivo e alterações</th><th className="right">Impacto</th></tr></thead>
+        <thead><tr><th>Data e hora</th><th>Ação</th><th>Registro afetado</th><th>Responsável</th><th>Motivo e alterações</th><th className="right">Impacto</th><th>Detalhes</th></tr></thead>
         <tbody>{events.map(row=>{
           const fields=auditFields(row);
           const operation=str(row.event_type);
@@ -109,9 +110,44 @@ export function ManagementAuditWorkspace({initialEvents,initialSummary,branches,
               </details>:null}
             </td>
             <td className="right"><b className={Number(row.amount_delta||0)<0?'negative':''}>{row.amount_delta==null?'—':money(row.amount_delta)}</b><small>{row.amount_before!=null&&row.amount_after!=null?`${money(row.amount_before)} → ${money(row.amount_after)}`:''}</small></td>
+            <td><button type="button" className="audit-view-button" onClick={()=>setSelected(row)}>Visualizar</button></td>
           </tr>;
         })}</tbody>
       </table></div>:<div className="audit-empty"><b>Nenhum evento encontrado</b><span>Ajuste os filtros ou aguarde novas operações auditáveis.</span></div>}
     </section>
+    {selected?<div className="audit-modal-backdrop" role="presentation" onMouseDown={()=>setSelected(null)}>
+      <section className="audit-modal" role="dialog" aria-modal="true" aria-labelledby="audit-modal-title" onMouseDown={event=>event.stopPropagation()}>
+        <header>
+          <div><span>Auditoria completa</span><h2 id="audit-modal-title">{str(selected.entity_name)||str(selected.title)||'Detalhes da operação'}</h2><p>{str(selected.entity_label)||str(selected.entity_type)} • {labels[str(selected.event_type)]||str(selected.title)}</p></div>
+          <button type="button" className="audit-modal-close" aria-label="Fechar detalhes" onClick={()=>setSelected(null)}>×</button>
+        </header>
+        <div className="audit-modal-facts">
+          <article><span>Data e hora</span><b>{dateTime(selected.occurred_at)}</b></article>
+          <article><span>Responsável</span><b>{str(selected.responsible_name)||str(selected.operator_name)||'Sistema'}</b><small>{str(selected.responsible_email)}</small></article>
+          <article><span>Loja / terminal</span><b>{str(selected.branch_name)||'Sem loja informada'}</b><small>{str(selected.device_name)}</small></article>
+          <article><span>Registro</span><b>{str(selected.entity_name)||'Sem nome disponível'}</b><small>ID {str(selected.entity_id)||'não informado'}</small></article>
+        </div>
+        <section className="audit-modal-reason"><span>O que foi feito</span><p>{str(selected.reason)||str(selected.title)||'Registro automático'}</p></section>
+        <section className="audit-modal-changes">
+          <div className="audit-modal-section-title"><span>Dados envolvidos na operação</span><strong>{auditFields(selected).length} campo(s)</strong></div>
+          {auditFields(selected).length?<div className="audit-modal-change-list">{auditFields(selected).map(field=><div className="audit-modal-change" key={field.key}>
+            <b>{field.label}</b>
+            <div><span><small>Antes</small>{formatValue(field.before)}</span><i>→</i><span><small>Depois</small>{formatValue(field.after)}</span></div>
+          </div>)}</div>:<p className="audit-modal-empty">Este evento não possui comparação de campos.</p>}
+        </section>
+        <details className="audit-technical">
+          <summary>Informações técnicas e rastreabilidade</summary>
+          <dl>
+            <div><dt>ID do evento</dt><dd>{str(selected.id)}</dd></div>
+            <div><dt>Tipo da ação</dt><dd>{str(selected.event_type)}</dd></div>
+            <div><dt>Origem</dt><dd>{str(record(selected.metadata).source_type)||'ThorGestão'}</dd></div>
+            <div><dt>Tabela de origem</dt><dd>{str(selected.source_entity_type)||str(record(selected.metadata).source_table)||str(selected.entity_type)}</dd></div>
+            <div><dt>ID da venda</dt><dd>{str(selected.sale_id)||'Não vinculado'}</dd></div>
+            <div><dt>ID do operador</dt><dd>{str(selected.operator_user_id)||str(record(selected.metadata).actor_id)||'Não informado'}</dd></div>
+          </dl>
+        </details>
+        <footer><span>Dados sensíveis permanecem protegidos na auditoria.</span><button type="button" onClick={()=>setSelected(null)}>Fechar</button></footer>
+      </section>
+    </div>:null}
   </div>;
 }
