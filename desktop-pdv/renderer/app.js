@@ -91,10 +91,16 @@ function paintFiscalProgress(m,sale,phase='waiting'){
 }
 
 async function boot(){
+  const started=performance.now();
   state.status=await window.thor.status();
   state.settings=state.status.settings||await window.thor.settings();
   render();
-  if(state.status.enrolled){await refreshProducts('');await refreshFiscalSales('');setInterval(async()=>{await refreshStatus();if(state.view==='fiscal'||state.fiscalSales.some(x=>['requested','draft','processing'].includes(String(x.fiscal?.status||''))))await refreshFiscalSales();},3000);}
+  if(state.status.enrolled){
+    await refreshProducts('');
+    void refreshFiscalSales('').catch(()=>{});
+    setInterval(async()=>{await refreshStatus();if(state.view==='fiscal'||state.fiscalSales.some(x=>['requested','draft','processing'].includes(String(x.fiscal?.status||''))))await refreshFiscalSales();},3000);
+  }
+  void window.thor.recordPerformance?.('ui.boot',performance.now()-started,{enrolled:Boolean(state.status.enrolled)});
 }
 
 async function refreshStatus(){state.status=await window.thor.status();state.settings=state.status.settings||state.settings;updateTop();}
@@ -129,7 +135,7 @@ function renderSaleWorkspace(){
 function bindSale(){
   const search=document.getElementById('search');let timer;
   search.value=state.query;
-  search.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>refreshProducts(search.value),120)};
+  search.oninput=()=>{clearTimeout(timer);const value=search.value;timer=setTimeout(()=>refreshProducts(value),220)};
   search.onkeydown=e=>{if(e.key==='Enter'&&state.products[0]){e.preventDefault();add(state.products[0]);search.select();}};
   document.getElementById('clear').onclick=()=>{state.cart=[];renderCart();};
   document.getElementById('finalize').onclick=finalize;
@@ -167,13 +173,17 @@ function renderCart(){
 async function finalize(){
   if(state.busy||!state.cart.length)return;
   if(!state.status.cashOpenEventId)return openCashModal();
-  const t=total();
+  const started=performance.now(),t=total();
+  const soldItems=state.cart.map(i=>({productId:i.productId,quantity:i.quantity}));
   try{
     state.busy=true;
-    const result=await window.thor.finalizeSale({items:state.cart.map(i=>({productId:i.productId,quantity:i.quantity})),payments:[{method:state.payment,amount:t}]});
-    state.cart=[];renderCart();await refreshProducts();await refreshStatus();await refreshFiscalSales();
+    const result=await window.thor.finalizeSale({items:soldItems,payments:[{method:state.payment,amount:t}]});
+    for(const sold of soldItems){const product=state.products.find(p=>p.id===sold.productId);if(product)product.quantity=Math.max(0,Number(product.quantity||0)-Number(sold.quantity||0));}
+    state.cart=[];renderCart();renderProducts();
+    state.busy=false;
     showToast(`Venda registrada: ${money(result.total)}.`);
-    await postSalePrint(result.eventId);
+    void window.thor.recordPerformance?.('ui.sale_released',performance.now()-started,{items:soldItems.length});
+    setTimeout(()=>{void refreshStatus().catch(()=>{});void postSalePrint(result.eventId).catch(e=>showToast(`Venda salva. Impressão pendente: ${friendlyError(e.message)}`));},0);
   }catch(e){alert(`Não foi possível finalizar: ${friendlyError(e.message)}`);}finally{state.busy=false;}
 }
 
