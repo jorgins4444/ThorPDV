@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('thor', {
   sync: () => ipcRenderer.invoke('thor:sync'),
   syncDiagnostics: () => ipcRenderer.invoke('thor:sync-diagnostics'),
   performanceMetrics: (limit = 200) => ipcRenderer.invoke('thor:performance-metrics', limit),
+  recordPerformance: (name, durationMs, metadata = {}) => ipcRenderer.invoke('thor:record-performance', name, durationMs, metadata),
   recoverSync: () => ipcRenderer.invoke('thor:recover-sync'),
   disconnectDevice: () => ipcRenderer.invoke('thor:disconnect-device'),
   searchProducts: (query) => ipcRenderer.invoke('thor:search-products', query),
