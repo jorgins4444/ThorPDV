@@ -243,7 +243,10 @@ async function printSale(saleKey, type = 'pre_sale', reprint = false) {
   if (!target) throw new Error('printer_not_configured');
   if (target === '__PDF__') return saveAsPdf(doc);
   if (doc.kind === 'remote_pdf') return printRemotePdf(doc, target);
-  return agent.printDocument(saleKey, type);
+  const notify=(progress)=>{try{mainWindow?.webContents.send('thor:print-progress',progress);}catch{}};
+  notify({stage:'preparing',percent:55});
+  try{return await agent.printDocument(saleKey,type,{onProgress:notify});}
+  catch(error){notify({stage:'error',percent:100,error:String(error?.message||error)});throw error;}
 }
 
 async function printCashClose(summary) {
