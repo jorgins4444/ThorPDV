@@ -154,8 +154,9 @@ function installOperationsCenterV120(ThorAgent){
   proto.finalizeSale=async function(input={}){
     const requestKey=text(input.clientRequestId||input.client_request_id);
     if(requestKey){this._ensureOperationsV120();const existing=this.store.db.prepare("select id,payload from queue where dedupe_key=? and type='sale_completed'").get(requestKey);if(existing){const receipt=this.store.receiptByEvent(existing.id);return {ok:true,eventId:existing.id,total:receipt?.total||0,receipt:receipt?.payload||{},duplicatePrevented:true};}}
+    this._enforceStockAtFinalize=true;
     this._supervisorNegativeStock=this._validAuthorization(input.supervisorAuthorization,'negative_stock');
-    try{const result=await originalFinalize.call(this,input);if(requestKey)this.store.db.prepare('update queue set dedupe_key=? where id=?').run(requestKey,result.eventId);return result;}finally{this._supervisorNegativeStock=false;}
+    try{const result=await originalFinalize.call(this,input);if(requestKey)this.store.db.prepare('update queue set dedupe_key=? where id=?').run(requestKey,result.eventId);return result;}finally{this._supervisorNegativeStock=false;this._enforceStockAtFinalize=false;}
   };
   const originalCancelSale=proto.cancelSale;
   proto.cancelSale=async function(input={}){
