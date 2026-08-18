@@ -18,3 +18,4 @@ require('./agent/receivable-idempotency-v115').installReceivableIdempotencyV115(
 require('./agent/receivable-print-v115').installReceivablePrintV115(ThorAgent);
 require('./ipc-store-credit-v105').installStoreCreditVoucherIpcV105(ThorAgent);
 require('./ipc-receivable-v115').installReceivableIpcV115();
+require('./agent/operations-center-v120').installOperationsCenterV120(ThorAgent);
