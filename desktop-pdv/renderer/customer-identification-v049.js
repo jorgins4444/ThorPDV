@@ -281,6 +281,7 @@
     if (!v3ValidDocument(v.consumerDocument)) return infoModal('CPF/CNPJ', 'CPF/CNPJ inválido. Corrija ou deixe em branco.');
     const progress = typeof saleProgress === 'function' ? saleProgress() : null;
     const started = performance.now();
+    const hasCash = v.payments.some((payment) => payment.method === 'cash');
     const soldItems = state.cart.map((item) => ({ productId:item.productId, quantity:item.quantity, discount:Math.max(Number(item.discount || 0), 0) }));
     try {
       state.busy = true;
@@ -304,7 +305,7 @@
       renderSaleWorkspace();
       state.busy = false;
       showToast(`Venda concluída: ${money(result.total)}${result.change > 0 ? ` • Troco ${money(result.change)}` : ''}.`);
-      void window.thor.recordPerformance?.('ui.checkout_released', performance.now() - started, { items:soldItems.length, cash:v.payments.some((p) => p.method === 'cash') });
+      void window.thor.recordPerformance?.('ui.checkout_released', performance.now() - started, { items:soldItems.length, cash:hasCash });
       setTimeout(() => {
         void refreshStatus().catch(() => {});
         void postSalePrint(result.eventId, progress).catch((error) => {
