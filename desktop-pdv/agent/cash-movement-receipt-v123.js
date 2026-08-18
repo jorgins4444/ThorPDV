@@ -15,6 +15,8 @@ function json(value, fallback = {}) {
 function installCashMovementReceiptV123(ThorAgent) {
   ThorAgent.prototype.cashMovementDocument = function (receiptInput = {}) {
     const receipt = receiptInput || {};
+    const eventRow = receipt.event_id ? this.store.db.prepare('select payload from queue where id=? limit 1').get(String(receipt.event_id)) : null;
+    const eventPayload = json(eventRow?.payload, {});
     const context = receipt.context || json(this.store.get('context', '{}'), {});
     const width = 44;
     const rule = (char = '-') => char.repeat(width);
@@ -58,9 +60,12 @@ function installCashMovementReceiptV123(ThorAgent) {
     const document = context.company_document || context.cnpj || context.tax_id || '';
     const address = context.branch_address || context.address || '';
     const terminal = context.pos_name || context.pos_code || context.terminal_name || context.terminal_code || 'PDV';
-    const operator = receipt.operator?.name || 'OPERADOR NAO IDENTIFICADO';
-    const supervisor = receipt.supervisor?.name || '';
-    const notes = receipt.notes || 'Nao informado';
+    const operatorId = receipt.operator?.id || eventPayload.operator_user_id || null;
+    const staff = typeof this._staffUsersWithHash === 'function' ? this._staffUsersWithHash() : [];
+    const staffOperator = staff.find((user) => String(user.id) === String(operatorId || '')) || {};
+    const operator = receipt.operator?.name || eventPayload.operator_name || staffOperator.name || staffOperator.full_name || staffOperator.display_name || staffOperator.user_name || staffOperator.email || 'OPERADOR NAO IDENTIFICADO';
+    const supervisor = receipt.supervisor?.name || eventPayload.supervisor_name || '';
+    const notes = receipt.reason || receipt.notes || eventPayload.reason || eventPayload.notes || 'Nao informado';
 
     const lines = [
       center(company),
