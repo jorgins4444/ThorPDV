@@ -263,6 +263,14 @@ async function printCashMovement(receipt) {
   return printHtmlDocument(doc, target);
 }
 
+async function printSaleCancellation(receipt) {
+  const doc = agent.saleCancellationDocument(receipt || {});
+  const target = agent.settings().printerName;
+  if (!target) throw new Error('printer_not_configured');
+  if (target === '__PDF__') return saveAsPdf(doc);
+  return printHtmlDocument(doc, target);
+}
+
 async function cachedProductImage(source) {
   const raw = String(source || '').trim();
   if (!raw) return '';
@@ -339,6 +347,7 @@ function registerIpc() {
   handle('thor:finalize-sale', (payload) => agent.finalizeSale(payload));
   handle('thor:save-term-duplicates-pdf', (payload) => saveAsPdf(agent.termDuplicateDocument(payload || {})));
   handle('thor:cancel-sale', (payload) => agent.cancelSale(payload));
+  handle('thor:print-sale-cancellation', (receipt) => printSaleCancellation(receipt));
   handle('thor:return-sale', (payload) => agent.returnSale(payload));
   handle('thor:request-nfce', (payload) => agent.requestNfce(payload));
   handle('thor:fiscal-sales', (query) => agent.fiscalSales(query));
