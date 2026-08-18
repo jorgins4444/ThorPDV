@@ -37,10 +37,10 @@ async function listSerialPorts() {
   const parsed=JSON.parse(out); return Array.isArray(parsed)?parsed:[parsed];
 }
 
-async function printRaw(printerName, bytes, documentName='ThorPDV Cupom') {
+async function printRaw(printerName, bytes, documentName='ThorPDV Cupom', options={}) {
   if (process.platform !== 'win32') throw new Error('printing_requires_windows');
   if (!printerName || printerName==='__PDF__') throw new Error('printer_not_configured');
-  return printService().send(printerName,Buffer.from(bytes),documentName);
+  return printService().send(printerName,Buffer.from(bytes),documentName,options);
 }
 
 function escposText(text) {
