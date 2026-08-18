@@ -31,7 +31,7 @@ $sg=[Drawing.Graphics]::FromImage($side);$rect=New-Object Drawing.Rectangle 0,0,
 $bg=New-Object Drawing.Drawing2D.LinearGradientBrush $rect,([Drawing.Color]::FromArgb(8,31,22)),([Drawing.Color]::FromArgb(18,91,59)),90
 $sg.FillRectangle($bg,$rect);Paint-Hammer $sg 0.72 34 42
 $white=New-Object Drawing.SolidBrush ([Drawing.Color]::White);$mint=New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(160,231,195))
-$title=New-Object Drawing.Font 'Segoe UI',18,[Drawing.FontStyle]::Bold;$small=New-Object Drawing.Font 'Segoe UI',9
+$title=[Drawing.Font]::new('Segoe UI',[single]18,[Drawing.FontStyle]::Bold,[Drawing.GraphicsUnit]::Point);$small=[Drawing.Font]::new('Segoe UI',[single]9,[Drawing.FontStyle]::Regular,[Drawing.GraphicsUnit]::Point)
 $sg.DrawString('THORPDV',$title,$white,16,198);$sg.DrawString('Instalacao segura',$small,$mint,18,236);$sg.DrawString('por ThorControl',$small,$mint,18,253)
 $side.Save((Join-Path $out 'thor-installer-sidebar.bmp'),[Drawing.Imaging.ImageFormat]::Bmp)
 $sg.Dispose();$bg.Dispose();$white.Dispose();$mint.Dispose();$title.Dispose();$small.Dispose();$side.Dispose()
