@@ -29,7 +29,7 @@
     };
   }
 
-  function imageOf(product){return product?.image_url||product?.imageUrl||product?.thumbnail_url||product?.thumbnailUrl||product?.photo_url||product?.photoUrl||product?.image||product?.photo||'';}
+  function imageOf(product){return product?.image_url||product?.imageUrl||product?.menu_image_url||product?.menuImageUrl||product?.self_service_image_url||product?.selfServiceImageUrl||product?.thumbnail_url||product?.thumbnailUrl||product?.photo_url||product?.photoUrl||product?.image||product?.photo||'';}
   function rememberImages(products){for(const product of products||[]){const image=imageOf(product);if(image&&product?.id!=null)productImageCache.set(String(product.id),image);}}
   function cartImage(item,product){return imageOf(item)||imageOf(product)||productImageCache.get(String(item?.productId||''))||'';}
   async function resolveProductImage(source){
