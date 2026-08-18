@@ -88,14 +88,18 @@ function installCashClosing(ThorAgent) {
     const openId = this.store.get('cash_open_event_id') || '';
     const occurredAt = new Date().toISOString();
     const result = await originalCashMovement.call(this, payload);
+    const authorization = payload.supervisorAuthorization || null;
+    const current = this.currentOperator?.() || {};
+    const staff = typeof this._staffUsersWithHash === 'function' ? this._staffUsersWithHash() : [];
+    const operator = staff.find((user) => String(user.id) === String(payload.operatorId || current.id || '')) || current;
+    const operatorName = String(payload.operatorName || operator.name || operator.full_name || operator.display_name || operator.user_name || operator.email || '').trim() || 'Operador não identificado';
+    const reason = String(payload.reason || payload.notes || authorization?.reason || '').trim();
     if (result?.eventId && openId) {
       const row = this.store.db.prepare('select payload from queue where id=?').get(result.eventId);
-      const merged = { ...json(row?.payload, {}), cash_open_event_id: openId, occurred_at: occurredAt };
+      const merged = { ...json(row?.payload, {}), cash_open_event_id: openId, occurred_at: occurredAt, notes: reason, reason, operator_user_id: payload.operatorId || operator.id || null, operator_name: operatorName };
       this.store.db.prepare('update queue set payload=?,updated_at=? where id=?').run(JSON.stringify(merged), occurredAt, result.eventId);
     }
-    const operator = this.currentOperator?.() || {};
     const context = json(this.store.get('context', '{}'), {});
-    const authorization = payload.supervisorAuthorization || null;
     return {
       ...result,
       receipt: {
@@ -103,9 +107,10 @@ function installCashClosing(ThorAgent) {
         cash_open_event_id: openId,
         movement_type: payload.movementType,
         amount: money(payload.amount),
-        notes: String(payload.notes || ''),
+        notes: reason,
+        reason,
         occurred_at: occurredAt,
-        operator: { id: operator.id || null, name: operator.name || operator.full_name || 'Operador não identificado' },
+        operator: { id: payload.operatorId || operator.id || null, name: operatorName },
         supervisor: authorization ? {
           id: authorization.supervisor_user_id || authorization.user_id || null,
           name: authorization.supervisor_name || authorization.user_name || authorization.name || '',
