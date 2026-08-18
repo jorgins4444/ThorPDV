@@ -401,8 +401,8 @@ function cancelSaleModal(sale){
     if(countdownTimer)clearInterval(countdownTimer);
     const card=m.querySelector('.modal-card');card.innerHTML='<div id="cancelProgressBody"></div>';m.dataset.cancelStartedAt=String(Date.now());
     paintCancelProgress(m,sale,{fiscalCancellation,phase:'validating'});
-    let settled=false,cancelError=null;
-    const task=window.thor.cancelSale({saleKey:saleKey(sale),reason}).then(()=>{settled=true;}).catch(e=>{cancelError=e;settled=true;});
+    let settled=false,cancelError=null,cancelResult=null;
+    const task=window.thor.cancelSale({saleKey:saleKey(sale),reason}).then(result=>{cancelResult=result;settled=true;}).catch(e=>{cancelError=e;settled=true;});
     while(!settled&&m.isConnected){const elapsed=Date.now()-Number(m.dataset.cancelStartedAt||Date.now());const phase=fiscalCancellation?(elapsed<350?'validating':elapsed<800?'building':elapsed<1350?'signing':'sending'):(elapsed<350?'validating':'reversing');paintCancelProgress(m,sale,{fiscalCancellation,phase});await wait(120);}
     await task;
     if(cancelError){const raw=String(cancelError?.message||cancelError||'');let stage=fiscalCancellation?3:1;if(raw.includes('window_expired'))stage=0;else if(raw.includes('reason_invalid'))stage=1;else if(raw.includes('rejected'))stage=4;else if(raw.includes('transmission'))stage=3;paintCancelProgress(m,sale,{fiscalCancellation,phase:'error',error:friendlyError(raw),errorStage:stage});return;}
@@ -414,8 +414,11 @@ function cancelSaleModal(sale){
     try{await refreshProducts();}catch{}
     try{await refreshFiscalSales();}catch{}
     try{finalSale=await window.thor.fiscalSale(saleKey(sale));}catch{}
+    let printWarning='';
+    try{await window.thor.printSaleCancellation(cancelResult?.receipt||{});}catch(printError){printWarning=friendlyError(printError?.message||'print_failed');}
     paintCancelProgress(m,finalSale,{fiscalCancellation,phase:'done',syncPending});
-    showToast(fiscalCancellation?'NFC-e cancelada e venda estornada.':'Venda cancelada.');
+    const successMessage=fiscalCancellation?'NFC-e cancelada e venda estornada.':'Venda cancelada.';
+    showToast(printWarning?`${successMessage} Impressão pendente: ${printWarning}`:`${successMessage} Comprovante impresso.`);
   };
 }
 
