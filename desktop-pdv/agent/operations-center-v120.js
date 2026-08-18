@@ -122,7 +122,7 @@ function installOperationsCenterV120(ThorAgent){
     if((doc.sensitive||!permitted)&&!this._validAuthorization(supervisorAuthorization,'sensitive_reprint'))throw new Error('supervisor_authorization_required');
     if(supervisorAuthorization)this._recordSupervisorAudit(supervisorAuthorization,'sensitive_reprint',reason,0,{document_id:doc.id,type:doc.type,reference:doc.reference});
     let receipt;
-    if(doc.type==='sale'&&doc.source_event_id){try{receipt=this.documentData('local:'+doc.source_event_id,'pre_sale').text;}catch{}}
+    if(doc.type==='sale'&&doc.source_event_id){try{receipt=this.documentData('local:'+doc.source_event_id,'pre_sale').text;receipt=receipt.replace('CUPOM DE PRE-VENDA','CUPOM DE PRE-VENDA - 2a VIA')+'\\n'+center('REIMPRESSAO AUDITADA - 2a VIA')+'\\n\\n';}catch{}}
     if(!receipt)receipt=genericReceipt(this,doc,true);
     const target=this.store.settings().printerName;if(target==='__PDF__')throw new Error('pdf_requires_ui');
     await hardware.printText(target,receipt);
