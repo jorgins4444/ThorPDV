@@ -4,6 +4,7 @@ const reservedShortcuts=new Set(['F2','F3','F4','F6','F12','ENTER','ESCAPE']);
 let state={status:null,products:[],cart:[],payment:'cash',query:'',busy:false,view:'sale',settings:null,fiscalSales:[],fiscalQuery:'',fiscalFilter:{status:'all',from:'',to:''},capturingShortcut:false};
 const SETTINGS_HARDWARE_CACHE_TTL_MS=45_000;
 let settingsHardwareCache={printers:null,ports:null,loadedAt:0,promise:null};
+let activeSaleProgress=null;
 
 const money=(v)=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -175,19 +176,23 @@ function saleProgress(){
   const box=document.createElement('div');box.id='saleProcessing';box.className='sale-processing';
   box.innerHTML='<div class="sale-processing-icon"><i></i></div><div class="sale-processing-copy"><small>PROCESSANDO VENDA</small><b id="saleProcessingTitle">Recebendo venda...</b><span id="saleProcessingDetail">Registrando os dados no caixa.</span><div class="sale-processing-track"><i id="saleProcessingBar"></i></div></div>';
   document.body.appendChild(box);requestAnimationFrame(()=>box.classList.add('show'));
-  let closeTimer=null,percent=10,closed=false;
-  const bar=box.querySelector('#saleProcessingBar');
-  const ticker=setInterval(()=>{if(!box.isConnected||closed)return clearInterval(ticker);percent=Math.min(percent+3,92);bar.style.width=`${percent}%`;},320);
-  const update=(title,detail,nextPercent)=>{if(!box.isConnected||closed)return;percent=Math.max(percent,Number(nextPercent)||percent);box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;bar.style.width=`${percent}%`;};
-  const finish=(title='Venda concluída',detail='O caixa está pronto para a próxima venda.',ok=true)=>{
-    if(!box.isConnected||closed)return;closed=true;clearInterval(ticker);clearTimeout(watchdog);clearTimeout(closeTimer);
-    box.classList.toggle('success',ok);box.classList.toggle('error',!ok);
-    box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;bar.style.width='100%';
-    closeTimer=setTimeout(()=>{box.classList.remove('show');setTimeout(()=>box.remove(),250);},ok?1300:3200);
-  };
-  const watchdog=setTimeout(()=>finish('Venda recebida','A impressão continua em segundo plano.',true),12000);
-  return {update,finish,remove:()=>{closed=true;clearInterval(ticker);clearTimeout(watchdog);clearTimeout(closeTimer);box.remove();}};
+  let closeTimer=null,closed=false,percent=8;
+  const update=(title,detail,nextPercent)=>{if(!box.isConnected||closed)return;percent=Math.max(percent,Math.min(Number(nextPercent)||percent,100));box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;box.querySelector('#saleProcessingBar').style.width=`${percent}%`;};
+  const finish=(title='Impressão confirmada',detail='Comprovante entregue ao spooler da impressora.',ok=true)=>{if(!box.isConnected||closed)return;closed=true;clearTimeout(closeTimer);box.classList.toggle('success',ok);box.classList.toggle('error',!ok);box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;box.querySelector('#saleProcessingBar').style.width='100%';closeTimer=setTimeout(()=>{box.classList.remove('show');setTimeout(()=>box.remove(),250);},ok?1600:3500);};
+  return {update,finish,remove:()=>{closed=true;clearTimeout(closeTimer);box.remove();}};
 }
+if(window.thor.onPrintProgress)window.thor.onPrintProgress((event)=>{
+  const progress=activeSaleProgress;if(!progress)return;
+  const stages={
+    preparing:['Preparando comprovante...','Montando os dados para impressão.',55],
+    queue:['Comprovante na fila...','Aguardando o serviço persistente de impressão.',62],
+    service_ready:['Impressora conectada...','Serviço RAW pronto para receber o comprovante.',72],
+    writing:['Imprimindo comprovante...','Bytes enviados ao spooler da impressora.',88],
+  };
+  if(event?.stage==='spooled'){progress.finish('Impressão confirmada','Comprovante entregue à impressora.',true);activeSaleProgress=null;return;}
+  if(event?.stage==='error'){progress.finish('Falha na impressão',friendlyError(event.error),false);activeSaleProgress=null;return;}
+  const row=stages[event?.stage];if(row)progress.update(row[0],row[1],event.percent||row[2]);
+});
 
 async function finalize(){
   if(state.busy||!state.cart.length)return;
@@ -254,8 +259,8 @@ async function requestNfceAndMaybePrint(key){
 }
 
 async function safePrint(key,type,progress=null){
-  try{progress?.update('Imprimindo comprovante...','Comando enviado; aguarde a saída e o corte.',91);const r=await window.thor.printSale(key,type);if(r?.cancelled){progress?.finish('Impressão cancelada','A venda foi salva normalmente.');return false;}progress?.finish('Venda concluída','Comprovante enviado para impressão.');showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
-  catch(e){progress?.finish('Venda salva; falha na impressão',friendlyError(e.message),false);if(e.message==='printer_not_configured')infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');else infoModal('Impressão',friendlyError(e.message));return false;}
+  try{activeSaleProgress=progress;progress?.update('Preparando comprovante...','Montando os dados para impressão.',55);const r=await window.thor.printSale(key,type);if(r?.cancelled){progress?.finish('Impressão cancelada','A venda foi salva normalmente.');return false;}if(activeSaleProgress===progress){progress?.finish('Impressão confirmada','Comprovante entregue à impressora.');activeSaleProgress=null;}showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
+  catch(e){if(activeSaleProgress===progress)activeSaleProgress=null;progress?.finish('Venda salva; falha na impressão',friendlyError(e.message),false);if(e.message==='printer_not_configured')infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');else infoModal('Impressão',friendlyError(e.message));return false;}
 }
 
 function fiscalOperationBucket(sale){
