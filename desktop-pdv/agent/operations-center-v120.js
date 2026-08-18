@@ -80,11 +80,15 @@ function installOperationsCenterV120(ThorAgent){
     this.store.db.prepare('insert into supervisor_audit(id,action,operator_id,operator_name,supervisor_id,supervisor_name,reason,requested_value,metadata,created_at) values(?,?,?,?,?,?,?,?,?,?)')
       .run(crypto.randomUUID(),text(action),text(op.id),text(op.name),text(auth.supervisor_user_id),text(auth.supervisor_name),text(reason||auth.reason),num(requestedValue||auth.requested_value),JSON.stringify(metadata||{}),now);
   };
-  proto.authorizeSensitiveAction=function(payload={}){
-    const result=this.authorizeSupervisor(payload),auth=result.authorization;
-    if(text(payload.reason).length<5)throw new Error('supervisor_reason_required');
+  const originalAuthorizeSupervisor=proto.authorizeSupervisor;
+  proto.authorizeSupervisor=function(payload={}){
+    const result=originalAuthorizeSupervisor.call(this,payload),auth=result.authorization;
     this._recordSupervisorAudit(auth,payload.action,payload.reason,payload.requestedValue,payload.metadata);
     return result;
+  };
+  proto.authorizeSensitiveAction=function(payload={}){
+    if(text(payload.reason).length<5)throw new Error('supervisor_reason_required');
+    return this.authorizeSupervisor(payload);
   };
   proto._validAuthorization=function(auth,action){
     if(!auth?.supervisor_user_id)return false;
