@@ -184,6 +184,12 @@ $outDir = Split-Path -Parent $OutputPath
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path $csc)) { $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
-& $csc /nologo /target:winexe /optimize+ /platform:anycpu /out:$OutputPath /reference:System.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll /reference:System.Security.dll $source
-if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar ThorControl." }
+$sourceFile = Join-Path $env:TEMP ('ThorControl-' + [guid]::NewGuid().ToString('N') + '.cs')
+[IO.File]::WriteAllText($sourceFile, $source, [Text.UTF8Encoding]::new($true))
+try {
+  & $csc /nologo /target:winexe /optimize+ /platform:anycpu /out:$OutputPath /reference:System.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll /reference:System.Security.dll $sourceFile
+  if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar ThorControl." }
+} finally {
+  Remove-Item -LiteralPath $sourceFile -Force -ErrorAction SilentlyContinue
+}
 Write-Host "Criado: $OutputPath"
