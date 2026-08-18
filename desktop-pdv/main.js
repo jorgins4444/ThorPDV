@@ -368,6 +368,17 @@ function registerIpc() {
   handle('thor:update-info', () => updater?.updateInfo?.() || { currentVersion: DESKTOP_VERSION });
   handle('thor:check-update', () => updater.check());
   handle('thor:install-update', () => updater.install());
+  handle('thor:operation-history', (filters) => agent.operationHistory(filters || {}));
+  handle('thor:reprint-operation', (payload) => agent.reprintOperation(payload || {}));
+  handle('thor:pending-operations', () => agent.pendingOperations());
+  handle('thor:retry-operation', (eventId) => agent.retryOperation(eventId));
+  handle('thor:retry-pending-operations', () => agent.retryPendingOperations());
+  handle('thor:authorize-sensitive-action', (payload) => agent.authorizeSensitiveAction(payload || {}));
+  handle('thor:draft-sales', (query) => agent.draftSales(query || ''));
+  handle('thor:save-draft-sale', (payload) => agent.saveDraftSale(payload || {}));
+  handle('thor:load-draft-sale', (id) => agent.loadDraftSale(id));
+  handle('thor:complete-draft-sale', (id, eventId) => agent.completeDraftSale(id, eventId));
+  handle('thor:delete-draft-sale', (id) => agent.deleteDraftSale(id));
   handle('thor:print-last', () => printSale(null, 'pre_sale', true));
 }
 
