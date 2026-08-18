@@ -58,6 +58,20 @@ function installOperationsCenterV120(ThorAgent){
     if(!cols.has('next_attempt_at'))this.store.db.exec('alter table queue add column next_attempt_at text');
     if(!cols.has('dedupe_key'))this.store.db.exec('alter table queue add column dedupe_key text');
     this.store.db.exec("create unique index if not exists idx_queue_dedupe on queue(dedupe_key) where dedupe_key is not null and dedupe_key<>''");
+    this.store.db.exec(`
+      insert or ignore into operation_documents(id,type,reference,source_event_id,payload,sensitive,created_at,updated_at)
+      select 'sale-'||id,'sale',coalesce(server_number,event_id),event_id,payload,0,created_at,created_at from receipts;
+      insert or ignore into operation_documents(id,type,reference,source_event_id,payload,sensitive,created_at,updated_at)
+      select 'event-'||id,
+        case when type='cash_open' then 'cash_open' when type='cash_close' then 'cash_close'
+             when type='sale_cancel' then 'sale_cancel' when type='sale_return' then 'sale_return'
+             when type like 'receivable%' then 'receivable'
+             when type='cash_movement' and json_extract(payload,'$.movement_type')='withdrawal' then 'cash_withdrawal'
+             else 'cash_supply' end,
+        id,id,payload,1,created_at,updated_at
+      from queue where type in ('cash_open','cash_close','cash_movement','sale_cancel','sale_return')
+        or type like 'receivable%';
+    `);
   };
   proto._ensureOperationsV120=function(){if(this._operationsV120Ready)return;this._operationsV120Ready=true;migrate.call(this);};
   const originalStart=proto.start;
