@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell } = require('electron');
+const crypto = require('crypto');
+const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, net } = require('electron');
 const { ThorAgent } = require('./agent');
 const { ThorUpdater } = require('./updater');
 const { installThorAgentV3 } = require('./agent/v3');
@@ -262,6 +263,47 @@ async function printCashMovement(receipt) {
   return printHtmlDocument(doc, target);
 }
 
+async function cachedProductImage(source) {
+  const raw = String(source || '').trim();
+  if (!raw) return '';
+  if (/^data:image\//i.test(raw)) return raw;
+
+  let target;
+  try { target = new URL(raw, `${String(agent?.apiBase || '').replace(/\/+$/, '')}/`); }
+  catch { return ''; }
+  if (!['http:', 'https:'].includes(target.protocol)) return '';
+
+  const cacheDir = path.join(app.getPath('userData'), 'product-image-cache');
+  const cacheKey = crypto.createHash('sha256').update(target.href).digest('hex');
+  await fs.promises.mkdir(cacheDir, { recursive: true });
+  const extensions = ['png', 'jpg', 'webp', 'gif', 'bin'];
+  for (const extension of extensions) {
+    const cached = path.join(cacheDir, `${cacheKey}.${extension}`);
+    if (!fs.existsSync(cached)) continue;
+    const bytes = await fs.promises.readFile(cached);
+    const mime = ({ png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', bin: 'application/octet-stream' })[extension];
+    return `data:${mime};base64,${bytes.toString('base64')}`;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await net.fetch(target.href, { signal: controller.signal });
+    if (!response.ok) return '';
+    const contentType = String(response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+    if (!contentType.startsWith('image/')) return '';
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 8 * 1024 * 1024) return '';
+    const extension = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : contentType.includes('gif') ? 'gif' : contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'bin';
+    await fs.promises.writeFile(path.join(cacheDir, `${cacheKey}.${extension}`), bytes);
+    return `data:${contentType};base64,${bytes.toString('base64')}`;
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function registerIpc() {
   const handle = (name, fn) => ipcMain.handle(name, async (_event, ...args) => fn(...args));
   handle('thor:status', async () => ({ ...(await agent.status()), appVersion: DESKTOP_VERSION, operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null, update: updater?.updateInfo?.() || null }));
@@ -274,6 +316,7 @@ function registerIpc() {
   handle('thor:disconnect-device', () => agent.disconnectDevice());
   handle('thor:search-products', (query) => agent.searchProducts(query));
   handle('thor:all-products', () => agent.store.searchProducts('', 5000));
+  handle('thor:product-image-data', (source) => cachedProductImage(source));
   handle('thor:customers', (query) => agent.searchCustomers(query));
   handle('thor:sales-orders', (query) => agent.salesOrders(query));
   handle('thor:payment-terms', () => agent.paymentTerms());
