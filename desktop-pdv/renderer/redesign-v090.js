@@ -151,7 +151,9 @@
       if(amount<=0){error.textContent='Informe um valor maior que zero.';input.focus();return;}
       try{
         button.disabled=true;button.textContent='Registrando...';
-        const result=await window.thor.cashMovement({movementType:type,amount,notes:m.querySelector('#v090MovementNote').value.trim()});
+        let supervisorAuthorization=null;
+        if(type==='withdrawal'&&amount>=500)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('high_withdrawal','Autorizar sangria elevada',amount);
+        const result=await window.thor.cashMovement({movementType:type,amount,notes:m.querySelector('#v090MovementNote').value.trim(),supervisorAuthorization});
         let printError='';
         try{await window.thor.printCashMovement(result?.receipt||{});}catch(error){printError=friendlyError(error?.message||'print_failed');}
         await refreshStatus();
