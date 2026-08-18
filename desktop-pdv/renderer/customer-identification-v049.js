@@ -285,7 +285,7 @@
     const soldItems = state.cart.map((item) => ({ productId:item.productId, quantity:item.quantity, discount:Math.max(Number(item.discount || 0), 0) }));
     try {
       state.busy = true;
-      progress?.update('Gravando venda...','Confirmando itens, pagamentos e estoque no caixa.',28);
+      progress?.update('Recebendo venda...','Confirmando itens e forma de pagamento.',28);
       const result = await window.thor.finalizeSale({
         items: soldItems,
         customerId: v.customerId || null,
@@ -295,7 +295,7 @@
         surcharge: Math.max(Number(v.surcharge || 0), 0),
         supervisorAuthorization: v.supervisorAuthorization,
       });
-      progress?.update('Venda salva','Preparando o comprovante em segundo plano.',58);
+      progress?.update('Autorizando venda...','Venda recebida; preparando a impressão.',58);
       for (const sold of soldItems) {
         const product = state.products.find((row) => row.id === sold.productId);
         if (product) product.quantity = Math.max(0, Number(product.quantity || 0) - Number(sold.quantity || 0));
