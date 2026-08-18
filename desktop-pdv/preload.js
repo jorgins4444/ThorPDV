@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('thor', {
   updateInfo: () => ipcRenderer.invoke('thor:update-info'),
   checkForUpdates: () => ipcRenderer.invoke('thor:check-update'),
   installUpdate: () => ipcRenderer.invoke('thor:install-update'),
+  onPrintProgress: (callback) => { const handler=(_event,payload)=>callback(payload); ipcRenderer.on('thor:print-progress',handler); return ()=>ipcRenderer.removeListener('thor:print-progress',handler); },
   onUpdateProgress: (callback) => { const handler=(_event,payload)=>callback(payload); ipcRenderer.on('thor:update-progress',handler); return ()=>ipcRenderer.removeListener('thor:update-progress',handler); },
   onUpdateStatus: (callback) => { const handler=(_event,payload)=>callback(payload); ipcRenderer.on('thor:update-status',handler); return ()=>ipcRenderer.removeListener('thor:update-status',handler); },
   printLast: () => ipcRenderer.invoke('thor:print-last'),
