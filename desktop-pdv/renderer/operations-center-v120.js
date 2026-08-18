@@ -69,5 +69,6 @@
     v3CompleteCheckout=async function(){const draft=activeDraftId;const result=await previous.apply(this,arguments);if(draft){try{await window.thor.completeDraftSale(draft,result?.eventId||'');activeDraftId=null;}catch{}}return result;};
   }
   window.openOperationsCenterV120=openCenter;
+  window.requestSupervisorAuthorizationV120=supervisorAuthorization;
   new MutationObserver(decorateActions).observe(document.documentElement,{childList:true,subtree:true});decorateActions();
 })();
