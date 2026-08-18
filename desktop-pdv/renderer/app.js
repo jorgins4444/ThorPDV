@@ -170,31 +170,47 @@ function renderCart(){
   document.getElementById('itemsCount').textContent=state.cart.reduce((s,i)=>s+i.quantity,0);document.getElementById('grand').textContent=money(total());
 }
 
+function saleProgress(){
+  document.getElementById('saleProcessing')?.remove();
+  const box=document.createElement('div');box.id='saleProcessing';box.className='sale-processing';
+  box.innerHTML='<div class="sale-processing-icon"><i></i></div><div class="sale-processing-copy"><small>PROCESSANDO VENDA</small><b id="saleProcessingTitle">Salvando venda...</b><span id="saleProcessingDetail">Registrando os dados com segurança no caixa.</span><div class="sale-processing-track"><i id="saleProcessingBar"></i></div></div>';
+  document.body.appendChild(box);requestAnimationFrame(()=>box.classList.add('show'));
+  let timer=null;
+  const update=(title,detail,percent)=>{if(!box.isConnected)return;box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;box.querySelector('#saleProcessingBar').style.width=`${percent}%`;};
+  const finish=(title='Venda concluída',detail='O caixa está pronto para a próxima venda.',ok=true)=>{if(!box.isConnected)return;clearTimeout(timer);box.classList.toggle('success',ok);box.classList.toggle('error',!ok);update(title,detail,100);timer=setTimeout(()=>{box.classList.remove('show');setTimeout(()=>box.remove(),250);},ok?1600:3500);};
+  return {update,finish,remove:()=>box.remove()};
+}
+
 async function finalize(){
   if(state.busy||!state.cart.length)return;
   if(!state.status.cashOpenEventId)return openCashModal();
   const started=performance.now(),t=total();
+  const progress=saleProgress();
   const soldItems=state.cart.map(i=>({productId:i.productId,quantity:i.quantity}));
   try{
     state.busy=true;
+    progress.update('Gravando venda...','Confirmando itens, pagamentos e movimentação de estoque.',28);
     const result=await window.thor.finalizeSale({items:soldItems,payments:[{method:state.payment,amount:t}]});
+    progress.update('Venda salva','Preparando o comprovante em segundo plano.',58);
     for(const sold of soldItems){const product=state.products.find(p=>p.id===sold.productId);if(product)product.quantity=Math.max(0,Number(product.quantity||0)-Number(sold.quantity||0));}
     state.cart=[];renderCart();renderProducts();
     state.busy=false;
     showToast(`Venda registrada: ${money(result.total)}.`);
     void window.thor.recordPerformance?.('ui.sale_released',performance.now()-started,{items:soldItems.length});
-    setTimeout(()=>{void refreshStatus().catch(()=>{});void postSalePrint(result.eventId).catch(e=>showToast(`Venda salva. Impressão pendente: ${friendlyError(e.message)}`));},0);
-  }catch(e){alert(`Não foi possível finalizar: ${friendlyError(e.message)}`);}finally{state.busy=false;}
+    setTimeout(()=>{void refreshStatus().catch(()=>{});void postSalePrint(result.eventId,progress).catch(e=>{progress.finish('Venda salva; impressão pendente',friendlyError(e.message),false);showToast(`Venda salva. Impressão pendente: ${friendlyError(e.message)}`);});},0);
+  }catch(e){progress.finish('Falha ao concluir a venda',friendlyError(e.message),false);alert(`Não foi possível finalizar: ${friendlyError(e.message)}`);}finally{state.busy=false;}
 }
 
-async function postSalePrint(eventId){
+async function postSalePrint(eventId,progress=null){
   const mode=state.settings?.printMode||'ask';
   const doc=state.settings?.printDocument||'ask';
-  if(mode==='never')return;
+  if(mode==='never'){progress?.finish('Venda concluída','Impressão desativada para este caixa.');return;}
   if(mode==='direct'&&doc!=='ask'){
-    if(doc==='pre_sale')return safePrint(`local:${eventId}`,'pre_sale');
-    if(doc==='nfce')return requestNfceAndMaybePrint(`local:${eventId}`);
+    progress?.update('Gerando comprovante...','Montando o documento para a impressora.',76);
+    if(doc==='pre_sale')return safePrint(`local:${eventId}`,'pre_sale',progress);
+    if(doc==='nfce'){progress?.finish('Venda registrada','Acompanhe a autorização da NFC-e na próxima tela.');return requestNfceAndMaybePrint(`local:${eventId}`);}
   }
+  progress?.finish('Venda registrada','Escolha agora o documento que deseja imprimir.');
   return postSaleModal(`local:${eventId}`);
 }
 
@@ -229,9 +245,9 @@ async function requestNfceAndMaybePrint(key){
   }catch(e){const body=m.querySelector('#fiscalProgressBody');if(body)body.innerHTML=`<h3>Falha ao iniciar NFC-e</h3><div class="fiscal-diagnostic error"><b>Não foi possível iniciar a transmissão</b><span>${esc(friendlyError(e.message))}</span></div><div class="actions"><button class="primary" id="fiscalClose">Fechar</button></div>`;m.querySelector('#fiscalClose')?.addEventListener('click',()=>m.remove());}
 }
 
-async function safePrint(key,type){
-  try{const r=await window.thor.printSale(key,type);if(r?.cancelled)return false;showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
-  catch(e){if(e.message==='printer_not_configured')infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');else infoModal('Impressão',friendlyError(e.message));return false;}
+async function safePrint(key,type,progress=null){
+  try{progress?.update('Enviando à impressora...','Aguarde a saída e o corte do comprovante.',91);const r=await window.thor.printSale(key,type);if(r?.cancelled){progress?.finish('Impressão cancelada','A venda foi salva normalmente.');return false;}progress?.finish('Venda concluída','Comprovante enviado para impressão.');showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
+  catch(e){progress?.finish('Venda salva; falha na impressão',friendlyError(e.message),false);if(e.message==='printer_not_configured')infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');else infoModal('Impressão',friendlyError(e.message));return false;}
 }
 
 function fiscalOperationBucket(sale){
