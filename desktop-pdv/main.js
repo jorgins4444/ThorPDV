@@ -21,6 +21,7 @@ const { installSalesSettlementV073 } = require('./agent/sales-settlement-v073');
 const { installDailyCashV083 } = require('./agent/daily-cash-v083');
 const { version: DESKTOP_VERSION } = require('./package.json');
 const { printService } = require('./agent/print-service');
+const { printThermalText } = require('./agent/hardware');
 
 installThorAgentV3(ThorAgent);
 installReturnFix(ThorAgent);
@@ -260,7 +261,7 @@ async function printCashMovement(receipt) {
   const target = agent.settings().printerName;
   if (!target) throw new Error('printer_not_configured');
   if (target === '__PDF__') return saveAsPdf(doc);
-  return printHtmlDocument(doc, target);
+  return printThermalText(target, doc.text || '');
 }
 
 async function printSaleCancellation(receipt) {
