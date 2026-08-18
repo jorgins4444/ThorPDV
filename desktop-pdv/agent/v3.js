@@ -121,7 +121,7 @@ function installThorAgentV3(ThorAgent) {
     return auth;
   };
 
-  ThorAgent.prototype.finalizeSale = async function ({ items, customerId = null, consumerDocument = '', payments = [], discount = 0, surcharge = 0, supervisorAuthorization = null, notes = '' }) {
+  ThorAgent.prototype.finalizeSale = async function ({ items, customerId = null, sellerUserId = null, sellerName = '', consumerDocument = '', payments = [], discount = 0, surcharge = 0, supervisorAuthorization = null, notes = '' }) {
     const operator = this.currentOperator();
     if (!operator) throw new Error('operator_required');
     if (!getPath(operator, 'permissions.sale.create', false)) throw new Error('operator_not_allowed_to_sell');
@@ -142,9 +142,11 @@ function installThorAgentV3(ThorAgent) {
     });
     const paid = normalizedPayments.reduce((s, p) => s + p.amount, 0);
     if (paid > quote.total + 0.01) throw new Error('payment_exceeds_total');
-    const payload = { cash_open_event_id: cashOpenEventId, operator_user_id: operator.id, customer_id: customerId || null, consumer_document: document || null, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount })), payments: normalizedPayments, discount: Number(discount || 0), surcharge: Number(surcharge || 0), supervisor_authorization: auth, notes };
+    const seller = sellerUserId ? this._staffUsersWithHash().find((user) => String(user.id) === String(sellerUserId)) : null;
+    const resolvedSellerName = String(sellerName || seller?.name || seller?.full_name || '').trim();
+    const payload = { cash_open_event_id: cashOpenEventId, operator_user_id: operator.id, seller_user_id:sellerUserId || null, seller_name:resolvedSellerName, customer_id: customerId || null, consumer_document: document || null, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount })), payments: normalizedPayments, discount: Number(discount || 0), surcharge: Number(surcharge || 0), supervisor_authorization: auth, notes };
     const event = { id:crypto.randomUUID(), type:'sale_completed', payload:{ ...payload, occurred_at:new Date().toISOString() } };
-    const receipt = { eventId: event.id, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount, name: i.name, sku: i.sku, unit: i.unit, total: i.total })), subtotal: quote.subtotal, discount: Number(discount || 0), surcharge: Number(surcharge || 0), total: quote.total, payments: normalizedPayments, customerId, consumerDocument: document || null, operator: { id: operator.id, name: operator.name }, supervisorAuthorization: auth, createdAt: new Date().toISOString(), context: json(this.store.get('context', '{}'), {}), local_status: 'pending_sync', returned_total: 0 };
+    const receipt = { eventId: event.id, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount, name: i.name, sku: i.sku, unit: i.unit, total: i.total })), subtotal: quote.subtotal, discount: Number(discount || 0), surcharge: Number(surcharge || 0), total: quote.total, payments: normalizedPayments, customerId, consumerDocument: document || null, operator: { id: operator.id, name: operator.name }, seller:resolvedSellerName ? { id:sellerUserId || seller?.id || null, name:resolvedSellerName } : null, seller_user_id:sellerUserId || null, seller_name:resolvedSellerName, supervisorAuthorization: auth, createdAt: new Date().toISOString(), context: json(this.store.get('context', '{}'), {}), local_status: 'pending_sync', returned_total: 0 };
     this.store.commitSaleLocal({ event, inventory:quote.items, total:quote.total, receipt });
     setTimeout(() => this.sync.run().catch(() => {}), 600);
     if (this.v3Settings().autoOpenDrawer && normalizedPayments.some((p) => p.method === 'cash')) {
