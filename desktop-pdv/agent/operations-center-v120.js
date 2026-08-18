@@ -123,6 +123,7 @@ function installOperationsCenterV120(ThorAgent){
     if(supervisorAuthorization)this._recordSupervisorAudit(supervisorAuthorization,'sensitive_reprint',reason,0,{document_id:doc.id,type:doc.type,reference:doc.reference});
     let receipt;
     if(doc.type==='sale'&&doc.source_event_id){try{receipt=this.documentData('local:'+doc.source_event_id,'pre_sale').text;receipt=receipt.replace('CUPOM DE PRE-VENDA','CUPOM DE PRE-VENDA - 2a VIA')+'\\n'+center('REIMPRESSAO AUDITADA - 2a VIA')+'\\n\\n';}catch{}}
+    if(doc.type==='sale_return'&&(doc.payload?.voucher||doc.payload?.returnReceipt)){try{receipt=this.storeCreditVoucherDocument(doc.payload.voucher||doc.payload.returnReceipt).text;receipt=receipt.replace('DEVOLUCAO DE VENDA','DEVOLUCAO DE VENDA - 2a VIA')+'\\n'+center('REIMPRESSAO AUDITADA - 2a VIA')+'\\n\\n';}catch{}}
     if(!receipt)receipt=genericReceipt(this,doc,true);
     const target=this.store.settings().printerName;if(target==='__PDF__')throw new Error('pdf_requires_ui');
     await hardware.printText(target,receipt);
