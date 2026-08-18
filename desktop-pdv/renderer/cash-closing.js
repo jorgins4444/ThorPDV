@@ -17,8 +17,11 @@ async function cashClosingMovement(type,previewModal){
   try{
     let auth=null;
     if(!v3Perm('cash.movement',false))auth=await v3NeedSupervisor('cash_movement',amount,notes||label);
-    await window.thor.cashMovement({movementType:type,amount,notes,supervisorAuthorization:auth});
-    previewModal?.remove();await window.thor.sync().catch(()=>{});await refreshStatus();showToast(`${label} registrado.`);openCashModal();
+    const result=await window.thor.cashMovement({movementType:type,amount,notes,supervisorAuthorization:auth});
+    let printWarning='';
+    try{await window.thor.printCashMovement(result?.receipt||{});}catch(printError){printWarning=friendlyError(printError?.message||'print_failed');}
+    previewModal?.remove();await window.thor.sync().catch(()=>{});await refreshStatus();
+    showToast(printWarning?`${label} registrado. Impressão pendente: ${printWarning}`:`${label} registrado e comprovante impresso.`);openCashModal();
   }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,friendlyError(e.message));}
 }
 
