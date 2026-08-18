@@ -13,6 +13,7 @@ function normalizedWeighableQuantity(product, value) {
 }
 
 function allowNegativeStock(agent) {
+  if (agent?._supervisorNegativeStock === true) return true;
   try {
     const context = JSON.parse(agent.store.get('context', '{}') || '{}');
     return context?.pdv_parameters?.allow_negative_stock === true || context?.allow_negative_stock === true;
