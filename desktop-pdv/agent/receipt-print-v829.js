@@ -200,6 +200,10 @@ function buildReceipt(sale, columns) {
   const saleNo = sale?.number || sale?.client_event_id || sale?.id || '';
   lines.push(leftRight('VENDA', fit(saleNo, Math.max(width - 8, 8)), width));
   lines.push(leftRight('DATA', dateTime(sale?.completed_at || sale?.created_at), width));
+  const operatorName = sale?.operator?.name || sale?.operator_name || '';
+  const sellerName = sale?.seller?.name || sale?.seller_name || '';
+  if (operatorName) for (const line of wrap(`OPERADOR: ${operatorName}`, width)) lines.push(line);
+  if (sellerName) for (const line of wrap(`VENDEDOR: ${sellerName}`, width)) lines.push(line);
   appendItemsAndTotals(lines, sale, width);
   if (sale?.customer_name || sale?.consumer_document) {
     lines.push(sep);
