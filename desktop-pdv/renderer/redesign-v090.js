@@ -151,10 +151,12 @@
       if(amount<=0){error.textContent='Informe um valor maior que zero.';input.focus();return;}
       try{
         button.disabled=true;button.textContent='Registrando...';
-        await window.thor.cashMovement({movementType:type,amount,notes:m.querySelector('#v090MovementNote').value.trim()});
+        const result=await window.thor.cashMovement({movementType:type,amount,notes:m.querySelector('#v090MovementNote').value.trim()});
+        let printError='';
+        try{await window.thor.printCashMovement(result?.receipt||{});}catch(error){printError=friendlyError(error?.message||'print_failed');}
         await refreshStatus();
         m.remove();
-        showToast(`${title} de ${money(amount)} registrado.`);
+        showToast(printError?`${title} registrado. Impressão pendente: ${printError}`:`${title} de ${money(amount)} registrado e comprovante impresso.`);
       }catch(err){error.textContent=friendlyError(err?.message||String(err));button.disabled=false;button.textContent=`Registrar ${title}`;}
     };
     setTimeout(()=>input?.focus(),30);
