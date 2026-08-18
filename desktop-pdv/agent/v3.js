@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const hardware = require('./hardware');
 
 function json(value, fallback) {
@@ -142,10 +143,10 @@ function installThorAgentV3(ThorAgent) {
     const paid = normalizedPayments.reduce((s, p) => s + p.amount, 0);
     if (paid > quote.total + 0.01) throw new Error('payment_exceeds_total');
     const payload = { cash_open_event_id: cashOpenEventId, operator_user_id: operator.id, customer_id: customerId || null, consumer_document: document || null, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount })), payments: normalizedPayments, discount: Number(discount || 0), surcharge: Number(surcharge || 0), supervisor_authorization: auth, notes };
-    const event = this.event('sale_completed', payload);
-    for (const i of quote.items) this.store.adjustInventory(i.productId, -i.quantity);
+    const event = { id:crypto.randomUUID(), type:'sale_completed', payload:{ ...payload, occurred_at:new Date().toISOString() } };
     const receipt = { eventId: event.id, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount, name: i.name, sku: i.sku, unit: i.unit, total: i.total })), subtotal: quote.subtotal, discount: Number(discount || 0), surcharge: Number(surcharge || 0), total: quote.total, payments: normalizedPayments, customerId, consumerDocument: document || null, operator: { id: operator.id, name: operator.name }, supervisorAuthorization: auth, createdAt: new Date().toISOString(), context: json(this.store.get('context', '{}'), {}), local_status: 'pending_sync', returned_total: 0 };
-    this.store.saveReceipt(event.id, quote.total, receipt);
+    this.store.commitSaleLocal({ event, inventory:quote.items, total:quote.total, receipt });
+    setImmediate(() => this.sync.run().catch(() => {}));
     if (this.v3Settings().autoOpenDrawer && normalizedPayments.some((p) => p.method === 'cash')) this.openDrawer().catch(() => {});
     return { ok: true, eventId: event.id, subtotal: quote.subtotal, discount: Number(discount || 0), surcharge: Number(surcharge || 0), total: quote.total, paid, change: normalizedPayments.reduce((s, p) => s + Number(p.change_amount || 0), 0), receipt };
   };
