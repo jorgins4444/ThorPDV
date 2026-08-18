@@ -258,10 +258,25 @@
   }
 
   function rebuildGate(){
-    const gate=document.getElementById('thorOperatorGate');const card=gate?.querySelector('.v088-gate-card');const login=card?.querySelector('.v088-gate-login');let config=card?.querySelector('.v088-gate-config');if(!gate||!card||!login||!config||card.dataset.v089Ready==='1')return;card.dataset.v089Ready='1';gate.classList.add('v089-gate');card.classList.add('v089-gate-card');login.classList.add('v089-gate-login');
-    const c=context(),settings=state.settings||state.status?.settings||{};let methods=[];try{methods=(vstate().salesOptions?.payment_methods||[]).filter(x=>x?.active!==false);}catch{}
-    config.className='v089-gate-config';config.innerHTML=`<div class="v089-gate-config-head"><div><i>⚙</i><span><h2>Configuração do Terminal</h2><p>Configure e teste os parâmetros do seu terminal</p></span></div><div><button id="v089GateSettings">☷ &nbsp; Abrir Configurações</button><button class="cyan" id="v089GateTest">◉ &nbsp; Testar Conexão</button></div></div><div class="v089-gate-grid"><article><i>⌂</i><span><b>Loja / Filial</b><small>${esc(c.branch)}</small></span><em>›</em></article><article class="cyan"><i>▣</i><span><b>PDV</b><small>${esc(c.pos)}</small></span><em>›</em></article><article><i>▧</i><span><b>Impressora</b><small>${esc(settings.printerName||state.status?.printer||'Não configurada')}</small></span><em>›</em></article><article class="cyan"><i>☁</i><span><b>Conexão / Sincronização</b><small>Modo: <strong class="${state.status?.online?'ok':'warn'}">${state.status?.online?'Online':'Offline'}</strong></small></span><em>›</em></article><article><i>▤</i><span><b>Servidor / URL</b><small>Status: <strong class="${state.status?.online?'ok':'warn'}">${state.status?.online?'Conectado':'Offline'}</strong></small></span><em>›</em></article><article class="cyan"><i>▥</i><span><b>Fiscal</b><small>Configuração sincronizada</small></span><em>›</em></article><article><i>▰</i><span><b>Meios de Pagamento</b><small>${methods.length?`${methods.length} forma(s) ativa(s)`:'Sincronizar configuração'}</small></span><em>›</em></article><article class="cyan"><i>•••</i><span><b>Outros</b><small>ThorPDV v${esc(state.status?.appVersion||'—')}</small></span><em>›</em></article></div><div class="v089-gate-ready ${state.status?.online?'online':'offline'}"><span>${state.status?.online?'✓ Terminal configurado e pronto para uso':'○ Operação offline disponível'}</span><small>Versão ${esc(state.status?.appVersion||'—')} &nbsp; | &nbsp; ${state.status?.lastSyncAt?`Atualizado ${new Date(state.status.lastSyncAt).toLocaleString('pt-BR')}`:'Ainda não sincronizado'}</small></div>`;
-    config.querySelector('#v089GateSettings').onclick=()=>settingsModal();config.querySelector('#v089GateTest').onclick=async(e)=>{const b=e.currentTarget,original=b.innerHTML;try{b.disabled=true;b.textContent='Testando...';await window.thor.sync();state.status=await window.thor.status();b.textContent=state.status?.online?'✓ Conexão OK':'Sem conexão';}catch{b.textContent='Falha na conexão';}finally{setTimeout(()=>{if(b.isConnected){b.disabled=false;b.innerHTML=original;}},1300);}};
+    const gate=document.getElementById('thorOperatorGate');
+    const card=gate?.querySelector('.v088-gate-card');
+    const login=card?.querySelector('.v088-gate-login');
+    if(!gate||!card||!login)return;
+    gate.classList.add('v089-gate');
+    card.classList.add('v089-gate-card','v089-login-only');
+    login.classList.add('v089-gate-login');
+    card.querySelector('.v088-gate-config')?.remove();
+    if(card.dataset.v089Ready==='1')return;
+    card.dataset.v089Ready='1';
+    login.querySelector('.operator-gate-terminal')?.remove();
+    login.querySelector('.operator-gate-foot')?.remove();
+    if(!login.querySelector('.v089-thor-hero')){
+      const hero=document.createElement('div');
+      hero.className='v089-thor-hero';
+      hero.setAttribute('aria-hidden','true');
+      hero.innerHTML=`<span class="v089-thor-orbit"></span><span class="v089-thor-bolt bolt-a"></span><span class="v089-thor-bolt bolt-b"></span><svg class="v089-thor-hammer" viewBox="0 0 180 180"><defs><linearGradient id="v089HammerMetal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fbff"/><stop offset=".45" stop-color="#b9c6d8"/><stop offset="1" stop-color="#75849b"/></linearGradient><linearGradient id="v089HammerGrip" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6e3bd0"/><stop offset="1" stop-color="#32156f"/></linearGradient><filter id="v089HammerGlow"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#5b2bc2" flood-opacity=".38"/></filter></defs><g filter="url(#v089HammerGlow)" transform="rotate(-14 90 90)"><rect x="75" y="72" width="30" height="78" rx="10" fill="url(#v089HammerGrip)"/><path d="M80 82h20M79 96h22M78 110h24M77 124h26" stroke="#b99af0" stroke-width="4" stroke-linecap="round"/><path d="M43 38h94l13 17-13 34H43L30 55z" fill="url(#v089HammerMetal)" stroke="#fff" stroke-width="4"/><path d="M43 38v51M137 38v51" stroke="#8796aa" stroke-width="4"/><path d="M58 51h64" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".75"/><circle cx="90" cy="151" r="8" fill="#25d4f0"/></g></svg><span class="v089-thor-shadow"></span>`;
+      login.insertBefore(hero,login.firstChild);
+    }
   }
 
   function apply(){
