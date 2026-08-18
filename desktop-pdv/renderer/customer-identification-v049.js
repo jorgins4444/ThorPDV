@@ -279,10 +279,14 @@
     if (state.busy) return;
     if (!state.status.cashOpenEventId) return openCashModal();
     if (!v3ValidDocument(v.consumerDocument)) return infoModal('CPF/CNPJ', 'CPF/CNPJ inválido. Corrija ou deixe em branco.');
+    const progress = typeof saleProgress === 'function' ? saleProgress() : null;
+    const started = performance.now();
+    const soldItems = state.cart.map((item) => ({ productId:item.productId, quantity:item.quantity, discount:Math.max(Number(item.discount || 0), 0) }));
     try {
       state.busy = true;
+      progress?.update('Gravando venda...','Confirmando itens, pagamentos e estoque no caixa.',28);
       const result = await window.thor.finalizeSale({
-        items: state.cart.map((item) => ({ productId: item.productId, quantity: item.quantity, discount: Math.max(Number(item.discount || 0), 0) })),
+        items: soldItems,
         customerId: v.customerId || null,
         consumerDocument: v.consumerDocument,
         payments: v.payments,
@@ -290,16 +294,29 @@
         surcharge: Math.max(Number(v.surcharge || 0), 0),
         supervisorAuthorization: v.supervisorAuthorization,
       });
+      progress?.update('Venda salva','Preparando o comprovante em segundo plano.',58);
+      for (const sold of soldItems) {
+        const product = state.products.find((row) => row.id === sold.productId);
+        if (product) product.quantity = Math.max(0, Number(product.quantity || 0) - Number(sold.quantity || 0));
+      }
       state.cart = [];
       v3ResetSale();
-      await refreshProducts();
-      await refreshStatus();
-      await refreshFiscalSales();
       renderSaleWorkspace();
+      state.busy = false;
       showToast(`Venda concluída: ${money(result.total)}${result.change > 0 ? ` • Troco ${money(result.change)}` : ''}.`);
-      await postSalePrint(result.eventId);
+      void window.thor.recordPerformance?.('ui.checkout_released', performance.now() - started, { items:soldItems.length, cash:v.payments.some((p) => p.method === 'cash') });
+      setTimeout(() => {
+        void refreshStatus().catch(() => {});
+        void postSalePrint(result.eventId, progress).catch((error) => {
+          progress?.finish('Venda salva; impressão pendente', friendlyError(error?.message), false);
+          showToast(`Venda salva. Impressão pendente: ${friendlyError(error?.message)}`);
+        });
+      }, 0);
+      return result;
     } catch (error) {
+      progress?.finish('Falha ao concluir a venda', friendlyError(error?.message), false);
       infoModal('Finalização', friendlyError(error?.message));
+      return null;
     } finally {
       state.busy = false;
     }
