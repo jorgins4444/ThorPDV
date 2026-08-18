@@ -257,11 +257,28 @@ async function printCashClose(summary) {
 }
 
 async function printCashMovement(receipt) {
-  const doc = agent.cashMovementDocument(receipt || {});
+  const current = agent.currentOperator?.() || {};
+  const currentId = current.id || agent.store.get('current_operator_id') || '';
+  const staff = typeof agent._staffUsersWithHash === 'function' ? agent._staffUsersWithHash() : [];
+  const stored = staff.find((user) => String(user.id) === String(currentId)) || {};
+  const operatorName = String(
+    receipt?.operator?.name || current.name || current.full_name || current.display_name || current.user_name ||
+    stored.name || stored.full_name || stored.display_name || stored.user_name || stored.email || ''
+  ).trim();
+  const enriched = {
+    ...(receipt || {}),
+    operator: operatorName
+      ? { id:receipt?.operator?.id || currentId || stored.id || null, name:operatorName }
+      : receipt?.operator,
+  };
+  const started = Date.now();
+  const doc = agent.cashMovementDocument(enriched);
   const target = agent.settings().printerName;
   if (!target) throw new Error('printer_not_configured');
   if (target === '__PDF__') return saveAsPdf(doc);
-  return printThermalText(target, doc.text || '');
+  const result = await printThermalText(target, doc.text || '');
+  agent.store.metric('print.cash_movement_total', Date.now() - started, { movement_type:enriched.movement_type || '', operator:Boolean(operatorName) });
+  return result;
 }
 
 async function printSaleCancellation(receipt) {
@@ -384,6 +401,7 @@ function registerIpc() {
 }
 
 app.whenReady().then(async () => {
+  void printService().start().catch(() => {});
   registerIpc();
   await createWindow();
   app.on('activate', async () => {
