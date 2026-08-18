@@ -61,6 +61,7 @@ jobs:
             'agent/scale-label-v060.js',
             'agent/sync-policy.js',
             'agent/recovery.js',
+            'agent/operations-center-v120.js',
             'agent/consistency.js',
             'agent/cash-closing.js',
             'agent/cash-close-receipt-v112.js',
