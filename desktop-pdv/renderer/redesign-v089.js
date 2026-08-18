@@ -2,6 +2,7 @@
   const V='v089';
   let scheduled=false;
   let paymentPatched=false;
+  const productImageCache=new Map();
 
   const num=(v)=>{const n=Number(v||0);return Number.isFinite(n)?n:0;};
   const digits=(v)=>String(v||'').replace(/\D/g,'');
@@ -28,6 +29,8 @@
   }
 
   function imageOf(product){return product?.image_url||product?.imageUrl||product?.thumbnail_url||product?.thumbnailUrl||product?.photo_url||product?.photoUrl||product?.image||product?.photo||'';}
+  function rememberImages(products){for(const product of products||[]){const image=imageOf(product);if(image&&product?.id!=null)productImageCache.set(String(product.id),image);}}
+  function cartImage(item,product){return imageOf(item)||imageOf(product)||productImageCache.get(String(item?.productId||''))||'';}
   function oldPriceOf(product){
     const current=num(product?.base_price??product?.sale_price);
     const candidates=[product?.original_price,product?.list_price,product?.compare_at_price,product?.regular_price,product?.price_before,product?.old_price].map(num).filter(v=>v>current+.009);
@@ -136,8 +139,8 @@
       row.classList.add('v089-cart-item');
       const item=state.cart[index];if(!item)return;
       if(!row.querySelector('.v089-cart-thumb')){
-        const product=(state.products||[]).find(p=>String(p.id)===String(item.productId));const img=imageOf(product);
-        const thumb=document.createElement('div');thumb.className='v089-cart-thumb';thumb.innerHTML=img?`<img src="${esc(img)}" alt="">`:'<span>◆</span>';
+        const product=(state.products||[]).find(p=>String(p.id)===String(item.productId));const img=cartImage(item,product);
+        const thumb=document.createElement('div');thumb.className='v089-cart-thumb';thumb.innerHTML=img?`<img src="${esc(img)}" alt="" decoding="async">`:'<span>◆</span>';
         row.insertBefore(thumb,row.firstChild);
       }
       const productBox=row.querySelector('.cart-v43-product');if(productBox){const small=productBox.querySelector('small');if(small)small.textContent=`Qtd. ${qty(item.quantity)}   Unit. ${br(item.unitPrice)}   Desc. ${br(item.discount||0)}`;}
