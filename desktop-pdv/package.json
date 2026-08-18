@@ -1,14 +1,15 @@
 {
   "name": "thorpdv-desktop",
-  "version": "0.8.54",
+  "version": "0.8.59",
   "private": true,
   "description": "ThorPDV Desktop para Windows com agente offline-first",
   "main": "main-v090.js",
   "scripts": {
-    "dev": "electron .",
-    "start": "electron .",
-    "dist:win": "electron-builder --win nsis",
-    "pack:win": "electron-builder --win dir"
+    "bundle:renderer": "node scripts/build-renderer-bundle.js",
+    "dev": "npm run bundle:renderer && electron .",
+    "start": "npm run bundle:renderer && electron .",
+    "dist:win": "npm run bundle:renderer && electron-builder --win nsis",
+    "pack:win": "npm run bundle:renderer && electron-builder --win dir"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

@@ -1,4 +1,6 @@
 const hardware = require('./hardware');
+const { BackgroundTaskQueue } = require('./background-queue');
+const productionQueues = new WeakMap();
 
 function ensureColumns(db) {
   const cols = new Set(db.prepare('pragma table_info(products)').all().map((x) => x.name));
@@ -110,13 +112,14 @@ function installProductionPrinting(ThorAgent) {
         outputs.push({ productId: product.id, productName: product.name, ok: false, error: 'production_printer_not_configured' });
         continue;
       }
-      try {
-        const content = kitchenText({ eventId: result.eventId, context, operator, product, item, notes: payload?.notes || '' });
-        await hardware.printText(printer, content);
-        outputs.push({ productId: product.id, productName: product.name, ok: true, printer });
-      } catch (error) {
-        outputs.push({ productId: product.id, productName: product.name, ok: false, printer, error: error instanceof Error ? error.message : String(error) });
+      let queue=productionQueues.get(this);
+      if(!queue){
+        queue=new BackgroundTaskQueue({concurrency:2,metric:(name,duration,metadata)=>this.store.metric(name,duration,metadata)});
+        productionQueues.set(this,queue);
       }
+      const content=kitchenText({eventId:result.eventId,context,operator,product,item,notes:payload?.notes||''});
+      const queued=queue.add('print.production',()=>hardware.printText(printer,content),{printer,productId:product.id,eventId:result.eventId});
+      outputs.push({productId:product.id,productName:product.name,printer,queued:true,queueId:queued.id});
     }
     return { ...result, productionPrints: outputs };
   };

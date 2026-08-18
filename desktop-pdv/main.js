@@ -19,6 +19,7 @@ const { installSalesOptionsV071 } = require('./agent/sales-options-v071');
 const { installSalesSettlementV073 } = require('./agent/sales-settlement-v073');
 const { installDailyCashV083 } = require('./agent/daily-cash-v083');
 const { version: DESKTOP_VERSION } = require('./package.json');
+const { printService } = require('./agent/print-service');
 
 installThorAgentV3(ThorAgent);
 installReturnFix(ThorAgent);
@@ -242,7 +243,10 @@ async function printSale(saleKey, type = 'pre_sale', reprint = false) {
   if (!target) throw new Error('printer_not_configured');
   if (target === '__PDF__') return saveAsPdf(doc);
   if (doc.kind === 'remote_pdf') return printRemotePdf(doc, target);
-  return agent.printDocument(saleKey, type);
+  const notify=(progress)=>{try{mainWindow?.webContents.send('thor:print-progress',progress);}catch{}};
+  notify({stage:'preparing',percent:55});
+  try{return await agent.printDocument(saleKey,type,{onProgress:notify});}
+  catch(error){notify({stage:'error',percent:100,error:String(error?.message||error)});throw error;}
 }
 
 async function printCashClose(summary) {
@@ -267,6 +271,8 @@ function registerIpc() {
   handle('thor:enroll', (payload) => agent.enroll(payload));
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
+  handle('thor:performance-metrics', (limit) => agent.store.recentMetrics(limit));
+  handle('thor:record-performance', (name, durationMs, metadata) => agent.store.metric(name, durationMs, metadata));
   handle('thor:recover-sync', () => agent.recoverSync());
   handle('thor:disconnect-device', () => agent.disconnectDevice());
   handle('thor:search-products', (query) => agent.searchProducts(query));
@@ -325,6 +331,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async () => {
+  try { printService().stop(); } catch {}
   if (agent) await agent.stop();
   if (process.platform !== 'darwin') app.quit();
 });

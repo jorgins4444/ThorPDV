@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { printService } = require('./print-service');
 
 function powershell(script) {
   return new Promise((resolve, reject) => {
@@ -36,37 +37,27 @@ async function listSerialPorts() {
   const parsed=JSON.parse(out); return Array.isArray(parsed)?parsed:[parsed];
 }
 
-async function printText(printerName,text) {
-  if (printerName==='__PDF__') throw new Error('pdf_requires_ui');
+async function printRaw(printerName, bytes, documentName='ThorPDV Cupom', options={}) {
   if (process.platform !== 'win32') throw new Error('printing_requires_windows');
-  if (!printerName) throw new Error('printer_not_configured');
-  const file=path.join(os.tmpdir(),`thorpdv-${Date.now()}.txt`); fs.writeFileSync(file,text,'utf8');
-  const q=(s)=>String(s).replace(/'/g,"''");
-  try { await powershell(`Get-Content -Raw -LiteralPath '${q(file)}' | Out-Printer -Name '${q(printerName)}'`); }
-  finally { try{fs.unlinkSync(file);}catch{} }
-  return true;
+  if (!printerName || printerName==='__PDF__') throw new Error('printer_not_configured');
+  return printService().send(printerName,Buffer.from(bytes),documentName,options);
 }
 
+function escposText(text) {
+  const normalized=String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E\n\r\t]/g,' ');
+  return Buffer.concat([
+    Buffer.from([0x1b,0x40,0x1b,0x61,0x00,0x1b,0x32]),
+    Buffer.from(normalized.replace(/\r/g,'')+'\n','ascii'),
+    Buffer.from([0x1b,0x64,0x04,0x1d,0x56,0x42,0x00]),
+  ]);
+}
 
-function thermalAscii(value) {
-  return String(value ?? '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[•·]/g, '-').replace(/[–—]/g, '-')
-    .replace(/[^\x0A\x0D\x20-\x7E]/g, '?');
+async function printText(printerName,text) {
+  return printRaw(printerName,escposText(text),'ThorPDV Texto');
 }
 
 async function printThermalText(printerName,text) {
-  if (printerName==='__PDF__') throw new Error('pdf_requires_ui');
-  if (process.platform !== 'win32') throw new Error('printing_requires_windows');
-  if (!printerName) throw new Error('printer_not_configured');
-  const normalized=thermalAscii(text).replace(/\r?\n/g,'\n');
-  const initialize=Buffer.from([0x1b,0x40,0x1b,0x61,0x00,0x1b,0x4d,0x00]);
-  const body=Buffer.from(normalized,'ascii');
-  // Feed five lines so the footer clears the cutter, then request a partial cut (GS V 66 0).
-  const finish=Buffer.from([0x1b,0x64,0x05,0x1d,0x56,0x42,0x00]);
-  const payload=Buffer.concat([initialize,body,finish]);
-  await powershell(rawPrinterScript(printerName,payload.toString('base64')));
-  return true;
+  return printRaw(printerName,escposText(text),'ThorPDV Comprovante');
 }
 
 function rawPrinterScript(printerName, base64) {
@@ -91,9 +82,7 @@ public class ThorRawPrinter {
 async function openDrawer(printerName) {
   if (process.platform !== 'win32') throw new Error('drawer_requires_windows');
   if (!printerName || printerName==='__PDF__') throw new Error('drawer_printer_not_configured');
-  const pulse=Buffer.from([0x1b,0x70,0x00,0x19,0xfa]);
-  await powershell(rawPrinterScript(printerName,pulse.toString('base64')));
-  return true;
+  return printRaw(printerName,Buffer.from([0x1b,0x70,0x00,0x19,0xfa]),'ThorPDV Gaveta');
 }
 
 async function readScaleDetailed(portName, baudRate=9600, timeoutMs=1500) {
@@ -117,4 +106,4 @@ async function readScale(portName, baudRate=9600, timeoutMs=1500) {
   return (await readScaleDetailed(portName,baudRate,timeoutMs)).value;
 }
 
-module.exports={ machineId,listPrinters,listSerialPorts,printText,printThermalText,openDrawer,readScale,readScaleDetailed };
+module.exports={ machineId,listPrinters,listSerialPorts,printRaw,printText,printThermalText,openDrawer,readScale,readScaleDetailed };

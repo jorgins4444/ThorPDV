@@ -1,5 +1,6 @@
 const { execFile } = require('child_process');
 const QRCode = require('qrcode');
+const hardware = require('./hardware');
 
 function psQuote(value) {
   return String(value || '').replace(/'/g, "''");
@@ -313,7 +314,7 @@ async function printReceiptRaw(printerName, text, columns, options = {}) {
   if (process.platform !== 'win32') throw new Error('printing_requires_windows');
   if (!printerName || printerName === '__PDF__') throw new Error('printer_not_configured');
   const payload = escposPayload(text, columns, options.qrCodeUrl || '');
-  await powershell(rawPrinterScript(printerName, payload.toString('base64'), options.documentName || 'ThorPDV Cupom'));
+  await hardware.printRaw(printerName,payload,options.documentName || 'ThorPDV Cupom',{onProgress:options.onProgress});
   return true;
 }
 
@@ -355,7 +356,7 @@ function installReceiptPrintingV829(ThorAgent, Store) {
     return { ...base, sale, kind:'text', text, html:htmlForReceipt(text, columns), receiptColumns:columns };
   };
 
-  ThorAgent.prototype.printDocument = async function (saleKey, type = 'pre_sale') {
+  ThorAgent.prototype.printDocument = async function (saleKey, type = 'pre_sale', options = {}) {
     const target = this.store.settings().printerName;
     if (!target) throw new Error('printer_not_configured');
     if (target === '__PDF__') throw new Error('pdf_requires_ui');
@@ -365,12 +366,12 @@ function installReceiptPrintingV829(ThorAgent, Store) {
       const doc = this.documentData(saleKey, type);
       const fiscal = doc.sale?.fiscal || {};
       if (!['authorized','cancelled'].includes(String(fiscal.status || ''))) throw new Error('nfce_not_authorized');
-      await printReceiptRaw(target, doc.text, columns, { qrCodeUrl:String(fiscal.qr_code_url), documentName:`ThorPDV DANFE NFC-e ${fiscal.number || doc.sale?.number || ''}` });
+      await printReceiptRaw(target, doc.text, columns, { qrCodeUrl:String(fiscal.qr_code_url), documentName:`ThorPDV DANFE NFC-e ${fiscal.number || doc.sale?.number || ''}`, onProgress:options.onProgress });
       return { ok:true, target, mode:'raw_escpos_nfce', columns, accessKey:fiscal.access_key };
     }
 
     const doc = this.documentData(saleKey, type);
-    await printReceiptRaw(target, doc.text, columns, { documentName:'ThorPDV Cupom Nao Fiscal' });
+    await printReceiptRaw(target, doc.text, columns, { documentName:'ThorPDV Cupom Nao Fiscal', onProgress:options.onProgress });
     return { ok:true, target, mode:'raw_escpos', columns };
   };
 

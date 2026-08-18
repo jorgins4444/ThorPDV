@@ -4,6 +4,7 @@ const reservedShortcuts=new Set(['F2','F3','F4','F6','F12','ENTER','ESCAPE']);
 let state={status:null,products:[],cart:[],payment:'cash',query:'',busy:false,view:'sale',settings:null,fiscalSales:[],fiscalQuery:'',fiscalFilter:{status:'all',from:'',to:''},capturingShortcut:false};
 const SETTINGS_HARDWARE_CACHE_TTL_MS=45_000;
 let settingsHardwareCache={printers:null,ports:null,loadedAt:0,promise:null};
+let activeSaleProgress=null;
 
 const money=(v)=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -91,10 +92,16 @@ function paintFiscalProgress(m,sale,phase='waiting'){
 }
 
 async function boot(){
+  const started=performance.now();
   state.status=await window.thor.status();
   state.settings=state.status.settings||await window.thor.settings();
   render();
-  if(state.status.enrolled){await refreshProducts('');await refreshFiscalSales('');setInterval(async()=>{await refreshStatus();if(state.view==='fiscal'||state.fiscalSales.some(x=>['requested','draft','processing'].includes(String(x.fiscal?.status||''))))await refreshFiscalSales();},3000);}
+  if(state.status.enrolled){
+    await refreshProducts('');
+    void refreshFiscalSales('').catch(()=>{});
+    setInterval(async()=>{await refreshStatus();if(state.view==='fiscal'||state.fiscalSales.some(x=>['requested','draft','processing'].includes(String(x.fiscal?.status||''))))await refreshFiscalSales();},3000);
+  }
+  void window.thor.recordPerformance?.('ui.boot',performance.now()-started,{enrolled:Boolean(state.status.enrolled)});
 }
 
 async function refreshStatus(){state.status=await window.thor.status();state.settings=state.status.settings||state.settings;updateTop();}
@@ -129,7 +136,7 @@ function renderSaleWorkspace(){
 function bindSale(){
   const search=document.getElementById('search');let timer;
   search.value=state.query;
-  search.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>refreshProducts(search.value),120)};
+  search.oninput=()=>{clearTimeout(timer);const value=search.value;timer=setTimeout(()=>refreshProducts(value),220)};
   search.onkeydown=e=>{if(e.key==='Enter'&&state.products[0]){e.preventDefault();add(state.products[0]);search.select();}};
   document.getElementById('clear').onclick=()=>{state.cart=[];renderCart();};
   document.getElementById('finalize').onclick=finalize;
@@ -164,27 +171,59 @@ function renderCart(){
   document.getElementById('itemsCount').textContent=state.cart.reduce((s,i)=>s+i.quantity,0);document.getElementById('grand').textContent=money(total());
 }
 
+function saleProgress(){
+  document.getElementById('saleProcessing')?.remove();
+  const box=document.createElement('div');box.id='saleProcessing';box.className='sale-processing';
+  box.innerHTML='<div class="sale-processing-icon"><i></i></div><div class="sale-processing-copy"><small>PROCESSANDO VENDA</small><b id="saleProcessingTitle">Recebendo venda...</b><span id="saleProcessingDetail">Registrando os dados no caixa.</span><div class="sale-processing-track"><i id="saleProcessingBar"></i></div></div>';
+  document.body.appendChild(box);requestAnimationFrame(()=>box.classList.add('show'));
+  let closeTimer=null,closed=false,percent=8;
+  const update=(title,detail,nextPercent)=>{if(!box.isConnected||closed)return;percent=Math.max(percent,Math.min(Number(nextPercent)||percent,100));box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;box.querySelector('#saleProcessingBar').style.width=`${percent}%`;};
+  const finish=(title='Impressão confirmada',detail='Comprovante entregue ao spooler da impressora.',ok=true)=>{if(!box.isConnected||closed)return;closed=true;clearTimeout(closeTimer);box.classList.toggle('success',ok);box.classList.toggle('error',!ok);box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;box.querySelector('#saleProcessingBar').style.width='100%';closeTimer=setTimeout(()=>{box.classList.remove('show');setTimeout(()=>box.remove(),250);},ok?1600:3500);};
+  return {update,finish,remove:()=>{closed=true;clearTimeout(closeTimer);box.remove();}};
+}
+if(window.thor.onPrintProgress)window.thor.onPrintProgress((event)=>{
+  const progress=activeSaleProgress;if(!progress)return;
+  const stages={
+    preparing:['Preparando comprovante...','Montando os dados para impressão.',55],
+    queue:['Comprovante na fila...','Aguardando o serviço persistente de impressão.',62],
+    service_ready:['Impressora conectada...','Serviço RAW pronto para receber o comprovante.',72],
+    writing:['Imprimindo comprovante...','Bytes enviados ao spooler da impressora.',88],
+  };
+  if(event?.stage==='spooled'){progress.finish('Impressão confirmada','Comprovante entregue à impressora.',true);activeSaleProgress=null;return;}
+  if(event?.stage==='error'){progress.finish('Falha na impressão',friendlyError(event.error),false);activeSaleProgress=null;return;}
+  const row=stages[event?.stage];if(row)progress.update(row[0],row[1],event.percent||row[2]);
+});
+
 async function finalize(){
   if(state.busy||!state.cart.length)return;
   if(!state.status.cashOpenEventId)return openCashModal();
-  const t=total();
+  const started=performance.now(),t=total();
+  const progress=saleProgress();
+  const soldItems=state.cart.map(i=>({productId:i.productId,quantity:i.quantity}));
   try{
     state.busy=true;
-    const result=await window.thor.finalizeSale({items:state.cart.map(i=>({productId:i.productId,quantity:i.quantity})),payments:[{method:state.payment,amount:t}]});
-    state.cart=[];renderCart();await refreshProducts();await refreshStatus();await refreshFiscalSales();
+    progress.update('Recebendo venda...','Confirmando itens e forma de pagamento.',28);
+    const result=await window.thor.finalizeSale({items:soldItems,payments:[{method:state.payment,amount:t}]});
+    progress.update('Autorizando venda...','Venda recebida; preparando a impressão.',58);
+    for(const sold of soldItems){const product=state.products.find(p=>p.id===sold.productId);if(product)product.quantity=Math.max(0,Number(product.quantity||0)-Number(sold.quantity||0));}
+    state.cart=[];renderCart();renderProducts();
+    state.busy=false;
     showToast(`Venda registrada: ${money(result.total)}.`);
-    await postSalePrint(result.eventId);
-  }catch(e){alert(`Não foi possível finalizar: ${friendlyError(e.message)}`);}finally{state.busy=false;}
+    void window.thor.recordPerformance?.('ui.sale_released',performance.now()-started,{items:soldItems.length});
+    setTimeout(()=>{void refreshStatus().catch(()=>{});void postSalePrint(result.eventId,progress).catch(e=>{progress.finish('Venda salva; impressão pendente',friendlyError(e.message),false);showToast(`Venda salva. Impressão pendente: ${friendlyError(e.message)}`);});},0);
+  }catch(e){progress.finish('Falha ao concluir a venda',friendlyError(e.message),false);alert(`Não foi possível finalizar: ${friendlyError(e.message)}`);}finally{state.busy=false;}
 }
 
-async function postSalePrint(eventId){
+async function postSalePrint(eventId,progress=null){
   const mode=state.settings?.printMode||'ask';
   const doc=state.settings?.printDocument||'ask';
-  if(mode==='never')return;
+  if(mode==='never'){progress?.finish('Venda concluída','Impressão desativada para este caixa.');return;}
   if(mode==='direct'&&doc!=='ask'){
-    if(doc==='pre_sale')return safePrint(`local:${eventId}`,'pre_sale');
-    if(doc==='nfce')return requestNfceAndMaybePrint(`local:${eventId}`);
+    progress?.update('Imprimindo comprovante...','Montando o documento e enviando para a impressora.',76);
+    if(doc==='pre_sale')return safePrint(`local:${eventId}`,'pre_sale',progress);
+    if(doc==='nfce'){progress?.finish('Venda registrada','Acompanhe a autorização da NFC-e na próxima tela.');return requestNfceAndMaybePrint(`local:${eventId}`);}
   }
+  progress?.finish('Venda registrada','Escolha agora o documento que deseja imprimir.');
   return postSaleModal(`local:${eventId}`);
 }
 
@@ -219,9 +258,9 @@ async function requestNfceAndMaybePrint(key){
   }catch(e){const body=m.querySelector('#fiscalProgressBody');if(body)body.innerHTML=`<h3>Falha ao iniciar NFC-e</h3><div class="fiscal-diagnostic error"><b>Não foi possível iniciar a transmissão</b><span>${esc(friendlyError(e.message))}</span></div><div class="actions"><button class="primary" id="fiscalClose">Fechar</button></div>`;m.querySelector('#fiscalClose')?.addEventListener('click',()=>m.remove());}
 }
 
-async function safePrint(key,type){
-  try{const r=await window.thor.printSale(key,type);if(r?.cancelled)return false;showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
-  catch(e){if(e.message==='printer_not_configured')infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');else infoModal('Impressão',friendlyError(e.message));return false;}
+async function safePrint(key,type,progress=null){
+  try{activeSaleProgress=progress;progress?.update('Preparando comprovante...','Montando os dados para impressão.',55);const r=await window.thor.printSale(key,type);if(r?.cancelled){progress?.finish('Impressão cancelada','A venda foi salva normalmente.');return false;}if(activeSaleProgress===progress){progress?.finish('Impressão confirmada','Comprovante entregue à impressora.');activeSaleProgress=null;}showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
+  catch(e){if(activeSaleProgress===progress)activeSaleProgress=null;progress?.finish('Venda salva; falha na impressão',friendlyError(e.message),false);if(e.message==='printer_not_configured')infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');else infoModal('Impressão',friendlyError(e.message));return false;}
 }
 
 function fiscalOperationBucket(sale){
