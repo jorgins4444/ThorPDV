@@ -66,9 +66,11 @@ function installOperationsCenterV120(ThorAgent){
   proto.stop=async function(...args){clearInterval(this._operationsRetryTimer);return originalStop.apply(this,args);};
   proto.saveOperationDocument=function(type,reference,sourceEventId,payload={},sensitive=false){
     this._ensureOperationsV120();const now=new Date().toISOString(),id=crypto.randomUUID();
-    this.store.db.prepare(`insert into operation_documents(id,type,reference,source_event_id,payload,sensitive,created_at,updated_at)
-      values(?,?,?,?,?,?,?,?) on conflict(source_event_id,type) do update set reference=excluded.reference,payload=excluded.payload,sensitive=excluded.sensitive,updated_at=excluded.updated_at`)
-      .run(id,text(type),text(reference),sourceEventId?text(sourceEventId):null,JSON.stringify(payload||{}),sensitive?1:0,now,now);
+    const eventKey=sourceEventId?text(sourceEventId):null;
+    const existing=eventKey?this.store.db.prepare('select id from operation_documents where source_event_id=? and type=?').get(eventKey,text(type)):null;
+    if(existing){this.store.db.prepare('update operation_documents set reference=?,payload=?,sensitive=?,updated_at=? where id=?').run(text(reference),JSON.stringify(payload||{}),sensitive?1:0,now,existing.id);return existing.id;}
+    this.store.db.prepare('insert into operation_documents(id,type,reference,source_event_id,payload,sensitive,created_at,updated_at) values(?,?,?,?,?,?,?,?)')
+      .run(id,text(type),text(reference),eventKey,JSON.stringify(payload||{}),sensitive?1:0,now,now);
     return id;
   };
   proto.operationHistory=function({query='',type='all',limit=200}={}){
