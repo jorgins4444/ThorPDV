@@ -173,12 +173,20 @@ function renderCart(){
 function saleProgress(){
   document.getElementById('saleProcessing')?.remove();
   const box=document.createElement('div');box.id='saleProcessing';box.className='sale-processing';
-  box.innerHTML='<div class="sale-processing-icon"><i></i></div><div class="sale-processing-copy"><small>PROCESSANDO VENDA</small><b id="saleProcessingTitle">Salvando venda...</b><span id="saleProcessingDetail">Registrando os dados com segurança no caixa.</span><div class="sale-processing-track"><i id="saleProcessingBar"></i></div></div>';
+  box.innerHTML='<div class="sale-processing-icon"><i></i></div><div class="sale-processing-copy"><small>PROCESSANDO VENDA</small><b id="saleProcessingTitle">Recebendo venda...</b><span id="saleProcessingDetail">Registrando os dados no caixa.</span><div class="sale-processing-track"><i id="saleProcessingBar"></i></div></div>';
   document.body.appendChild(box);requestAnimationFrame(()=>box.classList.add('show'));
-  let timer=null;
-  const update=(title,detail,percent)=>{if(!box.isConnected)return;box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;box.querySelector('#saleProcessingBar').style.width=`${percent}%`;};
-  const finish=(title='Venda concluída',detail='O caixa está pronto para a próxima venda.',ok=true)=>{if(!box.isConnected)return;clearTimeout(timer);box.classList.toggle('success',ok);box.classList.toggle('error',!ok);update(title,detail,100);timer=setTimeout(()=>{box.classList.remove('show');setTimeout(()=>box.remove(),250);},ok?1600:3500);};
-  return {update,finish,remove:()=>box.remove()};
+  let closeTimer=null,percent=10,closed=false;
+  const bar=box.querySelector('#saleProcessingBar');
+  const ticker=setInterval(()=>{if(!box.isConnected||closed)return clearInterval(ticker);percent=Math.min(percent+3,92);bar.style.width=`${percent}%`;},320);
+  const update=(title,detail,nextPercent)=>{if(!box.isConnected||closed)return;percent=Math.max(percent,Number(nextPercent)||percent);box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;bar.style.width=`${percent}%`;};
+  const finish=(title='Venda concluída',detail='O caixa está pronto para a próxima venda.',ok=true)=>{
+    if(!box.isConnected||closed)return;closed=true;clearInterval(ticker);clearTimeout(watchdog);clearTimeout(closeTimer);
+    box.classList.toggle('success',ok);box.classList.toggle('error',!ok);
+    box.querySelector('#saleProcessingTitle').textContent=title;box.querySelector('#saleProcessingDetail').textContent=detail;bar.style.width='100%';
+    closeTimer=setTimeout(()=>{box.classList.remove('show');setTimeout(()=>box.remove(),250);},ok?1300:3200);
+  };
+  const watchdog=setTimeout(()=>finish('Venda recebida','A impressão continua em segundo plano.',true),12000);
+  return {update,finish,remove:()=>{closed=true;clearInterval(ticker);clearTimeout(watchdog);clearTimeout(closeTimer);box.remove();}};
 }
 
 async function finalize(){
@@ -189,9 +197,9 @@ async function finalize(){
   const soldItems=state.cart.map(i=>({productId:i.productId,quantity:i.quantity}));
   try{
     state.busy=true;
-    progress.update('Gravando venda...','Confirmando itens, pagamentos e movimentação de estoque.',28);
+    progress.update('Recebendo venda...','Confirmando itens e forma de pagamento.',28);
     const result=await window.thor.finalizeSale({items:soldItems,payments:[{method:state.payment,amount:t}]});
-    progress.update('Venda salva','Preparando o comprovante em segundo plano.',58);
+    progress.update('Autorizando venda...','Venda recebida; preparando a impressão.',58);
     for(const sold of soldItems){const product=state.products.find(p=>p.id===sold.productId);if(product)product.quantity=Math.max(0,Number(product.quantity||0)-Number(sold.quantity||0));}
     state.cart=[];renderCart();renderProducts();
     state.busy=false;
@@ -206,7 +214,7 @@ async function postSalePrint(eventId,progress=null){
   const doc=state.settings?.printDocument||'ask';
   if(mode==='never'){progress?.finish('Venda concluída','Impressão desativada para este caixa.');return;}
   if(mode==='direct'&&doc!=='ask'){
-    progress?.update('Gerando comprovante...','Montando o documento para a impressora.',76);
+    progress?.update('Imprimindo comprovante...','Montando o documento e enviando para a impressora.',76);
     if(doc==='pre_sale')return safePrint(`local:${eventId}`,'pre_sale',progress);
     if(doc==='nfce'){progress?.finish('Venda registrada','Acompanhe a autorização da NFC-e na próxima tela.');return requestNfceAndMaybePrint(`local:${eventId}`);}
   }
@@ -246,7 +254,7 @@ async function requestNfceAndMaybePrint(key){
 }
 
 async function safePrint(key,type,progress=null){
-  try{progress?.update('Enviando à impressora...','Aguarde a saída e o corte do comprovante.',91);const r=await window.thor.printSale(key,type);if(r?.cancelled){progress?.finish('Impressão cancelada','A venda foi salva normalmente.');return false;}progress?.finish('Venda concluída','Comprovante enviado para impressão.');showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
+  try{progress?.update('Imprimindo comprovante...','Comando enviado; aguarde a saída e o corte.',91);const r=await window.thor.printSale(key,type);if(r?.cancelled){progress?.finish('Impressão cancelada','A venda foi salva normalmente.');return false;}progress?.finish('Venda concluída','Comprovante enviado para impressão.');showToast(type==='nfce'?'NFC-e enviada para impressão.':'Comprovante enviado para impressão.');return true;}
   catch(e){progress?.finish('Venda salva; falha na impressão',friendlyError(e.message),false);if(e.message==='printer_not_configured')infoModal('Impressora não configurada','Abra Configurações (F12), escolha uma impressora instalada no Windows ou “Salvar como PDF”.');else infoModal('Impressão',friendlyError(e.message));return false;}
 }
 
