@@ -234,15 +234,12 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
       voucherNumber: number,
     });
     const value = round2(result.estimatedTotal || 0);
-    if (customer) {
-      const updated = this.store.adjustCustomerCredit(customer.id, value);
-      return { ...result, refundMethod:'store_credit', storeCreditCustomerId:customer.id, storeCreditCustomerName:customer.name, storeCreditBalance:Number(updated?.store_credit_balance || 0) };
-    }
-
     const operator = this.currentOperator?.() || null;
     const issuedAt = new Date().toISOString();
+    const validUntil = new Date(new Date(issuedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const metadata = {
       origin:'sale_return',
+      credit_kind:customer?'customer_credit':'voucher',
       sale_id:sale.id || null,
       sale_number:sale.number || '',
       sale_client_event_id:sale.client_event_id || null,
@@ -251,8 +248,21 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
       operator_name:operator?.name || '',
       reason:String(payload.reason || '').trim(),
       items:returnItemMetadata(sale, payload.items || []),
+      customer_phone:customer?.phone || '',
+      customer_email:customer?.email || '',
       issued_at:issuedAt,
+      valid_until:validUntil,
     };
+    if (customer) {
+      const updated = this.store.adjustCustomerCredit(customer.id, value);
+      const returnReceipt = {
+        voucher_number:'CR' + String(result.eventId || Date.now()).replace(/[^a-zA-Z0-9]/g,'').slice(-16).toUpperCase(),
+        original_amount:value,used_amount:0,remaining:value,status:'active',
+        guest_name:customer.name || '',guest_document:customer.document || '',
+        sale_number:sale.number || '',issued_at:issuedAt,metadata
+      };
+      return { ...result, refundMethod:'store_credit', storeCreditCustomerId:customer.id, storeCreditCustomerName:customer.name, storeCreditBalance:Number(updated?.store_credit_balance || 0), returnReceipt };
+    }
 
     const voucher = this.store.saveStoreCreditVoucher({
       voucher_number:number,
