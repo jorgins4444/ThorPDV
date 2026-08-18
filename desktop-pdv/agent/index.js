@@ -31,7 +31,7 @@ class ThorAgent {
     }
     const saleDiscount=Math.min(Math.max(Number(discount||0),0),subtotal); return {items:resolved,subtotal,discount:saleDiscount,total:Math.max(subtotal-saleDiscount,0)};
   }
-  event(type,payload){ const e={id:crypto.randomUUID(),type,payload:{...payload,occurred_at:new Date().toISOString()}}; this.store.enqueue(e); setImmediate(()=>this.sync.run().catch(()=>{})); return e; }
+  event(type,payload){ const e={id:crypto.randomUUID(),type,payload:{...payload,occurred_at:new Date().toISOString()}}; this.store.enqueue(e); setTimeout(()=>this.sync.run().catch(()=>{}),600); return e; }
   async openCash({openingAmount=0,notes=''}){ if(this.store.get('cash_open_event_id')) throw new Error('cash_already_open'); const e=this.event('cash_open',{opening_amount:Number(openingAmount)||0,notes}); this.store.set('cash_open_event_id',e.id); return {ok:true,eventId:e.id}; }
   async cashMovement({movementType,amount,notes=''}){ if(!this.store.get('cash_open_event_id')) throw new Error('cash_not_open'); return {ok:true,eventId:this.event('cash_movement',{movement_type:movementType,amount:Number(amount)||0,notes}).id}; }
   async closeCash({closingAmount=0,notes=''}){ if(!this.store.get('cash_open_event_id')) throw new Error('cash_not_open'); const e=this.event('cash_close',{closing_amount:Number(closingAmount)||0,notes}); this.store.set('cash_open_event_id',''); return {ok:true,eventId:e.id}; }
