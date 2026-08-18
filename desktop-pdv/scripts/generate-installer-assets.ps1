@@ -16,7 +16,7 @@ function Paint-Hammer([Drawing.Graphics]$g,[float]$scale,[float]$x,[float]$y) {
   $g.Restore($state); $gold.Dispose(); $steel.Dispose(); $shade.Dispose()
 }
 
-$icon=New-Object Drawing.Bitmap 256,256,[Drawing.Imaging.PixelFormat]::Format32bppArgb
+$icon=[Drawing.Bitmap]::new(256,256,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
 $g=[Drawing.Graphics]::FromImage($icon); $g.Clear([Drawing.Color]::Transparent)
 $circle=New-Object Drawing.SolidBrush ([Drawing.Color]::FromArgb(15,58,41)); $g.FillEllipse($circle,12,12,232,232)
 Paint-Hammer $g 1.45 50 34
@@ -26,7 +26,7 @@ $png=[IO.File]::ReadAllBytes($pngPath); $stream=[IO.File]::Create((Join-Path $ou
 $writer.Write([UInt16]0);$writer.Write([UInt16]1);$writer.Write([UInt16]1);$writer.Write([Byte]0);$writer.Write([Byte]0);$writer.Write([Byte]0);$writer.Write([Byte]0)
 $writer.Write([UInt16]1);$writer.Write([UInt16]32);$writer.Write([UInt32]$png.Length);$writer.Write([UInt32]22);$writer.Write($png);$writer.Dispose();$stream.Dispose()
 
-$side=New-Object Drawing.Bitmap 164,314,[Drawing.Imaging.PixelFormat]::Format24bppRgb
+$side=[Drawing.Bitmap]::new(164,314,[Drawing.Imaging.PixelFormat]::Format24bppRgb)
 $sg=[Drawing.Graphics]::FromImage($side);$rect=New-Object Drawing.Rectangle 0,0,164,314
 $bg=New-Object Drawing.Drawing2D.LinearGradientBrush $rect,([Drawing.Color]::FromArgb(8,31,22)),([Drawing.Color]::FromArgb(18,91,59)),90
 $sg.FillRectangle($bg,$rect);Paint-Hammer $sg 0.72 34 42
