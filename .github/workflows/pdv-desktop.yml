@@ -3,13 +3,17 @@ name: Build ThorPDV Desktop
 on:
   workflow_dispatch:
   push:
-    branches: [main, pdv-rebuild-from-0.8.44]
+    branches: [main, pdv-rebuild-from-0.8.44, pdv-rework-from-0.8.55]
     paths:
       - 'desktop-pdv/**'
       - '.github/workflows/pdv-desktop.yml'
 
 permissions:
   contents: write
+
+concurrency:
+  group: thorpdv-desktop-${{ github.ref }}
+  cancel-in-progress: true
 
 # ThorPDV Desktop build + durable release assets for ThorControl rollouts.
 # Rebuild releases use a separate tag namespace so archived artifacts remain
@@ -42,7 +46,12 @@ jobs:
             'ipc-store-credit-v105.js',
             'ipc-receivable-v115.js',
             'updater.js',
+            'agent/cash-movement-receipt-v123.js',
+            'agent/sqlite-optimization-v124.js',
             'agent/store.js',
+            'agent/print-service.js',
+            'agent/background-queue.js',
+            'agent/sync-request-worker.js',
             'agent/hardware.js',
             'agent/sync.js',
             'agent/index.js',
@@ -58,6 +67,7 @@ jobs:
             'agent/scale-label-v060.js',
             'agent/sync-policy.js',
             'agent/recovery.js',
+            'agent/operations-center-v120.js',
             'agent/consistency.js',
             'agent/cash-closing.js',
             'agent/cash-close-receipt-v112.js',
@@ -75,7 +85,9 @@ jobs:
             'agent/receipt-print-v829.js',
             'agent/sale-identity-v830.js',
             'renderer/app.js',
+            'scripts/build-renderer-bundle.js',
             'renderer/update-center.js',
+            'renderer/seller-v125.js',
             'renderer/checkout-v3.js',
             'renderer/hotfix-v042.js',
             'renderer/validation-v3.js',
@@ -136,8 +148,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Validate consolidated renderer
+        shell: pwsh
+        run: |
+          npm run bundle:renderer
+          node --check renderer/thorpdv.bundle.js
+
       - name: Build Windows installer
         run: npm run dist:win
+
+      - name: Build ThorControl installer selector
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-thorcontrol-launcher.ps1
 
       - name: Generate SHA-256
         shell: pwsh
@@ -156,6 +178,7 @@ jobs:
           path: |
             desktop-pdv/dist/*.exe
             desktop-pdv/dist/*.sha256
+            desktop-pdv/dist/thor-hammer.ico
           if-no-files-found: error
           retention-days: 14
 
@@ -175,4 +198,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --title $title --notes $notes
           }
-          gh release upload $tag $exe.FullName $sha --clobber
+          $launcher = Join-Path (Resolve-Path dist) 'ThorControl-Atualizador.exe'
+          gh release upload $tag $exe.FullName $sha $launcher --clobber

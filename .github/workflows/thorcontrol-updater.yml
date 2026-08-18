@@ -1,0 +1,48 @@
+name: Build ThorControl Updater
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - pdv-rework-from-0.8.55
+    paths:
+      - .github/scripts/build-thorcontrol-online.ps1
+      - .github/workflows/thorcontrol-updater.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: thorcontrol-updater-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build native ThorControl updater
+        shell: pwsh
+        run: ./.github/scripts/build-thorcontrol-online.ps1 -OutputPath ./dist/ThorControl-Atualizador.exe
+
+      - name: Validate executable
+        shell: pwsh
+        run: |
+          $file = Get-Item -LiteralPath ./dist/ThorControl-Atualizador.exe
+          if ($file.Length -lt 20000) { throw "Executável gerado é menor que o esperado." }
+          Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName
+
+      - name: Preserve build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThorControl-Atualizador
+          path: dist/ThorControl-Atualizador.exe
+          if-no-files-found: error
+
+      - name: Publish updater in current stable release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload pdv-v0.8.79 ./dist/ThorControl-Atualizador.exe --clobber

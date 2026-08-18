@@ -202,9 +202,10 @@
           guestName:guest?.name || '',guestDocument:guest?.document || ''
         });
         m.remove();
-        if (result.voucher) {
-          try { await window.thor.printStoreCreditVoucher(result.voucher); }
-          catch (printError) { infoModal('Vale Crédito emitido', `Vale ${result.voucher.voucher_number} no valor de ${money(result.voucher.original_amount)} foi criado, mas não foi possível imprimir: ${friendlyError(printError.message)}.`); }
+        const returnReceipt = result.voucher || result.returnReceipt || null;
+        if (returnReceipt) {
+          try { await window.thor.printStoreCreditVoucher(returnReceipt); }
+          catch (printError) { infoModal('Comprovante de devolução', `A devolução foi concluída, mas não foi possível imprimir o comprovante em 44 colunas: ${friendlyError(printError.message)}.`); }
         }
         try { await window.thor.sync(); } catch {}
         await refreshProducts(); await refreshFiscalSales();

@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const path = require('path');
+const { Worker } = require('worker_threads');
 const CASH_SYNC_TIME_ZONE='America/Fortaleza';
 
 function syncBusinessDate(value=Date.now()){
@@ -28,6 +30,22 @@ class SyncEngine {
     this.failures=0;
     this.backoffUntil=0;
     this.intervalMs=5*60*1000;
+    this.requestWorker=null;
+    this.requestPending=new Map();
+  }
+
+  ensureRequestWorker(){
+    if(this.requestWorker)return this.requestWorker;
+    const worker=new Worker(path.join(__dirname,'sync-request-worker.js'));
+    worker.on('message',(row)=>{
+      const pending=this.requestPending.get(String(row.id));if(!pending)return;
+      this.requestPending.delete(String(row.id));
+      this.store.metric('sync.http',row.durationMs||0,{path:pending.path,ok:row.ok,status:row.status||0});
+      if(row.ok)pending.resolve(row.data);else pending.reject(new Error(row.error||row.data?.error||`http_${row.status||0}`));
+    });
+    worker.on('error',(error)=>{for(const pending of this.requestPending.values())pending.reject(error);this.requestPending.clear();this.requestWorker=null;});
+    worker.on('exit',()=>{this.requestWorker=null;});
+    this.requestWorker=worker;return worker;
   }
 
   headers(){
@@ -45,21 +63,14 @@ class SyncEngine {
     return row.result||{};
   }
 
-  async request(path,body){
-    const controller=new AbortController();
-    const timeoutMs=path==='/api/pdv/push'?45000:15000;
-    const timeout=setTimeout(()=>controller.abort(),timeoutMs);
-    try{
-      const response=await fetch(`${this.apiBase}${path}`,{
-        method:'POST',headers:this.headers(),body:JSON.stringify(body||{}),signal:controller.signal,
-      });
-      const data=await response.json().catch(()=>({ok:false,error:`http_${response.status}`}));
-      if(!response.ok||!data.ok) throw new Error(data.error||`http_${response.status}`);
-      return data;
-    }catch(error){
-      if(error?.name==='AbortError') throw new Error('sync_timeout');
-      throw error;
-    }finally{ clearTimeout(timeout); }
+  async request(pathname,body){
+    const timeoutMs=pathname==='/api/pdv/push'?45000:15000;
+    const id=crypto.randomUUID();
+    const worker=this.ensureRequestWorker();
+    return new Promise((resolve,reject)=>{
+      this.requestPending.set(id,{resolve,reject,path:pathname});
+      worker.postMessage({id,url:`${this.apiBase}${pathname}`,headers:this.headers(),body,timeoutMs});
+    });
   }
 
   start(){
@@ -76,6 +87,8 @@ class SyncEngine {
   stop(){
     if(this.timer) clearInterval(this.timer);
     this.timer=null;
+    try{this.requestWorker?.terminate();}catch{}
+    this.requestWorker=null;
   }
 
   nextBackoff(){
@@ -168,7 +181,9 @@ class SyncEngine {
       await this.control('cash_rollover',{});
 
       const pull=await this.request('/api/pdv/pull',{since:this.store.get('cursor')||null});
+      const applyStarted=Date.now();
       this.store.applyPull(pull);
+      this.store.metric('sync.apply_local',Date.now()-applyStarted,{products:(pull.products||[]).length,inventory:(pull.inventory||[]).length});
       this.store.set('last_pull_at',new Date().toISOString());
       if(Array.isArray(pull.staff_users)) this.store.set('staff_users',JSON.stringify(pull.staff_users));
       if(Array.isArray(pull.payment_integrations)) this.store.set('payment_integrations',JSON.stringify(pull.payment_integrations));

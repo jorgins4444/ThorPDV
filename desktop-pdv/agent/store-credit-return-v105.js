@@ -234,15 +234,12 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
       voucherNumber: number,
     });
     const value = round2(result.estimatedTotal || 0);
-    if (customer) {
-      const updated = this.store.adjustCustomerCredit(customer.id, value);
-      return { ...result, refundMethod:'store_credit', storeCreditCustomerId:customer.id, storeCreditCustomerName:customer.name, storeCreditBalance:Number(updated?.store_credit_balance || 0) };
-    }
-
     const operator = this.currentOperator?.() || null;
     const issuedAt = new Date().toISOString();
+    const validUntil = new Date(new Date(issuedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const metadata = {
       origin:'sale_return',
+      credit_kind:customer?'customer_credit':'voucher',
       sale_id:sale.id || null,
       sale_number:sale.number || '',
       sale_client_event_id:sale.client_event_id || null,
@@ -251,8 +248,21 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
       operator_name:operator?.name || '',
       reason:String(payload.reason || '').trim(),
       items:returnItemMetadata(sale, payload.items || []),
+      customer_phone:customer?.phone || '',
+      customer_email:customer?.email || '',
       issued_at:issuedAt,
+      valid_until:validUntil,
     };
+    if (customer) {
+      const updated = this.store.adjustCustomerCredit(customer.id, value);
+      const returnReceipt = {
+        voucher_number:'CR' + String(result.eventId || Date.now()).replace(/[^a-zA-Z0-9]/g,'').slice(-16).toUpperCase(),
+        original_amount:value,used_amount:0,remaining:value,status:'active',
+        guest_name:customer.name || '',guest_document:customer.document || '',
+        sale_number:sale.number || '',issued_at:issuedAt,metadata
+      };
+      return { ...result, refundMethod:'store_credit', storeCreditCustomerId:customer.id, storeCreditCustomerName:customer.name, storeCreditBalance:Number(updated?.store_credit_balance || 0), returnReceipt };
+    }
 
     const voucher = this.store.saveStoreCreditVoucher({
       voucher_number:number,
@@ -300,61 +310,84 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
     if (!voucher?.voucher_number) throw new Error('store_credit_voucher_not_found');
 
     const metadata = json(voucher.metadata, {});
-    const remaining = voucher.remaining == null
-      ? Math.max(Number(voucher.original_amount || 0) - Number(voucher.used_amount || 0), 0)
-      : Number(voucher.remaining || 0);
-    const used = Math.max(Number(voucher.used_amount || 0), 0);
-    const sep = '-'.repeat(WIDTH);
-    const strong = '='.repeat(WIDTH);
+    const remaining = voucher.remaining == null ? Math.max(Number(voucher.original_amount || 0) - Number(voucher.used_amount || 0), 0) : Number(voucher.remaining || 0);
     const context = json(this.store.get('context', '{}'), {});
     const company = context.company_trade_name || context.company_name || 'THORPDV';
-    const branch = context.branch_name || '';
-    const companyDocument = context.company_document || context.company_cnpj || context.cnpj || '';
-    const terminal = context.pos_name || context.register_name || context.device_name || '';
+    const branch = context.branch_name || context.store_name || '';
+    const companyDocument = context.branch_cnpj || context.company_document || context.company_cnpj || context.cnpj || '';
+    const phone = context.branch_phone || context.company_phone || context.phone || '';
+    const street = [context.branch_street || context.address_street || '', context.branch_number || context.address_number || ''].filter(Boolean).join(', ');
+    const city = [context.branch_district || '', context.branch_city || context.city || '', context.branch_state || context.state || ''].filter(Boolean).join(' - ');
     const issued = new Date(voucher.issued_at || metadata.issued_at || Date.now());
+    const valid = new Date(metadata.valid_until || issued.getTime() + 30 * 86400000);
     const items = Array.isArray(metadata.items) ? metadata.items : [];
+    const isCustomerCredit = metadata.credit_kind === 'customer_credit';
+    const sep = '-'.repeat(WIDTH);
+    const dotted = '.'.repeat(WIDTH);
+    const line = (label, value) => {
+      const left = ascii(label), right = ascii(value);
+      return fit(left + ' '.repeat(Math.max(1, WIDTH - left.length - right.length)) + right);
+    };
+    const lines = [];
 
-    const lines = [strong, center(company)];
-    if (branch) lines.push(center(branch));
-    if (companyDocument) lines.push(...wrap44(`CNPJ/CPF: ${companyDocument}`));
-    lines.push(center('VALE CREDITO'), center('DEVOLUCAO DE VENDA'), strong);
-    lines.push(...wrap44(`VALE: ${voucher.voucher_number}`));
-    lines.push(fit(`EMISSAO: ${issued.toLocaleString('pt-BR')}`));
-    if (voucher.sale_number || metadata.sale_number) lines.push(fit(`VENDA: ${voucher.sale_number || metadata.sale_number}`));
-    if (metadata.return_event_id) lines.push(...wrap44(`EVENTO DEVOLUCAO: ${metadata.return_event_id}`));
+    lines.push(center(isCustomerCredit ? 'COMPROVANTE DE CREDITO' : 'VALE CREDITO'));
+    lines.push(center('DEVOLUCAO DE VENDA'));
+    lines.push(center(issued.toLocaleString('pt-BR')));
+    lines.push(center('****** NAO POSSUI VALOR FISCAL ******'));
+    lines.push(sep);
+    lines.push(line('Validade:', valid.toLocaleDateString('pt-BR')));
+    lines.push(...wrap44(`Numero do comprovante: ${voucher.voucher_number}`));
+    if (!isCustomerCredit) lines.push('[[BARCODE]]');
     lines.push(sep);
 
-    lines.push(center('BENEFICIARIO'));
-    if (voucher.guest_name) lines.push(...wrap44(`NOME: ${voucher.guest_name}`));
-    if (voucher.guest_document) lines.push(...wrap44(`DOCUMENTO: ${voucher.guest_document}`));
-    if (!voucher.guest_name && !voucher.guest_document) lines.push(fit('PESSOA SEM CADASTRO'));
-    if (metadata.operator_name) lines.push(...wrap44(`OPERADOR: ${metadata.operator_name}`));
-    if (terminal) lines.push(...wrap44(`TERMINAL: ${terminal}`));
-    if (metadata.reason) {
-      lines.push(sep, fit('MOTIVO DA DEVOLUCAO:'));
-      lines.push(...wrap44(metadata.reason));
-    }
+    lines.push(...wrap44(`Loja: ${branch || company}`));
+    if (companyDocument) lines.push(...wrap44(`CNPJ: ${companyDocument}`));
+    if (phone) lines.push(...wrap44(`Telefone: ${phone}`));
+    if (street) lines.push(...wrap44(`Endereco: ${street}`));
+    if (city) lines.push(...wrap44(`          ${city}`));
+    lines.push(sep);
+
+    lines.push(...wrap44(`Cliente: ${voucher.guest_name || 'Nao identificado'}`));
+    if (voucher.guest_document) lines.push(...wrap44(`CPF/CNPJ: ${voucher.guest_document}`));
+    if (metadata.customer_phone) lines.push(...wrap44(`Telefone: ${metadata.customer_phone}`));
+    lines.push('');
+    lines.push(center('Preenchimento pelo encarregado do caixa'));
+    lines.push('');
+    lines.push(...wrap44(`Operador: ${metadata.operator_name || 'Nao identificado'}`));
+    if (metadata.reason) lines.push(...wrap44(`Motivo da devolucao: ${metadata.reason}`));
+    else lines.push('Motivo da devolucao:');
+    lines.push('', '', '_'.repeat(WIDTH), center('Assinatura'), '');
+
+    lines.push(dotted);
+    lines.push(center('DADOS DA DEVOLUCAO'));
+    lines.push(dotted);
+    if (metadata.return_event_id) lines.push(...wrap44(`Evento: ${metadata.return_event_id}`));
+    lines.push(line('Data:', issued.toLocaleDateString('pt-BR')));
+    if (voucher.sale_number || metadata.sale_number) lines.push(...wrap44(`Venda/Cupom: ${voucher.sale_number || metadata.sale_number}`));
+    lines.push(line('Lancamento:', issued.toLocaleString('pt-BR')));
+    lines.push('');
 
     if (items.length) {
-      lines.push(sep, center('ITENS DEVOLVIDOS'));
-      items.forEach((item, index) => {
-        lines.push(...wrap44(`${index + 1}. ${item.name || item.sku || 'ITEM'}`));
-        if (item.sku) lines.push(...wrap44(`COD/SKU: ${item.sku}`));
-        const unit = item.unit ? ` ${item.unit}` : '';
-        lines.push(fit(`QTD: ${qtyText(item.quantity)}${unit}`));
-        lines.push(fit(`UNITARIO: ${money(item.unit_price)}`));
-        lines.push(fit(`TOTAL ITEM: ${money(item.total)}`));
-      });
+      lines.push(fit('Produto                         Qtd   Valor'));
+      lines.push(sep);
+      for (const item of items) {
+        lines.push(...wrap44(item.name || item.sku || 'ITEM'));
+        const code = item.sku ? `Ref: ${item.sku}` : '';
+        const quantity = qtyText(item.quantity);
+        const value = money(item.total);
+        const left = ascii(code).slice(0, 24).padEnd(24, ' ');
+        lines.push(fit(left + quantity.padStart(7, ' ') + value.padStart(13, ' ')));
+      }
+      lines.push(sep);
     }
+    lines.push(line('TOTAL:', money(voucher.original_amount)));
+    if (Number(voucher.used_amount || 0) > 0) lines.push(line('UTILIZADO:', money(voucher.used_amount)));
+    lines.push(line('SALDO:', money(remaining)));
+    lines.push(dotted);
+    lines.push(center(isCustomerCredit ? 'CREDITO VINCULADO AO CLIENTE' : 'APRESENTE ESTE NUMERO NA PROXIMA COMPRA'));
+    lines.push(center('DOCUMENTO NAO FISCAL'));
+    lines.push('', '', '');
 
-    lines.push(strong);
-    lines.push(fit(`VALOR DO VALE: ${money(voucher.original_amount)}`));
-    lines.push(fit(`VALOR UTILIZADO: ${money(used)}`));
-    lines.push(fit(`SALDO DISPONIVEL: ${money(remaining)}`));
-    lines.push(strong);
-    lines.push(...wrap44('APRESENTE O NUMERO DESTE VALE NO MOMENTO DA COMPRA.'));
-    lines.push(...wrap44('USO PARCIAL PERMITIDO. GUARDE ESTE COMPROVANTE ATE UTILIZAR TODO O SALDO.'));
-    lines.push(sep, center('DOCUMENTO NAO FISCAL'), center('THORPDV'), strong, '', '', '');
     return { kind:'text', width:WIDTH, text:lines.join('\n'), voucher:{ ...voucher, metadata } };
   };
 
@@ -363,7 +396,7 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
     const target = this.settings().printerName;
     if (!target) throw new Error('printer_not_configured');
     if (target === '__PDF__') throw new Error('thermal_printer_required');
-    await hardware.printText(target, doc.text);
+    await hardware.printVoucherBarcode(target, doc.text, doc.voucher.metadata?.credit_kind === 'customer_credit' ? '' : doc.voucher.voucher_number);
     return { ok:true, target, voucher_number:doc.voucher.voucher_number, width:WIDTH };
   };
 }

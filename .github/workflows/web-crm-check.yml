@@ -1,0 +1,30 @@
+name: Validate ThorGestao CRM
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - pdv-rework-from-0.8.55
+    paths:
+      - src/app/page.tsx
+      - src/app/globals.css
+      - src/app/comece-agora/**
+      - src/app/control/crm/**
+      - src/app/control/page.tsx
+      - src/app/control/control.css
+      - .github/workflows/web-crm-check.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ovqjnkdnbkhslywumppn.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}

@@ -91,10 +91,16 @@ function paintFiscalProgress(m,sale,phase='waiting'){
 }
 
 async function boot(){
+  const started=performance.now();
   state.status=await window.thor.status();
   state.settings=state.status.settings||await window.thor.settings();
   render();
-  if(state.status.enrolled){await refreshProducts('');await refreshFiscalSales('');setInterval(async()=>{await refreshStatus();if(state.view==='fiscal'||state.fiscalSales.some(x=>['requested','draft','processing'].includes(String(x.fiscal?.status||''))))await refreshFiscalSales();},3000);}
+  if(state.status.enrolled){
+    await refreshProducts('');
+    void refreshFiscalSales('').catch(()=>{});
+    setInterval(async()=>{await refreshStatus();if(state.view==='fiscal'||state.fiscalSales.some(x=>['requested','draft','processing'].includes(String(x.fiscal?.status||''))))await refreshFiscalSales();},3000);
+  }
+  void window.thor.recordPerformance?.('ui.boot',performance.now()-started,{enrolled:Boolean(state.status.enrolled)});
 }
 
 async function refreshStatus(){state.status=await window.thor.status();state.settings=state.status.settings||state.settings;updateTop();}
@@ -129,7 +135,7 @@ function renderSaleWorkspace(){
 function bindSale(){
   const search=document.getElementById('search');let timer;
   search.value=state.query;
-  search.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>refreshProducts(search.value),120)};
+  search.oninput=()=>{clearTimeout(timer);const value=search.value;timer=setTimeout(()=>refreshProducts(value),220)};
   search.onkeydown=e=>{if(e.key==='Enter'&&state.products[0]){e.preventDefault();add(state.products[0]);search.select();}};
   document.getElementById('clear').onclick=()=>{state.cart=[];renderCart();};
   document.getElementById('finalize').onclick=finalize;
@@ -167,13 +173,17 @@ function renderCart(){
 async function finalize(){
   if(state.busy||!state.cart.length)return;
   if(!state.status.cashOpenEventId)return openCashModal();
-  const t=total();
+  const started=performance.now(),t=total();
+  const soldItems=state.cart.map(i=>({productId:i.productId,quantity:i.quantity}));
   try{
     state.busy=true;
-    const result=await window.thor.finalizeSale({items:state.cart.map(i=>({productId:i.productId,quantity:i.quantity})),payments:[{method:state.payment,amount:t}]});
-    state.cart=[];renderCart();await refreshProducts();await refreshStatus();await refreshFiscalSales();
+    const result=await window.thor.finalizeSale({items:soldItems,payments:[{method:state.payment,amount:t}]});
+    for(const sold of soldItems){const product=state.products.find(p=>p.id===sold.productId);if(product)product.quantity=Math.max(0,Number(product.quantity||0)-Number(sold.quantity||0));}
+    state.cart=[];renderCart();renderProducts();
+    state.busy=false;
     showToast(`Venda registrada: ${money(result.total)}.`);
-    await postSalePrint(result.eventId);
+    void window.thor.recordPerformance?.('ui.sale_released',performance.now()-started,{items:soldItems.length});
+    setTimeout(()=>{void refreshStatus().catch(()=>{});void postSalePrint(result.eventId).catch(e=>showToast(`Venda salva. Impressão pendente: ${friendlyError(e.message)}`));},0);
   }catch(e){alert(`Não foi possível finalizar: ${friendlyError(e.message)}`);}finally{state.busy=false;}
 }
 
@@ -391,8 +401,8 @@ function cancelSaleModal(sale){
     if(countdownTimer)clearInterval(countdownTimer);
     const card=m.querySelector('.modal-card');card.innerHTML='<div id="cancelProgressBody"></div>';m.dataset.cancelStartedAt=String(Date.now());
     paintCancelProgress(m,sale,{fiscalCancellation,phase:'validating'});
-    let settled=false,cancelError=null;
-    const task=window.thor.cancelSale({saleKey:saleKey(sale),reason}).then(()=>{settled=true;}).catch(e=>{cancelError=e;settled=true;});
+    let settled=false,cancelError=null,cancelResult=null;
+    const task=window.thor.cancelSale({saleKey:saleKey(sale),reason}).then(result=>{cancelResult=result;settled=true;}).catch(e=>{cancelError=e;settled=true;});
     while(!settled&&m.isConnected){const elapsed=Date.now()-Number(m.dataset.cancelStartedAt||Date.now());const phase=fiscalCancellation?(elapsed<350?'validating':elapsed<800?'building':elapsed<1350?'signing':'sending'):(elapsed<350?'validating':'reversing');paintCancelProgress(m,sale,{fiscalCancellation,phase});await wait(120);}
     await task;
     if(cancelError){const raw=String(cancelError?.message||cancelError||'');let stage=fiscalCancellation?3:1;if(raw.includes('window_expired'))stage=0;else if(raw.includes('reason_invalid'))stage=1;else if(raw.includes('rejected'))stage=4;else if(raw.includes('transmission'))stage=3;paintCancelProgress(m,sale,{fiscalCancellation,phase:'error',error:friendlyError(raw),errorStage:stage});return;}
@@ -404,8 +414,11 @@ function cancelSaleModal(sale){
     try{await refreshProducts();}catch{}
     try{await refreshFiscalSales();}catch{}
     try{finalSale=await window.thor.fiscalSale(saleKey(sale));}catch{}
+    let printWarning='';
+    try{await window.thor.printSaleCancellation(cancelResult?.receipt||{});}catch(printError){printWarning=friendlyError(printError?.message||'print_failed');}
     paintCancelProgress(m,finalSale,{fiscalCancellation,phase:'done',syncPending});
-    showToast(fiscalCancellation?'NFC-e cancelada e venda estornada.':'Venda cancelada.');
+    const successMessage=fiscalCancellation?'NFC-e cancelada e venda estornada.':'Venda cancelada.';
+    showToast(printWarning?`${successMessage} Impressão pendente: ${printWarning}`:`${successMessage} Comprovante impresso.`);
   };
 }
 
@@ -485,7 +498,7 @@ function settingsModal(){
 function openCashModal(){
   const opened=state.status.cashOpenEventId;
   const m=modal(opened?`<h3>Caixa aberto</h3><p class="muted">Você pode lançar suprimento/sangria ou fechar o caixa.</p><div class="field"><label>Valor</label><input id="cashValue" type="number" step="0.01" value="0"></div><div class="actions"><button class="secondary" id="supply">Suprimento</button><button class="secondary" id="withdraw">Sangria</button><button class="danger primary" id="closeCash">Fechar caixa</button></div>`:`<h3>Abrir caixa</h3><p class="muted">Informe o fundo de troco inicial.</p><div class="field"><label>Valor de abertura</label><input id="cashValue" type="number" step="0.01" value="0"></div><div class="actions"><button class="primary" id="openCash">Abrir caixa</button></div>`);
-  if(opened){m.querySelector('#supply').onclick=async()=>{await window.thor.cashMovement({movementType:'supply',amount:Number(m.querySelector('#cashValue').value)});m.remove();refreshStatus();};m.querySelector('#withdraw').onclick=async()=>{await window.thor.cashMovement({movementType:'withdrawal',amount:Number(m.querySelector('#cashValue').value)});m.remove();refreshStatus();};m.querySelector('#closeCash').onclick=async()=>{await window.thor.closeCash({closingAmount:Number(m.querySelector('#cashValue').value)});m.remove();refreshStatus();};}else m.querySelector('#openCash').onclick=async()=>{await window.thor.openCash({openingAmount:Number(m.querySelector('#cashValue').value)});m.remove();refreshStatus();};
+  if(opened){m.querySelector('#supply').onclick=async()=>{const result=await window.thor.cashMovement({movementType:'supply',amount:Number(m.querySelector('#cashValue').value),operatorId:state.status?.operator?.id||null,operatorName:state.status?.operator?.name||''});await window.thor.printCashMovement(result?.receipt||{});m.remove();refreshStatus();};m.querySelector('#withdraw').onclick=async()=>{const result=await window.thor.cashMovement({movementType:'withdrawal',amount:Number(m.querySelector('#cashValue').value),operatorId:state.status?.operator?.id||null,operatorName:state.status?.operator?.name||''});await window.thor.printCashMovement(result?.receipt||{});m.remove();refreshStatus();};m.querySelector('#closeCash').onclick=async()=>{await window.thor.closeCash({closingAmount:Number(m.querySelector('#cashValue').value)});m.remove();refreshStatus();};}else m.querySelector('#openCash').onclick=async()=>{await window.thor.openCash({openingAmount:Number(m.querySelector('#cashValue').value)});m.remove();refreshStatus();};
 }
 
 function modal(html,size=''){const wrap=document.createElement('div');wrap.className='modal';wrap.innerHTML=`<div class="modal-card ${size}">${html}</div>`;document.body.appendChild(wrap);wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};return wrap;}

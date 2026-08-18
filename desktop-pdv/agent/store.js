@@ -12,7 +12,8 @@ const DEFAULT_SHORTCUTS = {
 
 class Store {
   constructor(dataDir) {
-    this.db = new Database(path.join(dataDir, 'thorpdv-local.db'));
+    this.dbPath=path.join(dataDir, 'thorpdv-local.db');
+    this.db = new Database(this.dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.migrate();
@@ -28,7 +29,10 @@ class Store {
         production_description text not null default '',auto_print_production integer not null default 1,production_yield real not null default 1,
         production_composition text not null default '[]'
       );
-      create index if not exists idx_products_name on products(name);
+      create index if not exists idx_products_name on products(name collate nocase);
+      create index if not exists idx_products_sku on products(sku collate nocase);
+      create table if not exists product_barcodes(barcode text primary key,product_id text not null);
+      create index if not exists idx_product_barcodes_product on product_barcodes(product_id);
       create table if not exists inventory(product_id text primary key,quantity real not null default 0,reserved_quantity real not null default 0,updated_at text);
       create table if not exists price_items(product_id text primary key,price real not null);
       create table if not exists promotions(id text primary key,name text,rules text not null,valid_from text,valid_to text,updated_at text);
@@ -42,6 +46,12 @@ class Store {
       create table if not exists server_sales(id text primary key,client_event_id text,number text,status text,total real not null default 0,payload text not null,created_at text not null,updated_at text not null);
       create index if not exists idx_server_sales_number on server_sales(number);
       create index if not exists idx_server_sales_event on server_sales(client_event_id);
+      create table if not exists performance_metrics(
+        id integer primary key autoincrement,name text not null,duration_ms real not null,
+        metadata text not null default '{}',created_at text not null
+      );
+      create index if not exists idx_performance_metrics_time on performance_metrics(created_at desc);
+      create index if not exists idx_performance_metrics_name on performance_metrics(name,created_at desc);
     `);
 
     // Migração incremental para instalações anteriores sem apagar o SQLite do caixa.
@@ -57,6 +67,16 @@ class Store {
   }
 
   close() { this.db.close(); }
+  metric(name,durationMs,metadata={}) {
+    try {
+      this.db.prepare('insert into performance_metrics(name,duration_ms,metadata,created_at) values(?,?,?,?)')
+        .run(String(name),Math.max(0,Number(durationMs)||0),JSON.stringify(metadata||{}),new Date().toISOString());
+      this.db.prepare('delete from performance_metrics where id in (select id from performance_metrics order by id desc limit -1 offset 5000)').run();
+    } catch {}
+  }
+  recentMetrics(limit=200) {
+    return this.db.prepare('select name,duration_ms,metadata,created_at from performance_metrics order by id desc limit ?').all(Math.min(Math.max(Number(limit)||200,1),1000)).map(row=>({...row,metadata:JSON.parse(row.metadata||'{}')}));
+  }
   get(key, fallback = '') { const row = this.db.prepare('select value from settings where key=?').get(key); return row ? row.value : fallback; }
   set(key, value) { this.db.prepare('insert into settings(key,value) values(?,?) on conflict(key) do update set value=excluded.value').run(key, String(value ?? '')); }
 
@@ -112,6 +132,13 @@ class Store {
         production_yield:Number(p.production_yield||1),
         production_composition:JSON.stringify(p.composition||[]),
       });
+      const barcodeDelete=this.db.prepare('delete from product_barcodes where product_id=?');
+      const barcodeInsert=this.db.prepare('insert into product_barcodes(barcode,product_id) values(?,?) on conflict(barcode) do update set product_id=excluded.product_id');
+      for(const p of data.products||[]){
+        barcodeDelete.run(String(p.id));
+        const codes=new Set([p.sku,...(p.barcodes||[])].map(value=>String(value||'').trim().toLowerCase()).filter(Boolean));
+        for(const code of codes)barcodeInsert.run(code,String(p.id));
+      }
       const stockStmt = this.db.prepare(`insert into inventory(product_id,quantity,reserved_quantity,updated_at) values(@product_id,@quantity,@reserved_quantity,@updated_at)
         on conflict(product_id) do update set quantity=excluded.quantity,reserved_quantity=excluded.reserved_quantity,updated_at=excluded.updated_at`);
       for (const i of data.inventory || []) stockStmt.run({ product_id:i.product_id, quantity:Number(i.quantity||0), reserved_quantity:Number(i.reserved_quantity||0), updated_at:i.updated_at||'' });
@@ -137,9 +164,21 @@ class Store {
   }
 
   searchProducts(query = '', limit = 50) {
-    const q = String(query).trim().toLowerCase();
-    if (!q) return this.db.prepare(`select p.*,coalesce(i.quantity,0) quantity,coalesce(pi.price,p.sale_price) base_price from products p left join inventory i on i.product_id=p.id left join price_items pi on pi.product_id=p.id where p.active=1 order by p.name limit ?`).all(limit).map(this.inflateProduct);
-    return this.db.prepare(`select p.*,coalesce(i.quantity,0) quantity,coalesce(pi.price,p.sale_price) base_price from products p left join inventory i on i.product_id=p.id left join price_items pi on pi.product_id=p.id where p.active=1 and (lower(p.name) like ? or lower(coalesce(p.sku,'')) like ? or lower(p.barcodes) like ?) order by case when lower(coalesce(p.sku,''))=? then 0 else 1 end,p.name limit ?`).all(`%${q}%`,`%${q}%`,`%${q}%`,q,limit).map(this.inflateProduct);
+    const started=Date.now();
+    const q=String(query).trim().toLowerCase();
+    const select=`select p.*,coalesce(i.quantity,0) quantity,coalesce(pi.price,p.sale_price) base_price
+      from products p left join inventory i on i.product_id=p.id left join price_items pi on pi.product_id=p.id`;
+    let rows;
+    if(!q) rows=this.db.prepare(`${select} where p.active=1 order by p.name collate nocase limit ?`).all(limit);
+    else {
+      rows=this.db.prepare(`${select} left join product_barcodes pb on pb.product_id=p.id
+        where p.active=1 and (pb.barcode=? or p.sku=? collate nocase or p.name like ? collate nocase)
+        group by p.id order by case when pb.barcode=? then 0 when p.sku=? collate nocase then 1 else 2 end,p.name collate nocase limit ?`)
+        .all(q,q,`${q}%`,q,q,limit);
+      if(!rows.length&&q.length>=3) rows=this.db.prepare(`${select} where p.active=1 and p.name like ? collate nocase order by p.name collate nocase limit ?`).all(`%${q}%`,limit);
+    }
+    this.metric('search.products',Date.now()-started,{queryLength:q.length,rows:rows.length});
+    return rows.map(this.inflateProduct);
   }
 
   inflateProduct(row) { return { ...row, barcodes: JSON.parse(row.barcodes || '[]') }; }
@@ -183,6 +222,10 @@ class Store {
         customer_name:'',
         items:p.items||[],
         payments:p.payments||[],
+        operator:p.operator||null,
+        seller:p.seller||null,
+        seller_user_id:p.seller_user_id||null,
+        seller_name:p.seller_name||'',
         fiscal:p.fiscal||null,
         returned_total:Number(p.returned_total||0),
         source:'local',
@@ -201,7 +244,7 @@ class Store {
     const r=this.db.prepare('select * from receipts where event_id=? or id=? or server_sale_id=? or server_number=? limit 1').get(lookup,lookup,lookup,lookup);
     if(!r) return null;
     const p=JSON.parse(r.payload||'{}');
-    return {id:r.server_sale_id||null,local_key:`local:${r.event_id}`,client_event_id:r.event_id,number:r.server_number||null,status:p.local_status||'pending_sync',subtotal:p.subtotal||p.total||0,discount:p.discount||0,total:r.total,created_at:r.created_at,completed_at:p.createdAt||r.created_at,items:p.items||[],payments:p.payments||[],fiscal:p.fiscal||null,returned_total:Number(p.returned_total||0),source:'local'};
+    return {id:r.server_sale_id||null,local_key:`local:${r.event_id}`,client_event_id:r.event_id,number:r.server_number||null,status:p.local_status||'pending_sync',subtotal:p.subtotal||p.total||0,discount:p.discount||0,total:r.total,created_at:r.created_at,completed_at:p.createdAt||r.created_at,items:p.items||[],payments:p.payments||[],operator:p.operator||null,seller:p.seller||null,seller_user_id:p.seller_user_id||null,seller_name:p.seller_name||'',fiscal:p.fiscal||null,returned_total:Number(p.returned_total||0),source:'local'};
   }
 
   patchLocalSale(sale, patch) {
