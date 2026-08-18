@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: thorpdv-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 # ThorPDV Desktop build + durable release assets for ThorControl rollouts.
 # Rebuild releases use a separate tag namespace so archived artifacts remain
 # available for diagnostics without being reused accidentally.
@@ -42,6 +46,8 @@ jobs:
             'ipc-store-credit-v105.js',
             'ipc-receivable-v115.js',
             'updater.js',
+            'agent/cash-movement-receipt-v123.js',
+            'agent/sqlite-optimization-v124.js',
             'agent/store.js',
             'agent/print-service.js',
             'agent/background-queue.js',
@@ -81,6 +87,7 @@ jobs:
             'renderer/app.js',
             'scripts/build-renderer-bundle.js',
             'renderer/update-center.js',
+            'renderer/seller-v125.js',
             'renderer/checkout-v3.js',
             'renderer/hotfix-v042.js',
             'renderer/validation-v3.js',
@@ -140,6 +147,12 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Validate consolidated renderer
+        shell: pwsh
+        run: |
+          npm run bundle:renderer
+          node --check renderer/thorpdv.bundle.js
 
       - name: Build Windows installer
         run: npm run dist:win
