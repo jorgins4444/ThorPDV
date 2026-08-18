@@ -1,6 +1,6 @@
 /* Tipografia unificada ThorPDV — carregada por último para vencer os redesigns antigos */
 :root{
-  --thor-font:"Arial","Calibri","Segoe UI",sans-serif;
+  --thor-font:"Calibri","Arial","Segoe UI",sans-serif;
   --thor-text:13px;
   --thor-small:11px;
   --thor-label:11px;
@@ -119,3 +119,18 @@ h1{font-size:24px!important}h2{font-size:20px!important}h3{font-size:18px!import
   .v090-fiscal-table-card .fiscal-table td{font-size:11px!important}
   .v090-product-list .v088-product-copy>strong{font-size:11px!important}
 }
+
+/* Fiscal v122: Calibri e escala mínima uniforme, inclusive em resoluções compactas */
+.v090-fiscal,.v090-fiscal *,.v090-fiscal-shell,.v090-fiscal-shell *,.fiscal-view,.fiscal-view *,.fiscal-panel,.fiscal-panel *{font-family:"Calibri","Arial","Segoe UI",sans-serif!important}
+.v090-fiscal-head p{font-size:14px!important}.v090-fiscal-nav button{font-size:13px!important;min-height:40px!important}
+.v090-fiscal-kpis span{font-size:13px!important}.v090-fiscal-kpis small{font-size:12px!important}
+.v090-fiscal-notice{font-size:13px!important}.v090-fiscal-toolbar label,.fiscal-toolbar-v079 label{font-size:12px!important}
+.v090-fiscal-toolbar input,.v090-fiscal-toolbar select,.v090-fiscal-toolbar button{font-size:14px!important;min-height:42px!important}
+.v090-fiscal-chips button,.fiscal-chip{font-size:13px!important;min-height:37px!important}
+.v090-fiscal-table-card .fiscal-table,.fiscal-table{font-size:14px!important}
+.v090-fiscal-table-card .fiscal-table thead th,.fiscal-table th{font-size:12px!important}
+.v090-fiscal-table-card .fiscal-table td,.fiscal-table td{font-size:14px!important;line-height:1.45!important}
+.v090-fiscal-table-card .table-action{font-size:13px!important;min-height:38px!important}
+.fiscal-status,.sale-status{font-size:12px!important}.fiscal-meta,.fiscal-diagnostic{font-size:14px!important}
+.fiscal-progress-step,.fiscal-progress-details summary{font-size:13px!important}.fiscal-event b{font-size:14px!important}.fiscal-event small{font-size:12px!important}
+@media(max-width:1180px){.v090-fiscal-table-card .fiscal-table td,.fiscal-table td{font-size:13px!important}.v090-fiscal-nav button{font-size:12px!important}}
