@@ -13,6 +13,7 @@ require('./agent/store-credit-payment-v106').installStoreCreditPaymentV106(ThorA
 require('./agent/cash-close-receipt-v112').installCashCloseReceiptV112(ThorAgent);
 require('./agent/cash-close-receivable-v115').installCashCloseReceivableV115(ThorAgent);
 require('./agent/cash-close-print-layout-v113').installCashClosePrintLayoutV113(ThorAgent);
+require('./agent/cash-movement-receipt-v123').installCashMovementReceiptV123(ThorAgent);
 require('./agent/receivable-v115').installReceivableV115(ThorAgent);
 require('./agent/receivable-idempotency-v115').installReceivableIdempotencyV115(ThorAgent);
 require('./agent/receivable-print-v115').installReceivablePrintV115(ThorAgent);
