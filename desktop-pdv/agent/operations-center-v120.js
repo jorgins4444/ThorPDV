@@ -157,6 +157,11 @@ function installOperationsCenterV120(ThorAgent){
     this._supervisorNegativeStock=this._validAuthorization(input.supervisorAuthorization,'negative_stock');
     try{const result=await originalFinalize.call(this,input);if(requestKey)this.store.db.prepare('update queue set dedupe_key=? where id=?').run(requestKey,result.eventId);return result;}finally{this._supervisorNegativeStock=false;}
   };
+  const originalCancelSale=proto.cancelSale;
+  proto.cancelSale=async function(input={}){
+    if(!this._validAuthorization(input.supervisorAuthorization,'cancel_sale'))throw new Error('supervisor_authorization_required');
+    return originalCancelSale.call(this,input);
+  };
   const originalCashMovement=proto.cashMovement;
   proto.cashMovement=async function(input={}){
     const threshold=Math.max(num(this.store.get('cash_withdrawal_supervisor_threshold','500')),0);
