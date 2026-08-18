@@ -61,7 +61,9 @@ function installOperationsCenterV120(ThorAgent){
   };
   proto._ensureOperationsV120=function(){if(this._operationsV120Ready)return;this._operationsV120Ready=true;migrate.call(this);};
   const originalStart=proto.start;
-  proto.start=async function(...args){this._ensureOperationsV120();const r=await originalStart.apply(this,args);this.retryPendingOperations().catch(()=>{});return r;};
+  const originalStop=proto.stop;
+  proto.start=async function(...args){this._ensureOperationsV120();const r=await originalStart.apply(this,args);this.retryPendingOperations().catch(()=>{});clearInterval(this._operationsRetryTimer);this._operationsRetryTimer=setInterval(()=>this.retryPendingOperations().catch(()=>{}),60000);this._operationsRetryTimer.unref?.();return r;};
+  proto.stop=async function(...args){clearInterval(this._operationsRetryTimer);return originalStop.apply(this,args);};
   proto.saveOperationDocument=function(type,reference,sourceEventId,payload={},sensitive=false){
     this._ensureOperationsV120();const now=new Date().toISOString(),id=crypto.randomUUID();
     this.store.db.prepare(`insert into operation_documents(id,type,reference,source_event_id,payload,sensitive,created_at,updated_at)
@@ -121,8 +123,10 @@ function installOperationsCenterV120(ThorAgent){
     const result=await this.sync.run(true);return {ok:Boolean(result?.ok),sync:result,pending:this.pendingOperations()};
   };
   proto.retryPendingOperations=async function(){
-    this._ensureOperationsV120();const now=new Date().toISOString();
-    this.store.db.prepare("update queue set state='pending',next_attempt_at=null,updated_at=? where state='rejected' and attempts<8 and (next_attempt_at is null or next_attempt_at<=?)").run(now,now);
+    this._ensureOperationsV120();const nowDate=new Date(),now=nowDate.toISOString();
+    const rejected=this.store.db.prepare("select id,attempts,updated_at from queue where state='rejected' and attempts<8").all();
+    const reset=this.store.db.prepare("update queue set state='pending',next_attempt_at=null,updated_at=? where id=?");
+    for(const row of rejected){const delay=Math.min(Math.pow(2,Math.max(Number(row.attempts||1)-1,0))*30000,15*60*1000);const due=Date.parse(row.updated_at||0)+delay;if(!Number.isFinite(due)||due<=nowDate.getTime())reset.run(now,row.id);else this.store.db.prepare('update queue set next_attempt_at=? where id=?').run(new Date(due).toISOString(),row.id);}
     return this.sync.run();
   };
   proto.saveDraftSale=function(payload={}){
