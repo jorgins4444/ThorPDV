@@ -337,7 +337,7 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
     lines.push(sep);
     lines.push(line('Validade:', valid.toLocaleDateString('pt-BR')));
     lines.push(...wrap44(`Numero do comprovante: ${voucher.voucher_number}`));
-    lines.push(center(`*${voucher.voucher_number}*`));
+    if (!isCustomerCredit) lines.push('[[BARCODE]]');
     lines.push(sep);
 
     lines.push(...wrap44(`Loja: ${branch || company}`));
@@ -396,7 +396,7 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
     const target = this.settings().printerName;
     if (!target) throw new Error('printer_not_configured');
     if (target === '__PDF__') throw new Error('thermal_printer_required');
-    await hardware.printText(target, doc.text);
+    await hardware.printVoucherBarcode(target, doc.text, doc.voucher.metadata?.credit_kind === 'customer_credit' ? '' : doc.voucher.voucher_number);
     return { ok:true, target, voucher_number:doc.voucher.voucher_number, width:WIDTH };
   };
 }
