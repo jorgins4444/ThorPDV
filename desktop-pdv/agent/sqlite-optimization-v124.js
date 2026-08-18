@@ -112,6 +112,21 @@ function installSqliteOptimizationV124(Store) {
     return event;
   };
 
+  const previousFiscalSales = Store.prototype.fiscalSales;
+  Store.prototype.fiscalSales = function (query = '') {
+    const started = Date.now();
+    const rows = previousFiscalSales.call(this, query);
+    this.metric('fiscal.history_query', Date.now() - started, { queryLength:String(query || '').length, rows:rows.length });
+    return rows;
+  };
+  const previousFiscalSale = Store.prototype.fiscalSale;
+  Store.prototype.fiscalSale = function (key) {
+    const started = Date.now();
+    const row = previousFiscalSale.call(this, key);
+    this.metric('fiscal.sale_detail', Date.now() - started, { found:Boolean(row) });
+    return row;
+  };
+
   Store.prototype.sqliteHealth = function () {
     return {
       journal_mode: this.db.pragma('journal_mode', { simple: true }),
