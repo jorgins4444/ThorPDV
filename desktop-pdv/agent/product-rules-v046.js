@@ -71,7 +71,7 @@ function installProductRules(ThorAgent, Store) {
       return quantity === Number(item.quantity || 0) ? item : { ...item, quantity };
     });
 
-    if (!allowNegativeStock(this)) {
+    if (!allowNegativeStock(this) && this._enforceStockAtFinalize === true) {
       const totals = new Map();
       for (const item of normalized) {
         const id=String(item.productId||'');
