@@ -157,6 +157,10 @@ jobs:
       - name: Build Windows installer
         run: npm run dist:win
 
+      - name: Build ThorControl installer selector
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-thorcontrol-launcher.ps1
+
       - name: Generate SHA-256
         shell: pwsh
         run: |
@@ -174,6 +178,7 @@ jobs:
           path: |
             desktop-pdv/dist/*.exe
             desktop-pdv/dist/*.sha256
+            desktop-pdv/dist/thor-hammer.ico
           if-no-files-found: error
           retention-days: 14
 
@@ -193,4 +198,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --title $title --notes $notes
           }
-          gh release upload $tag $exe.FullName $sha --clobber
+          $launcher = Join-Path (Resolve-Path dist) 'ThorControl-Atualizador.exe'
+          gh release upload $tag $exe.FullName $sha $launcher --clobber
