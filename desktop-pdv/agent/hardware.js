@@ -60,6 +60,35 @@ async function printThermalText(printerName,text) {
   return printRaw(printerName,escposText(text),'ThorPDV Comprovante');
 }
 
+function escposVoucher(text, barcodeValue, marker='[[BARCODE]]') {
+  const normalize=(value)=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E\n\r\t]/g,' ');
+  const source=normalize(text).replace(/\r/g,'');
+  const parts=source.split(marker);
+  const code=normalize(barcodeValue).replace(/[^\x20-\x7E]/g,'').trim().slice(0,80);
+  const output=[
+    Buffer.from([0x1b,0x40,0x1b,0x61,0x00,0x1b,0x32]),
+    Buffer.from((parts[0]||'')+'\n','ascii'),
+  ];
+  if(code && parts.length>1){
+    const payload=Buffer.from('{B'+code,'ascii');
+    output.push(
+      Buffer.from([0x1b,0x61,0x01,0x1d,0x48,0x02,0x1d,0x68,0x48,0x1d,0x77,0x02]),
+      Buffer.from([0x1d,0x6b,0x49,payload.length]),
+      payload,
+      Buffer.from([0x0a,0x1b,0x61,0x00])
+    );
+  }
+  output.push(
+    Buffer.from(parts.length>1?(parts.slice(1).join(marker)||'')+'\n':'','ascii'),
+    Buffer.from([0x1b,0x64,0x04,0x1d,0x56,0x42,0x00])
+  );
+  return Buffer.concat(output);
+}
+
+async function printVoucherBarcode(printerName,text,barcodeValue) {
+  return printRaw(printerName,escposVoucher(text,barcodeValue),'ThorPDV Vale Credito');
+}
+
 function rawPrinterScript(printerName, base64) {
   const q=(s)=>String(s).replace(/'/g,"''");
   return `$src=@'
@@ -106,4 +135,4 @@ async function readScale(portName, baudRate=9600, timeoutMs=1500) {
   return (await readScaleDetailed(portName,baudRate,timeoutMs)).value;
 }
 
-module.exports={ machineId,listPrinters,listSerialPorts,printRaw,printText,printThermalText,openDrawer,readScale,readScaleDetailed };
+module.exports={ machineId,listPrinters,listSerialPorts,printRaw,printText,printThermalText,printVoucherBarcode,openDrawer,readScale,readScaleDetailed };
