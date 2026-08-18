@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('thor', {
   finalizeSale: (payload) => ipcRenderer.invoke('thor:finalize-sale', payload),
   saveTermDuplicatesPdf: (payload) => ipcRenderer.invoke('thor:save-term-duplicates-pdf', payload),
   cancelSale: (payload) => ipcRenderer.invoke('thor:cancel-sale', payload),
+  printSaleCancellation: (receipt) => ipcRenderer.invoke('thor:print-sale-cancellation', receipt),
   returnSale: (payload) => ipcRenderer.invoke('thor:return-sale', payload),
   storeCreditVoucher: (number) => ipcRenderer.invoke('thor:store-credit-voucher', number),
   storeCreditVouchers: (query = '', limit = 50) => ipcRenderer.invoke('thor:store-credit-vouchers', query, limit),
