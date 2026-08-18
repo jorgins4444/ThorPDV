@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('thor', {
   disconnectDevice: () => ipcRenderer.invoke('thor:disconnect-device'),
   searchProducts: (query) => ipcRenderer.invoke('thor:search-products', query),
   allProducts: () => ipcRenderer.invoke('thor:all-products'),
+  productImageData: (source) => ipcRenderer.invoke('thor:product-image-data', source),
   customers: (query) => ipcRenderer.invoke('thor:customers', query),
   salesOrders: (query = '') => ipcRenderer.invoke('thor:sales-orders', query),
   paymentTerms: () => ipcRenderer.invoke('thor:payment-terms'),
