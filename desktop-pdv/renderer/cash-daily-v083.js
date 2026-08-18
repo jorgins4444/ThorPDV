@@ -41,7 +41,9 @@ function cashDailyCloseModal(preview,{historical=false,readonly=false,onDone=nul
     if(!confirm(`Confirmar fechamento do caixa de ${business}?\n\nDinheiro esperado: ${money(preview.expected_cash)}\nDinheiro contado: ${money(closingAmount)}\nDiferença: ${money(reconciliation.difference)}`))return;
     const btn=m.querySelector('#cashDailyConfirm');btn.disabled=true;btn.textContent='Fechando...';
     try{
-      const payload={cashOpenEventId:preview.client_event_id,closingAmount,notes:m.querySelector('#cashDailyNotes').value,reconciliation};
+      let supervisorAuthorization=null;
+      if(historical)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',closingAmount);
+      const payload={cashOpenEventId:preview.client_event_id,closingAmount,notes:m.querySelector('#cashDailyNotes').value,reconciliation,supervisorAuthorization};
       const result=historical?await window.thor.closeHistoricalCash(payload):await window.thor.closeCash(payload);
       m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
       let printed=false;try{const p=await window.thor.printCashClose(result.summary);printed=!p?.cancelled;}catch(e){infoModal('Caixa fechado',`O caixa foi fechado, mas o comprovante não foi impresso: ${friendlyError(e.message)}.`);return;}
