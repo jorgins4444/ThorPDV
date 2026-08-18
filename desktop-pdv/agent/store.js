@@ -222,6 +222,10 @@ class Store {
         customer_name:'',
         items:p.items||[],
         payments:p.payments||[],
+        operator:p.operator||null,
+        seller:p.seller||null,
+        seller_user_id:p.seller_user_id||null,
+        seller_name:p.seller_name||'',
         fiscal:p.fiscal||null,
         returned_total:Number(p.returned_total||0),
         source:'local',
@@ -240,7 +244,7 @@ class Store {
     const r=this.db.prepare('select * from receipts where event_id=? or id=? or server_sale_id=? or server_number=? limit 1').get(lookup,lookup,lookup,lookup);
     if(!r) return null;
     const p=JSON.parse(r.payload||'{}');
-    return {id:r.server_sale_id||null,local_key:`local:${r.event_id}`,client_event_id:r.event_id,number:r.server_number||null,status:p.local_status||'pending_sync',subtotal:p.subtotal||p.total||0,discount:p.discount||0,total:r.total,created_at:r.created_at,completed_at:p.createdAt||r.created_at,items:p.items||[],payments:p.payments||[],fiscal:p.fiscal||null,returned_total:Number(p.returned_total||0),source:'local'};
+    return {id:r.server_sale_id||null,local_key:`local:${r.event_id}`,client_event_id:r.event_id,number:r.server_number||null,status:p.local_status||'pending_sync',subtotal:p.subtotal||p.total||0,discount:p.discount||0,total:r.total,created_at:r.created_at,completed_at:p.createdAt||r.created_at,items:p.items||[],payments:p.payments||[],operator:p.operator||null,seller:p.seller||null,seller_user_id:p.seller_user_id||null,seller_name:p.seller_name||'',fiscal:p.fiscal||null,returned_total:Number(p.returned_total||0),source:'local'};
   }
 
   patchLocalSale(sale, patch) {
