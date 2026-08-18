@@ -3,7 +3,7 @@ name: Build ThorPDV Desktop
 on:
   workflow_dispatch:
   push:
-    branches: [main, pdv-rebuild-from-0.8.44, pdv-performance-v0.8.55]
+    branches: [main, pdv-rebuild-from-0.8.44, pdv-rework-from-0.8.55]
     paths:
       - 'desktop-pdv/**'
       - '.github/workflows/pdv-desktop.yml'
