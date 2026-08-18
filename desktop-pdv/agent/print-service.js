@@ -85,15 +85,18 @@ class PersistentPrintService {
       if(row.ok)pending.resolve(true);else pending.reject(new Error(row.error||'raw_print_failed'));
     }
   }
-  async send(printer,bytes,name='ThorPDV Cupom'){
+  async send(printer,bytes,name='ThorPDV Cupom',options={}){
+    const onProgress=typeof options.onProgress==='function'?options.onProgress:()=>{};
+    onProgress({stage:'queue',percent:62});
     if(!printer||printer==='__PDF__')throw new Error('printer_not_configured');
     await this.start();
+    onProgress({stage:'service_ready',percent:72});
     const id=crypto.randomUUID();
     const started=Date.now();
     return new Promise((resolve,reject)=>{
       const timeout=setTimeout(()=>{this.pending.delete(id);reject(new Error('print_timeout'));this.restart();},20000);
-      this.pending.set(id,{resolve:(value)=>{this.metric('print.spool',Date.now()-started,{printer,name,ok:true});resolve(value);},reject:(error)=>{this.metric('print.spool',Date.now()-started,{printer,name,ok:false,error:error.message});reject(error);},timeout});
-      try{this.child.stdin.write(JSON.stringify({id,printer,name,base64:Buffer.from(bytes).toString('base64')})+'\n');}
+      this.pending.set(id,{resolve:(value)=>{onProgress({stage:'spooled',percent:100});this.metric('print.spool',Date.now()-started,{printer,name,ok:true});resolve(value);},reject:(error)=>{this.metric('print.spool',Date.now()-started,{printer,name,ok:false,error:error.message});reject(error);},timeout});
+      try{this.child.stdin.write(JSON.stringify({id,printer,name,base64:Buffer.from(bytes).toString('base64')})+'\n');onProgress({stage:'writing',percent:88});}
       catch(error){clearTimeout(timeout);this.pending.delete(id);reject(error);}
     });
   }
