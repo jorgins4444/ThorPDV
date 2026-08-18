@@ -43,7 +43,7 @@
   }
   function decorate() {
     const button = document.getElementById('v089Seller');
-    if (!button || button.dataset.v125Seller === '1') { refreshSellerLabel(); return; }
+    if (!button || button.dataset.v125Seller === '1') return;
     button.dataset.v125Seller = '1';
     button.onclick = openSellerSelector;
     refreshSellerLabel();
