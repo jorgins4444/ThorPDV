@@ -14,13 +14,15 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
-      - name: Checkout restored runtime branch
+      - id: checkout
+        name: Checkout restored runtime branch
         uses: actions/checkout@v4
         with:
           ref: restore/exe079-runtime
           fetch-depth: 0
 
-      - name: Verify exact stable runtime hashes
+      - id: hashes
+        name: Verify exact stable runtime hashes
         shell: pwsh
         run: |
           $expected = @{
@@ -44,16 +46,19 @@ jobs:
           $pkg = Get-Content desktop-pdv/package.json | ConvertFrom-Json
           if ($pkg.version -ne '0.8.86') { throw "Unexpected RC version: $($pkg.version)" }
 
-      - name: Setup Node
+      - id: node
+        name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install dependencies
+      - id: install
+        name: Install dependencies
         working-directory: desktop-pdv
         run: npm install
 
-      - name: Validate JavaScript syntax
+      - id: syntax
+        name: Validate JavaScript syntax
         working-directory: desktop-pdv
         shell: pwsh
         run: |
@@ -63,24 +68,26 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
-      - name: Build Windows RC installer
+      - id: build
+        name: Build Windows RC installer
         working-directory: desktop-pdv
         run: npm run dist:win
 
-      - name: Verify packaged runtime contains stable bundle and worker
+      - id: packaged
+        name: Verify packaged runtime contains stable bundle and worker
         working-directory: desktop-pdv
         shell: pwsh
         run: |
           $asar = 'dist\win-unpacked\resources\app.asar'
           if (-not (Test-Path $asar)) { throw 'Packaged app.asar not found' }
           npx --yes @electron/asar@3.2.10 list $asar | Set-Content "$env:RUNNER_TEMP\asar-list.txt"
-          $list = Get-Content "$env:RUNNER_TEMP\asar-list.txt" -Raw
+          $list = (Get-Content "$env:RUNNER_TEMP\asar-list.txt" -Raw).Replace('/','\')
           foreach ($required in @('renderer\thorpdv.bundle.js','renderer\thorpdv.bundle.css','agent\sync-request-worker.js','agent\sqlite-optimization-v124.js')) {
             if ($list -notmatch [regex]::Escape($required)) { throw "Packaged runtime missing $required" }
           }
 
-      - name: Generate RC checksum
-        id: checksum
+      - id: checksum
+        name: Generate RC checksum
         working-directory: desktop-pdv
         shell: pwsh
         run: |
@@ -91,7 +98,8 @@ jobs:
           "sha256=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "RC SHA256 $hash"
 
-      - name: Publish isolated RC release
+      - id: publish
+        name: Publish isolated RC release
         working-directory: desktop-pdv
         shell: pwsh
         env:
@@ -105,3 +113,26 @@ jobs:
             gh release create $tag --target restore/exe079-runtime --title 'ThorPDV Desktop 0.8.86 RC1' --notes 'RC isolada reconstruída diretamente do instalador estável 0.8.79. Não cadastrada no ThorControl.'
           }
           gh release upload $tag $exe.FullName $sha --clobber
+
+      - name: Persist RC build diagnostic
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          run_id=${{ github.run_id }}
+          checkout=${{ steps.checkout.outcome }}
+          hashes=${{ steps.hashes.outcome }}
+          node=${{ steps.node.outcome }}
+          install=${{ steps.install.outcome }}
+          syntax=${{ steps.syntax.outcome }}
+          build=${{ steps.build.outcome }}
+          packaged=${{ steps.packaged.outcome }}
+          checksum=${{ steps.checksum.outcome }}
+          publish=${{ steps.publish.outcome }}
+          sha256=${{ steps.checksum.outputs.sha256 }}
+          "@ | Set-Content build-exe079-rc-diagnostic.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add build-exe079-rc-diagnostic.txt
+          git commit -m 'chore: record restored runtime RC build diagnostic' 2>$null
+          git push origin HEAD:restore/exe079-runtime
