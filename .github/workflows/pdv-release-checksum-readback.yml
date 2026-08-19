@@ -1,0 +1,38 @@
+name: Read ThorPDV Release Checksum
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pdv-release-checksum-readback.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read published checksum and persist metadata
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oP '"version"\s*:\s*"\K[^"]+' desktop-pdv/package.json | head -1)
+          TAG="pdv-v${VERSION}"
+          mkdir -p "$RUNNER_TEMP/release"
+          gh release download "$TAG" --pattern '*.sha256' --dir "$RUNNER_TEMP/release"
+          CHECKSUM_FILE=$(find "$RUNNER_TEMP/release" -maxdepth 1 -type f -name '*.sha256' | head -1)
+          SHA=$(awk '{print $1}' "$CHECKSUM_FILE" | tr '[:upper:]' '[:lower:]')
+          if ! [[ "$SHA" =~ ^[a-f0-9]{64}$ ]]; then
+            echo "Invalid SHA-256: $SHA" >&2
+            exit 1
+          fi
+          CONTENT=$(printf '%s\n' "$SHA" | base64 -w0)
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/release-metadata/${TAG}.sha256" \
+            -f message="chore(release): record ${TAG} checksum" \
+            -f content="$CONTENT"
