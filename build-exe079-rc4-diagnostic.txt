@@ -1,0 +1,11 @@
+run_id=32293955104
+stable=success
+install=success
+sqlite_source=success
+syntax=success
+build=success
+sqlite_packaged=failure
+packaged=skipped
+checksum=skipped
+publish=skipped
+sha256=
