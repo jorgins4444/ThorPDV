@@ -1,0 +1,107 @@
+name: Build restored 0.8.79 runtime RC
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-exe079-rc.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-rc:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout restored runtime branch
+        uses: actions/checkout@v4
+        with:
+          ref: restore/exe079-runtime
+          fetch-depth: 0
+
+      - name: Verify exact stable runtime hashes
+        shell: pwsh
+        run: |
+          $expected = @{
+            'desktop-pdv/renderer/index.html' = 'caac5189223af560596f141f6a04ff9113149c03f7aa5225210f58662f816e41'
+            'desktop-pdv/renderer/thorpdv.bundle.js' = '5a4919272f1ee3cd1a78160cd2c27888be21e03457169eac85b87eb080fd1df9'
+            'desktop-pdv/renderer/thorpdv.bundle.css' = 'e4e7991bc67355197b6db92176a236230a3cc062c1d5746cfc36a737882f532a'
+            'desktop-pdv/agent/sync.js' = '722150b7932e7dc4d42f2f079e6c56e58fb840c80658420c9a38b34129d63fc6'
+            'desktop-pdv/agent/sync-request-worker.js' = 'ce7b8ced067ae7077ab60f6aa214369021ce79743fcca704e5942b0f9b4ab940'
+            'desktop-pdv/agent/store.js' = 'f106a649f35b52a7390ca3170c13c42074d753b9b14082a78f00f2820b35ffb1'
+            'desktop-pdv/main-v090.js' = '97e1541b49f075ca403ce71a81f5097502dc9631ac617d40fa89c10a803aaad8'
+            'desktop-pdv/main.js' = '2bab08eee16e379e7704e911f503caa3275fdf1b548232277860f49e69f9c267'
+            'desktop-pdv/preload.js' = 'd5a01b049ab932b561e870cb3b401b24b01578af429ac9e2671a130ebe143d8c'
+            'desktop-pdv/updater.js' = 'ef97055111bd79f98328a06e534c18b2d72eb5a30410a3104ffa34438f34259e'
+          }
+          foreach ($path in $expected.Keys) {
+            if (-not (Test-Path $path)) { throw "Missing stable file: $path" }
+            $actual = (Get-FileHash $path -Algorithm SHA256).Hash.ToLower()
+            Write-Host "$path $actual"
+            if ($actual -ne $expected[$path]) { throw "Stable runtime hash mismatch: $path" }
+          }
+          $pkg = Get-Content desktop-pdv/package.json | ConvertFrom-Json
+          if ($pkg.version -ne '0.8.86') { throw "Unexpected RC version: $($pkg.version)" }
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: desktop-pdv
+        run: npm install
+
+      - name: Validate JavaScript syntax
+        working-directory: desktop-pdv
+        shell: pwsh
+        run: |
+          $files = @('main-v090.js','main.js','preload.js','updater.js','agent/index.js','agent/store.js','agent/sync.js','agent/sync-request-worker.js','agent/sqlite-optimization-v124.js','ipc-store-credit-v105.js','ipc-receivable-v115.js')
+          foreach ($file in $files) {
+            node --check $file
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Build Windows RC installer
+        working-directory: desktop-pdv
+        run: npm run dist:win
+
+      - name: Verify packaged runtime contains stable bundle and worker
+        working-directory: desktop-pdv
+        shell: pwsh
+        run: |
+          $asar = 'dist\win-unpacked\resources\app.asar'
+          if (-not (Test-Path $asar)) { throw 'Packaged app.asar not found' }
+          npx --yes @electron/asar@3.2.10 list $asar | Set-Content "$env:RUNNER_TEMP\asar-list.txt"
+          $list = Get-Content "$env:RUNNER_TEMP\asar-list.txt" -Raw
+          foreach ($required in @('renderer\thorpdv.bundle.js','renderer\thorpdv.bundle.css','agent\sync-request-worker.js','agent\sqlite-optimization-v124.js')) {
+            if ($list -notmatch [regex]::Escape($required)) { throw "Packaged runtime missing $required" }
+          }
+
+      - name: Generate RC checksum
+        id: checksum
+        working-directory: desktop-pdv
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist\ThorPDV-Desktop-0.8.86-x64.exe | Select-Object -First 1
+          if (-not $exe) { throw 'RC installer not found' }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path ($exe.FullName + '.sha256') -Value ($hash + '  ' + $exe.Name) -Encoding ascii
+          "sha256=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "RC SHA256 $hash"
+
+      - name: Publish isolated RC release
+        working-directory: desktop-pdv
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = 'pdv-v0.8.86-rc1'
+          $exe = Get-ChildItem dist\ThorPDV-Desktop-0.8.86-x64.exe | Select-Object -First 1
+          $sha = $exe.FullName + '.sha256'
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target restore/exe079-runtime --title 'ThorPDV Desktop 0.8.86 RC1' --notes 'RC isolada reconstruída diretamente do instalador estável 0.8.79. Não cadastrada no ThorControl.'
+          }
+          gh release upload $tag $exe.FullName $sha --clobber
