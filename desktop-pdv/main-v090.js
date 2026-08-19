@@ -3,7 +3,6 @@ require('./main.js');
 
 const { ThorAgent } = require('./agent');
 const { Store } = require('./agent/store');
-require('./agent/product-catalog-v110').installProductCatalogV110(ThorAgent, Store);
 require('./agent/product-rules-v046').installProductRules(ThorAgent, Store);
 require('./agent/queue-reconcile-v104').installQueueReconcileV104(Store);
 require('./agent/receipt-print-v829').installReceiptPrintingV829(ThorAgent, Store);
@@ -16,3 +15,4 @@ require('./agent/sales-session-v107').installSalesSessionV107(ThorAgent);
 require('./agent/license-guard-v107').installLicenseGuardV107(ThorAgent);
 require('./ipc-store-credit-v105').installStoreCreditVoucherIpcV105(ThorAgent);
 require('./ipc-cash-movement-v106').installCashMovementIpcV106(ThorAgent);
+require('./ipc-product-catalog-v111').installProductCatalogIpcV111();
