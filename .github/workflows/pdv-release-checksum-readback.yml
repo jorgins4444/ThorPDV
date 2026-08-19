@@ -36,3 +36,5 @@ jobs:
           gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/release-metadata/${TAG}.sha256" \
             -f message="chore(release): record ${TAG} checksum" \
             -f content="$CONTENT"
+
+# readback trigger: pdv-v0.8.84
