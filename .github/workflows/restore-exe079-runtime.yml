@@ -44,6 +44,9 @@ jobs:
       - id: extract
         name: Extract exact app.asar
         run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/extract-stage.txt"
+          echo 'start' > "$STAGE"
           EXE="$RUNNER_TEMP/stable/ThorPDV-Desktop-0.8.79-x64.exe"
           PAYLOAD="$RUNNER_TEMP/stable/payload.7z"
           mkdir -p "$RUNNER_TEMP/unpacked" "$RUNNER_TEMP/stable-app"
@@ -60,19 +63,24 @@ jobs:
           payload.write_bytes(data[offset:])
           print('Embedded 7z payload offset:', offset)
           PY
-          7z x -y "$PAYLOAD" -o"$RUNNER_TEMP/unpacked" >/dev/null
+          echo 'payload-sliced' > "$STAGE"
+          7z x -y "$PAYLOAD" -o"$RUNNER_TEMP/unpacked"
+          echo 'payload-extracted' > "$STAGE"
           ASAR=$(find "$RUNNER_TEMP/unpacked" -type f -path '*/resources/app.asar' | head -1)
           if [ -z "$ASAR" ]; then
-            echo 'app.asar not found in embedded payload' >&2
+            echo 'asar-not-found' > "$STAGE"
             find "$RUNNER_TEMP/unpacked" -maxdepth 4 -type f | head -150
             exit 1
           fi
+          echo "asar-found:$ASAR" > "$STAGE"
           ./node_modules/.bin/asar extract "$ASAR" "$RUNNER_TEMP/stable-app"
+          echo 'asar-extracted' > "$STAGE"
           node -e "const p=require(process.env.RUNNER_TEMP+'/stable-app/package.json'); if(p.version!=='0.8.79') process.exit(1); console.log('Stable runtime',p.version)"
           test -f "$RUNNER_TEMP/stable-app/renderer/thorpdv.bundle.js"
           test -f "$RUNNER_TEMP/stable-app/renderer/thorpdv.bundle.css"
           test -f "$RUNNER_TEMP/stable-app/agent/sync-request-worker.js"
           test -f "$RUNNER_TEMP/stable-app/agent/sqlite-optimization-v124.js"
+          echo 'verified' > "$STAGE"
 
       - id: reconstruct
         name: Reconstruct desktop source from installer runtime
@@ -90,12 +98,7 @@ jobs:
           stable.dependencies=stable.dependencies||{};
           stable.dependencies['better-sqlite3']='12.4.1';
           stable.devDependencies=previous.devDependencies||{electron:'latest','electron-builder':'latest'};
-          stable.build={
-            appId:'br.com.thorpdv.desktop',productName:'ThorPDV Desktop',artifactName:'ThorPDV-Desktop-${version}-${arch}.${ext}',
-            files:['main-v090.js','main.js','preload.js','ipc-store-credit-v105.js','ipc-receivable-v115.js','updater.js','agent/**/*','renderer/**/*','package.json'],
-            npmRebuild:true,asar:true,win:{target:['nsis']},
-            nsis:{oneClick:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true}
-          };
+          stable.build={appId:'br.com.thorpdv.desktop',productName:'ThorPDV Desktop',artifactName:'ThorPDV-Desktop-${version}-${arch}.${ext}',files:['main-v090.js','main.js','preload.js','ipc-store-credit-v105.js','ipc-receivable-v115.js','updater.js','agent/**/*','renderer/**/*','package.json'],npmRebuild:true,asar:true,win:{target:['nsis']},nsis:{oneClick:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true}};
           fs.writeFileSync('desktop-pdv/package.json',JSON.stringify(stable,null,2)+'\n');
           NODE
 
@@ -130,8 +133,9 @@ jobs:
       - name: Persist restore diagnostic
         if: always()
         run: |
-          printf 'checkout=%s\ntools=%s\ndownload=%s\nextract=%s\nreconstruct=%s\nverify=%s\ncommit=%s\n' \
-            '${{ steps.checkout.outcome }}' '${{ steps.tools.outcome }}' '${{ steps.download.outcome }}' '${{ steps.extract.outcome }}' \
+          STAGE=$(cat "$RUNNER_TEMP/extract-stage.txt" 2>/dev/null || echo 'not-started')
+          printf 'run_id=%s\nextract_stage=%s\ncheckout=%s\ntools=%s\ndownload=%s\nextract=%s\nreconstruct=%s\nverify=%s\ncommit=%s\n' \
+            '${{ github.run_id }}' "$STAGE" '${{ steps.checkout.outcome }}' '${{ steps.tools.outcome }}' '${{ steps.download.outcome }}' '${{ steps.extract.outcome }}' \
             '${{ steps.reconstruct.outcome }}' '${{ steps.verify.outcome }}' '${{ steps.commit.outcome }}' > restore-exe079-diagnostic.txt
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
