@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const Database = require('better-sqlite3');
 const { app, ipcMain, safeStorage } = require('electron');
 
@@ -9,6 +10,25 @@ function decodeDeviceToken(value) {
   if (!raw.startsWith('enc:') || !safeStorage.isEncryptionAvailable()) return '';
   try { return safeStorage.decryptString(Buffer.from(raw.slice(4), 'base64')); }
   catch { return ''; }
+}
+
+function cachePath() {
+  return path.join(app.getPath('userData'), 'product-catalog-v114.json');
+}
+
+function readCatalogCache() {
+  try {
+    const data = JSON.parse(fs.readFileSync(cachePath(), 'utf8'));
+    return Array.isArray(data?.products) ? data.products : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCatalogCache(products) {
+  try {
+    fs.writeFileSync(cachePath(), JSON.stringify({ saved_at: new Date().toISOString(), products }, null, 0), 'utf8');
+  } catch {}
 }
 
 function localCatalog() {
@@ -52,6 +72,21 @@ function localCatalog() {
   }
 }
 
+function mergeOfflineCatalog(localProducts, cachedProducts) {
+  const cache = new Map((cachedProducts || []).map(product => [String(product.id || product.product_code || ''), product]));
+  return (localProducts || []).map(product => {
+    const cached = cache.get(String(product.id || product.product_code || '')) || {};
+    return {
+      ...cached,
+      ...product,
+      ncm: String(product.ncm || cached.ncm || ''),
+      brand: String(product.brand || cached.brand || ''),
+      price: Number(product.price ?? cached.price ?? 0),
+      stock: Number(product.stock ?? cached.stock ?? 0),
+    };
+  });
+}
+
 function normalizePull(data) {
   const inventory = new Map((Array.isArray(data?.inventory) ? data.inventory : []).map(row => [String(row.product_id || ''), Number(row.quantity || 0)]));
   const prices = new Map((Array.isArray(data?.price_items) ? data.price_items : []).map(row => [String(row.product_id || ''), Number(row.price || 0)]));
@@ -89,7 +124,9 @@ async function remoteCatalog(token) {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.ok) throw new Error(data?.error || `catalog_http_${response.status}`);
-    return { ok: true, source: 'online', products: normalizePull(data), loaded_at: new Date().toISOString() };
+    const products = normalizePull(data);
+    writeCatalogCache(products);
+    return { ok: true, source: 'online', products, loaded_at: new Date().toISOString() };
   } finally {
     clearTimeout(timeout);
   }
@@ -103,7 +140,8 @@ function installProductCatalogReadV114() {
     try {
       return await remoteCatalog(local.token);
     } catch (error) {
-      return { ok: true, source: 'offline', products: local.products, warning: String(error?.message || 'offline'), loaded_at: new Date().toISOString() };
+      const products = mergeOfflineCatalog(local.products, readCatalogCache());
+      return { ok: true, source: 'offline', products, warning: String(error?.message || 'offline'), loaded_at: new Date().toISOString() };
     }
   });
 }
