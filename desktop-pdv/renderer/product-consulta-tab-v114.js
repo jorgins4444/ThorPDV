@@ -1,5 +1,8 @@
 (() => {
-  if (window.ThorProductConsultaTabV114) return;
+  if (window.ThorProductConsultaTabV114) {
+    window.ThorProductConsultaTabV114.attach();
+    return;
+  }
 
   const PAGE_SIZE = 10;
   const LOW_STOCK_LIMIT = 3;
@@ -13,11 +16,6 @@
   const escHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const moneyValue = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const stockValue = value => Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
-
-  function pdvState() {
-    try { return typeof state !== 'undefined' ? state : null; }
-    catch { return null; }
-  }
 
   function button() { return document.getElementById('navProductConsulta'); }
 
@@ -52,10 +50,9 @@
   }
 
   function attach() {
-    const currentState = pdvState();
-    if (!currentState?.status?.operator) return false;
+    if (!state?.status?.operator) return;
     const top = document.querySelector('.top-right');
-    if (!top) return false;
+    if (!top) return;
     let consult = button();
     if (!consult) {
       consult = document.createElement('button');
@@ -69,7 +66,6 @@
     }
     consult.onclick = open;
     if (productViewOpen) markProductTab(true);
-    return true;
   }
 
   function stockBadge(product) {
@@ -224,12 +220,11 @@
   }
 
   function open() {
-    const currentState = pdvState();
-    if (!currentState?.status?.operator || !window.thor?.productCatalogReadV114) return;
+    if (!state?.status?.operator || !window.thor?.productCatalogReadV114) return;
     const workspace = document.getElementById('workspace');
     if (!workspace) return;
     ensureStyle();
-    currentState.view = 'sale';
+    state.view = 'sale';
     productViewOpen = true;
     attach();
     markProductTab(true);
@@ -273,7 +268,7 @@
     if (!target) return;
     closeDetails();
     productViewOpen = false;
-    setTimeout(() => { try { attach(); } catch {} }, 0);
+    setTimeout(attach, 0);
   }, true);
 
   document.addEventListener('keydown', event => {
@@ -281,13 +276,5 @@
   }, true);
 
   window.ThorProductConsultaTabV114 = { attach, open };
-
-  // Importante: este módulo não participa do login/sincronização inicial.
-  // Ele só tenta anexar a opção de consulta depois que o renderer está estável.
-  const attachTimer = window.setInterval(() => {
-    try {
-      if (attach()) window.clearInterval(attachTimer);
-    } catch {}
-  }, 750);
-  window.setTimeout(() => { try { attach(); } catch {} }, 1200);
+  attach();
 })();
