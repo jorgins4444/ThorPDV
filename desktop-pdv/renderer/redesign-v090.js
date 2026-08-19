@@ -151,10 +151,16 @@
       if(amount<=0){error.textContent='Informe um valor maior que zero.';input.focus();return;}
       try{
         button.disabled=true;button.textContent='Registrando...';
-        await window.thor.cashMovement({movementType:type,amount,notes:m.querySelector('#v090MovementNote').value.trim()});
+        let supervisorAuthorization=null;
+        if(type==='withdrawal'&&amount>=500)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('high_withdrawal','Autorizar sangria elevada',amount);
+        const reason=m.querySelector('#v090MovementNote').value.trim();
+        const operator=(()=>{try{return v3State()?.operator||state?.status?.operator||null}catch{return state?.status?.operator||null}})()||{};
+        const result=await window.thor.cashMovement({movementType:type,amount,notes:reason,reason,operatorId:operator.id||null,operatorName:operator.name||operator.full_name||operator.display_name||operator.user_name||operator.email||'',supervisorAuthorization});
+        let printError='';
+        try{await window.thor.printCashMovement(result?.receipt||{});}catch(error){printError=friendlyError(error?.message||'print_failed');}
         await refreshStatus();
         m.remove();
-        showToast(`${title} de ${money(amount)} registrado.`);
+        showToast(printError?`${title} registrado. Impressão pendente: ${printError}`:`${title} de ${money(amount)} registrado e comprovante impresso.`);
       }catch(err){error.textContent=friendlyError(err?.message||String(err));button.disabled=false;button.textContent=`Registrar ${title}`;}
     };
     setTimeout(()=>input?.focus(),30);

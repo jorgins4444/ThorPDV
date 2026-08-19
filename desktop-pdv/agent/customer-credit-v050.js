@@ -113,15 +113,26 @@ function installCustomerCreditRules(ThorAgent, Store) {
 
   ThorAgent.prototype.returnSale = async function (payload = {}) {
     if (payload.refundMethod !== 'store_credit') return originalReturnSale.call(this, payload);
+
     const sale = this.store.fiscalSale(payload.saleKey);
     if (!sale) throw new Error('sale_not_found');
-    const customerId = sale.customer_id || null;
-    if (!customerId) throw new Error('store_credit_requires_customer');
-    const customer = this.store.customer(customerId);
-    if (!customer) throw new Error('customer_not_found');
-    const result = await originalReturnSale.call(this, payload);
-    const updated = this.store.adjustCustomerCredit(customerId, Math.max(Number(result.estimatedTotal || 0), 0));
-    return { ...result, storeCreditCustomerId: customerId, storeCreditBalance: Number(updated?.store_credit_balance || 0) };
+
+    const customerId = sale.customer_id || payload.returnCustomerId || null;
+    const guestName = String(payload.guestName || '').trim();
+    const guestDocument = String(payload.guestDocument || '').replace(/\D/g, '');
+    const voucherNumber = String(payload.voucherNumber || '').trim();
+
+    // Regra antiga: toda restituição "store_credit" exigia customer_id.
+    // Regra atual: crédito de cliente e Vale Crédito são fluxos diferentes.
+    // Sem cliente, a camada de Vale Crédito é responsável pela emissão e impressão.
+    if (!customerId) {
+      if (!guestName && !guestDocument && !voucherNumber) throw new Error('return_customer_identification_required');
+      return originalReturnSale.call(this, payload);
+    }
+
+    // Não credita o saldo aqui: a camada store-credit-return-v105 é a fonte única
+    // para evitar crédito em duplicidade quando as duas regras estiverem carregadas.
+    return originalReturnSale.call(this, payload);
   };
 }
 

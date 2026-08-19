@@ -131,12 +131,23 @@ try {
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-    <StackPanel Grid.Row="0">
-      <TextBlock Text="THORPDV UPDATE" FontSize="12" FontWeight="Bold" Foreground="#7ED4AA"/>
-      <TextBlock x:Name="TitleText" Text="Preparando atualização" FontSize="26" FontWeight="Bold" Margin="0,7,0,0"/>
-      <TextBlock x:Name="MessageText" Text="Mantendo seus dados locais protegidos durante a troca de versão." FontSize="13" Foreground="#B7C7BE" TextWrapping="Wrap" Margin="0,7,0,0"/>
-      <TextBlock x:Name="VersionText" FontSize="12" Foreground="#7ED4AA" Margin="0,7,0,0"/>
-    </StackPanel>
+    <Grid Grid.Row="0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="82"/></Grid.ColumnDefinitions>
+      <StackPanel Grid.Column="0">
+        <TextBlock Text="THORCONTROL • ATUALIZAÇÃO SEGURA" FontSize="12" FontWeight="Bold" Foreground="#7ED4AA"/>
+        <TextBlock x:Name="TitleText" Text="Preparando atualização" FontSize="26" FontWeight="Bold" Margin="0,7,0,0"/>
+        <TextBlock x:Name="MessageText" Text="Mantendo seus dados locais protegidos durante a troca de versão." FontSize="13" Foreground="#B7C7BE" TextWrapping="Wrap" Margin="0,7,0,0"/>
+        <TextBlock x:Name="VersionText" FontSize="12" Foreground="#7ED4AA" Margin="0,7,0,0"/>
+      </StackPanel>
+      <Border Grid.Column="1" Width="70" Height="70" CornerRadius="18" Background="#193427" HorizontalAlignment="Right">
+        <Canvas x:Name="HammerMark" Width="54" Height="54" RenderTransformOrigin="0.5,0.62">
+          <Canvas.RenderTransform><RotateTransform Angle="-12"/></Canvas.RenderTransform>
+          <Rectangle Width="10" Height="38" Fill="#C98B2C" RadiusX="4" RadiusY="4" Canvas.Left="23" Canvas.Top="16"/>
+          <Rectangle Width="42" Height="17" Fill="#DCE7E1" RadiusX="5" RadiusY="5" Canvas.Left="6" Canvas.Top="7"/>
+          <Rectangle Width="11" Height="23" Fill="#B9C8C0" RadiusX="3" RadiusY="3" Canvas.Left="5" Canvas.Top="4"/>
+        </Canvas>
+      </Border>
+    </Grid>
 
     <ProgressBar x:Name="ProgressBar" Grid.Row="1" Height="10" Minimum="0" Maximum="100"
                  Value="8" Margin="0,24,0,0" Foreground="#42B883" Background="#24352D"/>
@@ -179,7 +190,17 @@ $step4 = $window.FindName('Step4')
 $step5 = $window.FindName('Step5')
 $footer = $window.FindName('FooterText')
 $closeButton = $window.FindName('CloseButton')
+$hammerMark = $window.FindName('HammerMark')
 $versionText.Text = "Versão alvo: v$TargetVersion"
+try {
+  $rotation = $hammerMark.RenderTransform
+  $animation = New-Object Windows.Media.Animation.DoubleAnimation
+  $animation.From = -18; $animation.To = 13
+  $animation.Duration = [Windows.Duration]::new([TimeSpan]::FromMilliseconds(620))
+  $animation.AutoReverse = $true
+  $animation.RepeatBehavior = [Windows.Media.Animation.RepeatBehavior]::Forever
+  $rotation.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $animation)
+} catch {}
 
 if ($SelfTest) {
   Save-BootState 'helper_ready' 'Self-test do helper concluído.'

@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell } = require('electron');
+const crypto = require('crypto');
+const { app, BrowserWindow, ipcMain, safeStorage, dialog, shell, net } = require('electron');
 const { ThorAgent } = require('./agent');
 const { ThorUpdater } = require('./updater');
 const { installThorAgentV3 } = require('./agent/v3');
@@ -19,6 +20,8 @@ const { installSalesOptionsV071 } = require('./agent/sales-options-v071');
 const { installSalesSettlementV073 } = require('./agent/sales-settlement-v073');
 const { installDailyCashV083 } = require('./agent/daily-cash-v083');
 const { version: DESKTOP_VERSION } = require('./package.json');
+const { printService } = require('./agent/print-service');
+const { printThermalText } = require('./agent/hardware');
 
 installThorAgentV3(ThorAgent);
 installReturnFix(ThorAgent);
@@ -254,11 +257,77 @@ async function printCashClose(summary) {
 }
 
 async function printCashMovement(receipt) {
-  const doc = agent.cashMovementDocument(receipt || {});
+  const current = agent.currentOperator?.() || {};
+  const currentId = current.id || agent.store.get('current_operator_id') || '';
+  const staff = typeof agent._staffUsersWithHash === 'function' ? agent._staffUsersWithHash() : [];
+  const stored = staff.find((user) => String(user.id) === String(currentId)) || {};
+  const operatorName = String(
+    receipt?.operator?.name || current.name || current.full_name || current.display_name || current.user_name ||
+    stored.name || stored.full_name || stored.display_name || stored.user_name || stored.email || ''
+  ).trim();
+  const enriched = {
+    ...(receipt || {}),
+    operator: operatorName
+      ? { id:receipt?.operator?.id || currentId || stored.id || null, name:operatorName }
+      : receipt?.operator,
+  };
+  const started = Date.now();
+  const doc = agent.cashMovementDocument(enriched);
+  const target = agent.settings().printerName;
+  if (!target) throw new Error('printer_not_configured');
+  if (target === '__PDF__') return saveAsPdf(doc);
+  const result = await printThermalText(target, doc.text || '');
+  agent.store.metric('print.cash_movement_total', Date.now() - started, { movement_type:enriched.movement_type || '', operator:Boolean(operatorName) });
+  return result;
+}
+
+async function printSaleCancellation(receipt) {
+  const doc = agent.saleCancellationDocument(receipt || {});
   const target = agent.settings().printerName;
   if (!target) throw new Error('printer_not_configured');
   if (target === '__PDF__') return saveAsPdf(doc);
   return printHtmlDocument(doc, target);
+}
+
+async function cachedProductImage(source) {
+  const raw = String(source || '').trim();
+  if (!raw) return '';
+  if (/^data:image\//i.test(raw)) return raw;
+
+  let target;
+  try { target = new URL(raw, `${String(agent?.apiBase || '').replace(/\/+$/, '')}/`); }
+  catch { return ''; }
+  if (!['http:', 'https:'].includes(target.protocol)) return '';
+
+  const cacheDir = path.join(app.getPath('userData'), 'product-image-cache');
+  const cacheKey = crypto.createHash('sha256').update(target.href).digest('hex');
+  await fs.promises.mkdir(cacheDir, { recursive: true });
+  const extensions = ['png', 'jpg', 'webp', 'gif', 'bin'];
+  for (const extension of extensions) {
+    const cached = path.join(cacheDir, `${cacheKey}.${extension}`);
+    if (!fs.existsSync(cached)) continue;
+    const bytes = await fs.promises.readFile(cached);
+    const mime = ({ png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', bin: 'application/octet-stream' })[extension];
+    return `data:${mime};base64,${bytes.toString('base64')}`;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await net.fetch(target.href, { signal: controller.signal });
+    if (!response.ok) return '';
+    const contentType = String(response.headers.get('content-type') || '').split(';')[0].toLowerCase();
+    if (!contentType.startsWith('image/')) return '';
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > 8 * 1024 * 1024) return '';
+    const extension = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : contentType.includes('gif') ? 'gif' : contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'bin';
+    await fs.promises.writeFile(path.join(cacheDir, `${cacheKey}.${extension}`), bytes);
+    return `data:${contentType};base64,${bytes.toString('base64')}`;
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function registerIpc() {
@@ -267,10 +336,13 @@ function registerIpc() {
   handle('thor:enroll', (payload) => agent.enroll(payload));
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
+  handle('thor:performance-metrics', (limit) => agent.store.recentMetrics(limit));
+  handle('thor:record-performance', (name, durationMs, metadata) => agent.store.metric(name, durationMs, metadata));
   handle('thor:recover-sync', () => agent.recoverSync());
   handle('thor:disconnect-device', () => agent.disconnectDevice());
   handle('thor:search-products', (query) => agent.searchProducts(query));
   handle('thor:all-products', () => agent.store.searchProducts('', 5000));
+  handle('thor:product-image-data', (source) => cachedProductImage(source));
   handle('thor:customers', (query) => agent.searchCustomers(query));
   handle('thor:sales-orders', (query) => agent.salesOrders(query));
   handle('thor:payment-terms', () => agent.paymentTerms());
@@ -293,6 +365,7 @@ function registerIpc() {
   handle('thor:finalize-sale', (payload) => agent.finalizeSale(payload));
   handle('thor:save-term-duplicates-pdf', (payload) => saveAsPdf(agent.termDuplicateDocument(payload || {})));
   handle('thor:cancel-sale', (payload) => agent.cancelSale(payload));
+  handle('thor:print-sale-cancellation', (receipt) => printSaleCancellation(receipt));
   handle('thor:return-sale', (payload) => agent.returnSale(payload));
   handle('thor:request-nfce', (payload) => agent.requestNfce(payload));
   handle('thor:fiscal-sales', (query) => agent.fiscalSales(query));
@@ -313,10 +386,22 @@ function registerIpc() {
   handle('thor:update-info', () => updater?.updateInfo?.() || { currentVersion: DESKTOP_VERSION });
   handle('thor:check-update', () => updater.check());
   handle('thor:install-update', () => updater.install());
+  handle('thor:operation-history', (filters) => agent.operationHistory(filters || {}));
+  handle('thor:reprint-operation', (payload) => agent.reprintOperation(payload || {}));
+  handle('thor:pending-operations', () => agent.pendingOperations());
+  handle('thor:retry-operation', (eventId) => agent.retryOperation(eventId));
+  handle('thor:retry-pending-operations', () => agent.retryPendingOperations());
+  handle('thor:authorize-sensitive-action', (payload) => agent.authorizeSensitiveAction(payload || {}));
+  handle('thor:draft-sales', (query) => agent.draftSales(query || ''));
+  handle('thor:save-draft-sale', (payload) => agent.saveDraftSale(payload || {}));
+  handle('thor:load-draft-sale', (id) => agent.loadDraftSale(id));
+  handle('thor:complete-draft-sale', (id, eventId) => agent.completeDraftSale(id, eventId));
+  handle('thor:delete-draft-sale', (id) => agent.deleteDraftSale(id));
   handle('thor:print-last', () => printSale(null, 'pre_sale', true));
 }
 
 app.whenReady().then(async () => {
+  void printService().start().catch(() => {});
   registerIpc();
   await createWindow();
   app.on('activate', async () => {
@@ -325,6 +410,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', async () => {
+  try { printService().stop(); } catch {}
   if (agent) await agent.stop();
   if (process.platform !== 'darwin') app.quit();
 });

@@ -44,11 +44,13 @@
       const found = state.cart.find((item) => String(item.productId) === String(product.id));
       if (found) {
         found.quantity = w46Number(found.quantity) + qty;
+        found.image_url = product.image_url || product.imageUrl || product.menu_image_url || product.menuImageUrl || product.self_service_image_url || product.selfServiceImageUrl || product.thumbnail_url || product.thumbnailUrl || product.photo_url || product.photoUrl || product.image || product.photo || '' || found.image_url || '';
         Object.assign(found, flags);
       } else {
         state.cart.push({
           productId: product.id,
           name: product.name || product.description || 'Produto',
+          image_url: product.image_url || product.imageUrl || product.menu_image_url || product.menuImageUrl || product.self_service_image_url || product.selfServiceImageUrl || product.thumbnail_url || product.thumbnailUrl || product.photo_url || product.photoUrl || product.image || product.photo || '',
           sku: product.sku || '',
           quantity: qty,
           unitPrice: w46Number(product.base_price ?? product.sale_price ?? product.price),

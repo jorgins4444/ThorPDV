@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const { printService } = require('./print-service');
 
 function powershell(script) {
   return new Promise((resolve, reject) => {
@@ -36,15 +37,56 @@ async function listSerialPorts() {
   const parsed=JSON.parse(out); return Array.isArray(parsed)?parsed:[parsed];
 }
 
-async function printText(printerName,text) {
-  if (printerName==='__PDF__') throw new Error('pdf_requires_ui');
+async function printRaw(printerName, bytes, documentName='ThorPDV Cupom') {
   if (process.platform !== 'win32') throw new Error('printing_requires_windows');
-  if (!printerName) throw new Error('printer_not_configured');
-  const file=path.join(os.tmpdir(),`thorpdv-${Date.now()}.txt`); fs.writeFileSync(file,text,'utf8');
-  const q=(s)=>String(s).replace(/'/g,"''");
-  try { await powershell(`Get-Content -Raw -LiteralPath '${q(file)}' | Out-Printer -Name '${q(printerName)}'`); }
-  finally { try{fs.unlinkSync(file);}catch{} }
-  return true;
+  if (!printerName || printerName==='__PDF__') throw new Error('printer_not_configured');
+  return printService().send(printerName,Buffer.from(bytes),documentName);
+}
+
+function escposText(text) {
+  const normalized=String(text||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E\n\r\t]/g,' ');
+  return Buffer.concat([
+    Buffer.from([0x1b,0x40,0x1b,0x61,0x00,0x1b,0x32]),
+    Buffer.from(normalized.replace(/\r/g,'')+'\n','ascii'),
+    Buffer.from([0x1b,0x64,0x04,0x1d,0x56,0x42,0x00]),
+  ]);
+}
+
+async function printText(printerName,text) {
+  return printRaw(printerName,escposText(text),'ThorPDV Texto');
+}
+
+async function printThermalText(printerName,text) {
+  return printRaw(printerName,escposText(text),'ThorPDV Comprovante');
+}
+
+function escposVoucher(text, barcodeValue, marker='[[BARCODE]]') {
+  const normalize=(value)=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E\n\r\t]/g,' ');
+  const source=normalize(text).replace(/\r/g,'');
+  const parts=source.split(marker);
+  const code=normalize(barcodeValue).replace(/[^\x20-\x7E]/g,'').trim().slice(0,80);
+  const output=[
+    Buffer.from([0x1b,0x40,0x1b,0x61,0x00,0x1b,0x32]),
+    Buffer.from((parts[0]||'')+'\n','ascii'),
+  ];
+  if(code && parts.length>1){
+    const payload=Buffer.from('{B'+code,'ascii');
+    output.push(
+      Buffer.from([0x1b,0x61,0x01,0x1d,0x48,0x02,0x1d,0x68,0x48,0x1d,0x77,0x02]),
+      Buffer.from([0x1d,0x6b,0x49,payload.length]),
+      payload,
+      Buffer.from([0x0a,0x1b,0x61,0x00])
+    );
+  }
+  output.push(
+    Buffer.from(parts.length>1?(parts.slice(1).join(marker)||'')+'\n':'','ascii'),
+    Buffer.from([0x1b,0x64,0x04,0x1d,0x56,0x42,0x00])
+  );
+  return Buffer.concat(output);
+}
+
+async function printVoucherBarcode(printerName,text,barcodeValue) {
+  return printRaw(printerName,escposVoucher(text,barcodeValue),'ThorPDV Vale Credito');
 }
 
 function rawPrinterScript(printerName, base64) {
@@ -61,7 +103,7 @@ public class ThorRawPrinter {
  [DllImport("winspool.Drv", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool StartPagePrinter(IntPtr hPrinter);
  [DllImport("winspool.Drv", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool EndPagePrinter(IntPtr hPrinter);
  [DllImport("winspool.Drv", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)] public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, Int32 count, out Int32 written);
- public static bool Send(string printer, byte[] bytes) { IntPtr h; if(!OpenPrinter(printer,out h,IntPtr.Zero)) return false; var di=new DOCINFOA{pDocName="ThorPDV RAW",pDataType="RAW"}; bool ok=StartDocPrinter(h,1,di); if(ok){StartPagePrinter(h); IntPtr p=Marshal.AllocCoTaskMem(bytes.Length); Marshal.Copy(bytes,0,p,bytes.Length); int w=0; ok=WritePrinter(h,p,bytes.Length,out w); Marshal.FreeCoTaskMem(p); EndPagePrinter(h); EndDocPrinter(h);} ClosePrinter(h); return ok; }
+ public static bool Send(string printer, byte[] bytes) { IntPtr h; if(!OpenPrinter(printer,out h,IntPtr.Zero)) return false; var di=new DOCINFOA{pDocName="ThorPDV RAW",pDataType="RAW"}; bool ok=StartDocPrinter(h,1,di); if(ok){ok=StartPagePrinter(h); IntPtr p=Marshal.AllocCoTaskMem(bytes.Length); try{Marshal.Copy(bytes,0,p,bytes.Length); int total=0; while(ok && total<bytes.Length){int written=0; ok=WritePrinter(h,IntPtr.Add(p,total),bytes.Length-total,out written); if(!ok || written<=0){ok=false;break;} total+=written;} ok=ok && total==bytes.Length;}finally{Marshal.FreeCoTaskMem(p);} EndPagePrinter(h); EndDocPrinter(h);} ClosePrinter(h); return ok; }
 }
 '@; Add-Type -TypeDefinition $src -ErrorAction SilentlyContinue; $b=[Convert]::FromBase64String('${q(base64)}'); if(-not [ThorRawPrinter]::Send('${q(printerName)}',$b)){throw 'raw_print_failed'}`;
 }
@@ -69,9 +111,7 @@ public class ThorRawPrinter {
 async function openDrawer(printerName) {
   if (process.platform !== 'win32') throw new Error('drawer_requires_windows');
   if (!printerName || printerName==='__PDF__') throw new Error('drawer_printer_not_configured');
-  const pulse=Buffer.from([0x1b,0x70,0x00,0x19,0xfa]);
-  await powershell(rawPrinterScript(printerName,pulse.toString('base64')));
-  return true;
+  return printRaw(printerName,Buffer.from([0x1b,0x70,0x00,0x19,0xfa]),'ThorPDV Gaveta');
 }
 
 async function readScaleDetailed(portName, baudRate=9600, timeoutMs=1500) {
@@ -95,4 +135,4 @@ async function readScale(portName, baudRate=9600, timeoutMs=1500) {
   return (await readScaleDetailed(portName,baudRate,timeoutMs)).value;
 }
 
-module.exports={ machineId,listPrinters,listSerialPorts,printText,openDrawer,readScale,readScaleDetailed };
+module.exports={ machineId,listPrinters,listSerialPorts,printRaw,printText,printThermalText,printVoucherBarcode,openDrawer,readScale,readScaleDetailed };
