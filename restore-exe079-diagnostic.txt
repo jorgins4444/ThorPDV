@@ -1,0 +1,7 @@
+checkout=success
+tools=success
+download=success
+extract=failure
+reconstruct=skipped
+verify=skipped
+commit=skipped
