@@ -146,8 +146,8 @@
     const productId = String(product.id);
     const found = state.cart.find((item) => String(item.productId) === productId);
 
-    if (found) { found.quantity = Number(found.quantity || 0) + 1; found.productCode = product.product_code || found.productCode || ''; found.reference = product.sku || found.reference || ''; }
-    else state.cart.push({ productId: product.id, name: product.name || product.description || 'Produto', productCode: product.product_code || '', reference: product.sku || '', sku: product.sku || '', quantity: 1, unitPrice: cartV43Price(product) });
+    if (found) { found.quantity = Number(found.quantity || 0) + 1; found.productCode = product.product_code || found.productCode || ''; found.reference = product.sku || found.reference || ''; found.image_url = product.image_url || product.imageUrl || product.thumbnail_url || product.thumbnailUrl || product.photo_url || product.photoUrl || product.image || product.photo || '' || found.image_url || ''; }
+    else state.cart.push({ productId: product.id, name: product.name || product.description || 'Produto', image_url: product.image_url || product.imageUrl || product.thumbnail_url || product.thumbnailUrl || product.photo_url || product.photoUrl || product.image || product.photo || '', productCode: product.product_code || '', reference: product.sku || '', sku: product.sku || '', quantity: 1, unitPrice: cartV43Price(product) });
 
     v.lastProductId = product.id;
     const subtotal = cartV43Subtotal();

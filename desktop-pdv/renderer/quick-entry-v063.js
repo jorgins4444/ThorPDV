@@ -106,11 +106,13 @@
       found.productCode = product.product_code || found.productCode || '';
       found.reference = product.sku || found.reference || '';
       found.sku = product.sku || found.sku || '';
+      found.image_url = product.image_url || product.imageUrl || product.thumbnail_url || product.thumbnailUrl || product.photo_url || product.photoUrl || product.image || product.photo || '' || found.image_url || '';
       Object.assign(found, flags);
     } else {
       state.cart.push({
         productId: product.id,
         name: product.name || product.description || 'Produto',
+        image_url: product.image_url || product.imageUrl || product.thumbnail_url || product.thumbnailUrl || product.photo_url || product.photoUrl || product.image || product.photo || '',
         productCode: product.product_code || '',
         reference: product.sku || '',
         sku: product.sku || '',

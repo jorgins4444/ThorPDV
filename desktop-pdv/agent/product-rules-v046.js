@@ -13,6 +13,7 @@ function normalizedWeighableQuantity(product, value) {
 }
 
 function allowNegativeStock(agent) {
+  if (agent?._supervisorNegativeStock === true) return true;
   try {
     const context = JSON.parse(agent.store.get('context', '{}') || '{}');
     return context?.pdv_parameters?.allow_negative_stock === true || context?.allow_negative_stock === true;
@@ -70,7 +71,7 @@ function installProductRules(ThorAgent, Store) {
       return quantity === Number(item.quantity || 0) ? item : { ...item, quantity };
     });
 
-    if (!allowNegativeStock(this)) {
+    if (!allowNegativeStock(this) && this._enforceStockAtFinalize === true) {
       const totals = new Map();
       for (const item of normalized) {
         const id=String(item.productId||'');

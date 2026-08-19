@@ -1,19 +1,19 @@
 {
   "name": "thorpdv-desktop",
-  "version": "0.8.94",
+  "version": "0.8.79",
   "private": true,
   "description": "ThorPDV Desktop para Windows com agente offline-first",
   "main": "main-v090.js",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "better-sqlite3": "13.0.3",
+    "qrcode": "^1.5.4"
+  },
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
     "dist:win": "electron-builder --win nsis",
     "pack:win": "electron-builder --win dir"
-  },
-  "dependencies": {
-    "bcryptjs": "^3.0.2",
-    "better-sqlite3": "latest",
-    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "electron": "latest",
@@ -28,19 +28,15 @@
       "main.js",
       "preload.js",
       "ipc-store-credit-v105.js",
-      "ipc-cash-movement-v106.js",
+      "ipc-receivable-v115.js",
       "updater.js",
       "agent/**/*",
       "renderer/**/*",
       "package.json"
     ],
-    "npmRebuild": true,
+    "npmRebuild": false,
     "asar": true,
-    "win": {
-      "target": [
-        "nsis"
-      ]
-    },
+    "win": { "target": ["nsis"] },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,

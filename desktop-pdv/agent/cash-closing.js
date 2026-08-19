@@ -86,13 +86,38 @@ function installCashClosing(ThorAgent) {
 
   ThorAgent.prototype.cashMovement = async function (payload = {}) {
     const openId = this.store.get('cash_open_event_id') || '';
+    const occurredAt = new Date().toISOString();
     const result = await originalCashMovement.call(this, payload);
+    const authorization = payload.supervisorAuthorization || null;
+    const current = this.currentOperator?.() || {};
+    const staff = typeof this._staffUsersWithHash === 'function' ? this._staffUsersWithHash() : [];
+    const operator = staff.find((user) => String(user.id) === String(payload.operatorId || current.id || '')) || current;
+    const operatorName = String(payload.operatorName || operator.name || operator.full_name || operator.display_name || operator.user_name || operator.email || '').trim() || 'Operador não identificado';
+    const reason = String(payload.reason || payload.notes || authorization?.reason || '').trim();
     if (result?.eventId && openId) {
       const row = this.store.db.prepare('select payload from queue where id=?').get(result.eventId);
-      const merged = { ...json(row?.payload, {}), cash_open_event_id: openId };
-      this.store.db.prepare('update queue set payload=?,updated_at=? where id=?').run(JSON.stringify(merged), new Date().toISOString(), result.eventId);
+      const merged = { ...json(row?.payload, {}), cash_open_event_id: openId, occurred_at: occurredAt, notes: reason, reason, operator_user_id: payload.operatorId || operator.id || null, operator_name: operatorName };
+      this.store.db.prepare('update queue set payload=?,updated_at=? where id=?').run(JSON.stringify(merged), occurredAt, result.eventId);
     }
-    return result;
+    const context = json(this.store.get('context', '{}'), {});
+    return {
+      ...result,
+      receipt: {
+        event_id: result?.eventId || '',
+        cash_open_event_id: openId,
+        movement_type: payload.movementType,
+        amount: money(payload.amount),
+        notes: reason,
+        reason,
+        occurred_at: occurredAt,
+        operator: { id: payload.operatorId || operator.id || null, name: operatorName },
+        supervisor: authorization ? {
+          id: authorization.supervisor_user_id || authorization.user_id || null,
+          name: authorization.supervisor_name || authorization.user_name || authorization.name || '',
+        } : null,
+        context,
+      },
+    };
   };
 
   ThorAgent.prototype.returnSale = async function (payload = {}) {
@@ -135,6 +160,73 @@ function installCashClosing(ThorAgent) {
   };
 
   ThorAgent.prototype.lastCashCloseSummary = function () { return json(this.store.get('last_cash_close_summary', '{}'), null); };
+
+  ThorAgent.prototype.cashMovementDocument = function (receiptInput = {}) {
+    const r = receiptInput || {};
+    const context = r.context || json(this.store.get('context', '{}'), {});
+    const width = 44;
+    const clean = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const center = (value) => {
+      const text = clean(value).slice(0, width);
+      return ' '.repeat(Math.max(0, Math.floor((width - text.length) / 2))) + text;
+    };
+    const pair = (label, value) => {
+      const left = clean(label);
+      const right = clean(value);
+      const spaces = Math.max(1, width - left.length - right.length);
+      return (left + ' '.repeat(spaces) + right).slice(0, width);
+    };
+    const wrap = (prefix, value) => {
+      const words = clean(value).split(' ').filter(Boolean);
+      if (!words.length) return [];
+      const result = [];
+      let line = prefix;
+      for (const word of words) {
+        if ((line + (line === prefix ? '' : ' ') + word).length > width) {
+          result.push(line);
+          line = ' '.repeat(prefix.length) + word;
+        } else line += (line === prefix ? '' : ' ') + word;
+      }
+      if (line.trim()) result.push(line);
+      return result;
+    };
+    const type = String(r.movement_type || '') === 'supply' ? 'SUPRIMENTO' : 'SANGRIA';
+    const occurred = r.occurred_at ? new Date(r.occurred_at) : new Date();
+    const documentNumber = clean(r.event_id || '').slice(0, 8).toUpperCase() || 'LOCAL';
+    const company = context.company_name || context.tenant_name || context.organization_name || 'THORPDV';
+    const branch = context.branch_name || context.store_name || '';
+    const pos = context.pos_name || context.pos_code || context.terminal_name || 'PDV';
+    const operator = r.operator?.name || 'Operador não identificado';
+    const lines = [
+      center(company),
+      ...(branch ? [center(branch)] : []),
+      '-'.repeat(width),
+      center(`*** COMPROVANTE DE ${type} ***`),
+      '-'.repeat(width),
+      pair('Documento:', documentNumber),
+      pair('Data:', occurred.toLocaleDateString('pt-BR')),
+      pair('Hora:', occurred.toLocaleTimeString('pt-BR')),
+      pair('Caixa:', pos),
+      ...wrap('Responsável: ', operator),
+      '-'.repeat(width),
+      center('VALOR DA OPERAÇÃO'),
+      center(`R$ ${money(r.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`),
+      '-'.repeat(width),
+      ...(r.notes ? [center('MOTIVO / OBSERVAÇÃO'), ...wrap('', r.notes), '-'.repeat(width)] : []),
+      ...(r.supervisor?.name ? [...wrap('Autorizado por: ', r.supervisor.name), '-'.repeat(width)] : []),
+      '',
+      center('________________________________'),
+      center('ASSINATURA DO RESPONSÁVEL'),
+      '',
+      center('Operação registrada pelo ThorPDV'),
+      '',
+      '',
+      '',
+    ];
+    const text = lines.join('\n');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}html,body{width:80mm;margin:0;padding:0;background:#fff;color:#000}body{padding:4mm 3mm 8mm;font-family:"Courier New",Consolas,monospace}pre{width:100%;margin:0;white-space:pre-wrap;overflow-wrap:normal;font-size:9.5px;line-height:1.35;font-weight:600}</style></head><body><pre>${escapeHtml(text)}</pre></body></html>`;
+    return { kind: 'text', text, html, title: `Comprovante de ${type}`, filename: `ThorPDV-${type}-${Date.now()}.pdf`, receipt: r };
+  };
 
   ThorAgent.prototype.cashCloseDocument = function (summaryInput = null) {
     const s = summaryInput || this.lastCashCloseSummary();

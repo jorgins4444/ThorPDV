@@ -3,6 +3,14 @@
   window.__storeCreditPaymentV106 = true;
 
   const number = (value) => Number(value || 0);
+
+  // Vale Crédito é uma forma de pagamento oficial do ThorPDV. O lançamento
+  // nunca é manual: ao escolher esta forma abrimos a consulta do vale e
+  // validamos o saldo antes de adicionar o pagamento à venda.
+  if (typeof v3PaymentLabels === 'object' && v3PaymentLabels) {
+    v3PaymentLabels.store_credit_voucher = 'Vale Crédito';
+  }
+
   const voucherAppliedInSale = (voucherNumber) => v3State().payments
     .filter((payment) => payment?.method === 'store_credit_voucher' && String(payment?.metadata?.voucher_number || '').toUpperCase() === String(voucherNumber || '').toUpperCase())
     .reduce((sum, payment) => sum + number(payment.amount), 0);
@@ -56,7 +64,7 @@
       add.disabled = applied <= 0;
       error.textContent = '';
       const already = voucherAppliedInSale(row.voucher_number);
-      selectedBox.innerHTML = `<span><small>VALE SELECIONADO</small><b>${esc(row.voucher_number)}</b><em>Saldo disponível: ${money(available)}${already > 0 ? ` • Já usado nesta venda: ${money(already)}` : ''}</em><em>${esc(row.guest_name || row.guest_document || 'Pessoa sem cadastro')}${row.sale_number ? ` • Origem: venda ${esc(row.sale_number)}` : ''}</em></span>`;
+      selectedBox.innerHTML = `<span><small>VALE SELECIONADO</small><b>${esc(row.voucher_number)}</b><em>Saldo disponível: ${money(available)}${already > 0 ? ` • Já usado nesta venda: ${money(already)}` : ''}</em><em>${esc(row.guest_name || row.guest_document || 'Pessoa sem cadastro')}${row.sale_number ? ` • Origem: venda ${esc(row.sale_number)}` : ''}</em><em>${row.issued_at ? `Emitido em ${esc(formatDate(row.issued_at))}` : ''}</em></span>`;
     };
 
     const renderResults = (rows) => {
@@ -134,6 +142,7 @@
     };
 
     setTimeout(() => query.focus(), 50);
+    return m;
   }
 
   const previousPaymentModalV106 = v3PaymentModal;
@@ -144,17 +153,42 @@
     queueMicrotask(() => {
       if (!paymentModal?.isConnected) return;
       const grid = paymentModal.querySelector('.payment-method-grid');
-      if (!grid || grid.querySelector('[data-v106-store-credit]')) return;
-      const button = document.createElement('button');
-      button.type = 'button';
+      if (!grid) return;
+
+      // Como a forma já faz parte do catálogo visual, reaproveitamos o botão
+      // criado pelo checkout e substituímos somente sua ação. Assim não existe
+      // pagamento manual sem identificação do vale nem botão duplicado.
+      let button = grid.querySelector('[data-method="store_credit_voucher"]');
+      if (!button) {
+        button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.method = 'store_credit_voucher';
+        grid.appendChild(button);
+      }
       button.dataset.v106StoreCredit = '1';
       button.textContent = 'Vale Crédito';
       button.onclick = () => {
         paymentModal.remove();
         voucherPaymentModalV106();
       };
-      grid.appendChild(button);
     });
     return paymentModal;
   };
+
+  // Caso a tela de venda já tenha sido renderizada antes deste complemento
+  // terminar de carregar, insere a forma de pagamento sem exigir reinício.
+  const ensureQuickPaymentButton = () => {
+    const grid = document.querySelector('.payment-methods');
+    if (!grid || grid.querySelector('[data-v3-pay="store_credit_voucher"]')) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'pay';
+    button.dataset.v3Pay = 'store_credit_voucher';
+    button.innerHTML = '<span>Vale Crédito</span><kbd></kbd>';
+    button.onclick = () => v3PaymentModal('store_credit_voucher');
+    grid.appendChild(button);
+  };
+
+  queueMicrotask(ensureQuickPaymentButton);
+  setTimeout(ensureQuickPaymentButton, 120);
 })();

@@ -33,43 +33,25 @@ function installProfilePermissions(ThorAgent) {
   };
 
   ThorAgent.prototype.loginOperator = async function (payload = {}) {
-    // Login do caixa é local e precisa liberar a operação imediatamente.
-    // A sincronização nunca pode fazer parte do caminho crítico de entrada.
     const localLogin = await originalLoginOperator.call(this, payload);
+    const sync = await this.sync.run(true);
 
-    const runBackgroundSync = async () => {
+    if (sync?.ok) {
       try {
-        const sync = await this.sync.run(true);
-        if (!sync?.ok) return sync;
-
-        // Depois do pull, valida novamente o mesmo PIN contra o perfil recém
-        // sincronizado. Se o usuário tiver sido removido, desativado ou o PIN
-        // alterado, a sessão local é encerrada sem travar a tela de login.
-        try {
-          await originalLoginOperator.call(this, payload);
-        } catch (error) {
-          this.store.set('current_operator_id', '');
-          return { ok: false, error: error?.message || 'operator_revalidation_failed' };
-        }
-        return sync;
+        const refreshedLogin = await originalLoginOperator.call(this, payload);
+        return {
+          ...refreshedLogin,
+          sync: { ok: true, at: this.store.get('last_sync_at') || null },
+        };
       } catch (error) {
-        return { ok: false, error: error?.message || 'sync_unavailable' };
+        this.store.set('current_operator_id', '');
+        throw error;
       }
-    };
-
-    if (!this.sync?.running) {
-      void runBackgroundSync();
     }
 
     return {
       ...localLogin,
-      sync: {
-        ok: true,
-        pending: true,
-        background: true,
-        reused: Boolean(this.sync?.running),
-        at: this.store.get('last_sync_at') || null,
-      },
+      sync: { ok: false, offline: true, error: sync?.error || 'sync_unavailable' },
     };
   };
 

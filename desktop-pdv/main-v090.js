@@ -1,6 +1,5 @@
 require('./agent/product-images-v090').installProductImagesV090();
 require('./main.js');
-require('./agent/product-catalog-read-v114').installProductCatalogReadV114();
 
 const { ThorAgent } = require('./agent');
 const { Store } = require('./agent/store');
@@ -11,8 +10,14 @@ require('./agent/sale-identity-v830').installSaleIdentityV830(ThorAgent, Store);
 require('./agent/store-credit-return-v105').installStoreCreditReturnV105(ThorAgent, Store);
 require('./agent/return-quantity-guard-v106').installReturnQuantityGuardV106(ThorAgent);
 require('./agent/store-credit-payment-v106').installStoreCreditPaymentV106(ThorAgent, Store);
-require('./agent/cash-movement-receipt-v106').installCashMovementReceiptV106(ThorAgent);
-require('./agent/sales-session-v107').installSalesSessionV107(ThorAgent);
-require('./agent/license-guard-v107').installLicenseGuardV107(ThorAgent);
+require('./agent/cash-close-receipt-v112').installCashCloseReceiptV112(ThorAgent);
+require('./agent/cash-close-receivable-v115').installCashCloseReceivableV115(ThorAgent);
+require('./agent/cash-close-print-layout-v113').installCashClosePrintLayoutV113(ThorAgent);
+require('./agent/cash-movement-receipt-v123').installCashMovementReceiptV123(ThorAgent);
+require('./agent/receivable-v115').installReceivableV115(ThorAgent);
+require('./agent/receivable-idempotency-v115').installReceivableIdempotencyV115(ThorAgent);
+require('./agent/receivable-print-v115').installReceivablePrintV115(ThorAgent);
 require('./ipc-store-credit-v105').installStoreCreditVoucherIpcV105(ThorAgent);
-require('./ipc-cash-movement-v106').installCashMovementIpcV106(ThorAgent);
+require('./ipc-receivable-v115').installReceivableIpcV115();
+require('./agent/operations-center-v120').installOperationsCenterV120(ThorAgent);
+require('./agent/sqlite-optimization-v124').installSqliteOptimizationV124(Store);

@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const hardware = require('./hardware');
 
 function json(value, fallback) {
@@ -120,7 +121,7 @@ function installThorAgentV3(ThorAgent) {
     return auth;
   };
 
-  ThorAgent.prototype.finalizeSale = async function ({ items, customerId = null, consumerDocument = '', payments = [], discount = 0, surcharge = 0, supervisorAuthorization = null, notes = '' }) {
+  ThorAgent.prototype.finalizeSale = async function ({ items, customerId = null, sellerUserId = null, sellerName = '', consumerDocument = '', payments = [], discount = 0, surcharge = 0, supervisorAuthorization = null, notes = '' }) {
     const operator = this.currentOperator();
     if (!operator) throw new Error('operator_required');
     if (!getPath(operator, 'permissions.sale.create', false)) throw new Error('operator_not_allowed_to_sell');
@@ -141,12 +142,16 @@ function installThorAgentV3(ThorAgent) {
     });
     const paid = normalizedPayments.reduce((s, p) => s + p.amount, 0);
     if (paid > quote.total + 0.01) throw new Error('payment_exceeds_total');
-    const payload = { cash_open_event_id: cashOpenEventId, operator_user_id: operator.id, customer_id: customerId || null, consumer_document: document || null, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount })), payments: normalizedPayments, discount: Number(discount || 0), surcharge: Number(surcharge || 0), supervisor_authorization: auth, notes };
-    const event = this.event('sale_completed', payload);
-    for (const i of quote.items) this.store.adjustInventory(i.productId, -i.quantity);
-    const receipt = { eventId: event.id, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount, name: i.name, sku: i.sku, unit: i.unit, total: i.total })), subtotal: quote.subtotal, discount: Number(discount || 0), surcharge: Number(surcharge || 0), total: quote.total, payments: normalizedPayments, customerId, consumerDocument: document || null, operator: { id: operator.id, name: operator.name }, supervisorAuthorization: auth, createdAt: new Date().toISOString(), context: json(this.store.get('context', '{}'), {}), local_status: 'pending_sync', returned_total: 0 };
-    this.store.saveReceipt(event.id, quote.total, receipt);
-    if (this.v3Settings().autoOpenDrawer && normalizedPayments.some((p) => p.method === 'cash')) this.openDrawer().catch(() => {});
+    const seller = sellerUserId ? this._staffUsersWithHash().find((user) => String(user.id) === String(sellerUserId)) : null;
+    const resolvedSellerName = String(sellerName || seller?.name || seller?.full_name || '').trim();
+    const payload = { cash_open_event_id: cashOpenEventId, operator_user_id: operator.id, seller_user_id:sellerUserId || null, seller_name:resolvedSellerName, customer_id: customerId || null, consumer_document: document || null, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount })), payments: normalizedPayments, discount: Number(discount || 0), surcharge: Number(surcharge || 0), supervisor_authorization: auth, notes };
+    const event = { id:crypto.randomUUID(), type:'sale_completed', payload:{ ...payload, occurred_at:new Date().toISOString() } };
+    const receipt = { eventId: event.id, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount, name: i.name, sku: i.sku, unit: i.unit, total: i.total })), subtotal: quote.subtotal, discount: Number(discount || 0), surcharge: Number(surcharge || 0), total: quote.total, payments: normalizedPayments, customerId, consumerDocument: document || null, operator: { id: operator.id, name: operator.name }, seller:resolvedSellerName ? { id:sellerUserId || seller?.id || null, name:resolvedSellerName } : null, seller_user_id:sellerUserId || null, seller_name:resolvedSellerName, supervisorAuthorization: auth, createdAt: new Date().toISOString(), context: json(this.store.get('context', '{}'), {}), local_status: 'pending_sync', returned_total: 0 };
+    this.store.commitSaleLocal({ event, inventory:quote.items, total:quote.total, receipt });
+    setTimeout(() => this.sync.run().catch(() => {}), 600);
+    if (this.v3Settings().autoOpenDrawer && normalizedPayments.some((p) => p.method === 'cash')) {
+      setTimeout(() => this.openDrawer().catch(() => {}), 1500);
+    }
     return { ok: true, eventId: event.id, subtotal: quote.subtotal, discount: Number(discount || 0), surcharge: Number(surcharge || 0), total: quote.total, paid, change: normalizedPayments.reduce((s, p) => s + Number(p.change_amount || 0), 0), receipt };
   };
 
@@ -244,8 +249,103 @@ function installThorAgentV3(ThorAgent) {
       cStat: fiscalCancellation.cStat || null,
     } : null,
   });
-  return { ok: true, eventId: e.id, fiscalCancellation };
+  const cancelledAt = new Date().toISOString();
+  const context = sale?.context || json(this.store.get('context', '{}'), {});
+  return {
+    ok: true,
+    eventId: e.id,
+    fiscalCancellation,
+    receipt: {
+      event_id: e.id,
+      sale_id: saleId || sale?.id || null,
+      sale_client_event_id: saleClientEventId || sale?.client_event_id || null,
+      sale_number: sale?.number || null,
+      sale_completed_at: sale?.completed_at || sale?.created_at || null,
+      cancelled_at: cancelledAt,
+      reason: normalizedReason,
+      total: Number(sale?.total || 0),
+      customer_name: sale?.customer_name || sale?.customer?.name || 'Consumidor',
+      items: Array.isArray(sale?.items) ? sale.items : [],
+      payments: Array.isArray(sale?.payments) ? sale.payments : [],
+      operator: { id: operator.id || null, name: operator.name || operator.full_name || 'Operador não identificado' },
+      supervisor: supervisorAuthorization ? {
+        id: supervisorAuthorization.supervisor_user_id || null,
+        name: supervisorAuthorization.supervisor_name || supervisorAuthorization.user_name || supervisorAuthorization.name || '',
+      } : null,
+      fiscal: sale?.fiscal || null,
+      fiscal_cancellation: fiscalCancellation,
+      context,
+    },
+  };
 };
+
+  ThorAgent.prototype.saleCancellationDocument = function (receiptInput = {}) {
+    const r = receiptInput || {};
+    const context = r.context || json(this.store.get('context', '{}'), {});
+    const width = 44;
+    const clean = (value) => String(value ?? '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const center = (value) => { const text = clean(value).slice(0, width); return ' '.repeat(Math.max(0, Math.floor((width - text.length) / 2))) + text; };
+    const pair = (label, value) => { const left=clean(label),right=clean(value);return (left+' '.repeat(Math.max(1,width-left.length-right.length))+right).slice(0,width); };
+    const wrap = (prefix, value) => {
+      const words=clean(value).split(' ').filter(Boolean);if(!words.length)return [];
+      const result=[];let line=prefix;
+      for(const word of words){const next=line+(line===prefix?'':' ')+word;if(next.length>width){result.push(line);line=' '.repeat(prefix.length)+word;}else line=next;}
+      if(line.trim())result.push(line);return result;
+    };
+    const brl = (value) => Number(value || 0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const date = r.cancelled_at ? new Date(r.cancelled_at) : new Date();
+    const fiscal = r.fiscal || {};
+    const cancellation = r.fiscal_cancellation || {};
+    const company=context.company_name||context.tenant_name||context.organization_name||'THORPDV';
+    const branch=context.branch_name||context.store_name||'';
+    const pos=context.pos_name||context.pos_code||context.terminal_name||'PDV';
+    const number=clean(r.sale_number||r.sale_client_event_id||r.sale_id||'LOCAL');
+    const lines=[
+      center(company),...(branch?[center(branch)]:[]),
+      '-'.repeat(width),
+      center('*** COMPROVANTE DE CANCELAMENTO ***'),
+      '-'.repeat(width),
+      pair('Venda:',number),
+      pair('Data:',date.toLocaleDateString('pt-BR')),
+      pair('Hora:',date.toLocaleTimeString('pt-BR')),
+      pair('Caixa:',pos),
+      ...wrap('Responsável: ',r.operator?.name||'Operador não identificado'),
+      ...(r.supervisor?.name?wrap('Autorizado por: ',r.supervisor.name):[]),
+      '-'.repeat(width),
+      ...wrap('Cliente: ',r.customer_name||'Consumidor'),
+      ...(r.sale_completed_at?[pair('Venda realizada:',new Date(r.sale_completed_at).toLocaleDateString('pt-BR'))]:[]),
+      '-'.repeat(width),
+      center('ITENS CANCELADOS')
+    ];
+    const items=Array.isArray(r.items)?r.items:[];
+    if(!items.length)lines.push(center('Itens não disponíveis localmente'));
+    for(const item of items){
+      const qty=Number(item.quantity||0),unit=Number(item.unit_price??item.unitPrice??0),discount=Number(item.discount||0);
+      lines.push(...wrap('',`${qty.toLocaleString('pt-BR',{maximumFractionDigits:3})}x ${item.name||item.description||item.sku||'ITEM'}`));
+      lines.push(pair(`  Unit. R$ ${brl(unit)}`,`R$ ${brl(qty*unit-discount)}`));
+    }
+    lines.push('-'.repeat(width));
+    const payments=Array.isArray(r.payments)?r.payments:[];
+    if(payments.length){
+      lines.push(center('FORMAS DE PAGAMENTO'));
+      for(const payment of payments)lines.push(pair(clean(payment.name||payment.method||'Forma'),`R$ ${brl(payment.amount)}`));
+      lines.push('-'.repeat(width));
+    }
+    lines.push(center('VALOR TOTAL CANCELADO'),center(`R$ ${brl(r.total)}`),'-'.repeat(width),center('MOTIVO DO CANCELAMENTO'),...wrap('',r.reason||'Não informado'),'-'.repeat(width));
+    if(String(fiscal.status||'')==='cancelled'||cancellation.cancellation_protocol){
+      lines.push(center('CANCELAMENTO FISCAL / NFC-e'));
+      if(fiscal.number)lines.push(pair('NFC-e:',fiscal.number));
+      if(fiscal.access_key)lines.push(...wrap('Chave: ',fiscal.access_key));
+      if(cancellation.cancellation_protocol||fiscal.cancellation_protocol)lines.push(...wrap('Protocolo: ',cancellation.cancellation_protocol||fiscal.cancellation_protocol));
+      if(cancellation.cStat||fiscal.cStat)lines.push(pair('cStat:',cancellation.cStat||fiscal.cStat));
+      lines.push('-'.repeat(width));
+    }
+    lines.push('',center('________________________________'),center('ASSINATURA DO RESPONSÁVEL'),'',center('Cancelamento registrado pelo ThorPDV'),'','','');
+    const text=lines.join('\n');
+    const escape=(value)=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const html=`<!doctype html><html><head><meta charset="utf-8"><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}html,body{width:80mm;margin:0;padding:0;background:#fff;color:#000}body{padding:4mm 3mm 8mm;font-family:"Courier New",Consolas,monospace}pre{width:100%;margin:0;white-space:pre-wrap;font-size:9.5px;line-height:1.35;font-weight:600}</style></head><body><pre>${escape(text)}</pre></body></html>`;
+    return {kind:'text',text,html,title:'Comprovante de Cancelamento',filename:`ThorPDV-Cancelamento-${Date.now()}.pdf`,receipt:r};
+  };
 
   ThorAgent.prototype.returnSale = async function (payload) {
     const operator = this.currentOperator();
