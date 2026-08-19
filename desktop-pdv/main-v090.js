@@ -15,5 +15,6 @@ require('./agent/cash-movement-receipt-v106').installCashMovementReceiptV106(Tho
 require('./agent/sales-session-v107').installSalesSessionV107(ThorAgent);
 require('./agent/license-guard-v107').installLicenseGuardV107(ThorAgent);
 require('./agent/operator-login-fast-v090').installOperatorLoginFastV090(ThorAgent);
+require('./agent/fiscal-startup-guard-v091').installFiscalStartupGuardV091(ThorAgent);
 require('./ipc-store-credit-v105').installStoreCreditVoucherIpcV105(ThorAgent);
 require('./ipc-cash-movement-v106').installCashMovementIpcV106(ThorAgent);
