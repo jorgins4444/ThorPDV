@@ -1,0 +1,108 @@
+/* ThorPDV Desktop 0.8.89 — isolamento final do login.
+   Este arquivo deve ser carregado por último para impedir que skins antigas
+   do PDV alterem o overlay de autenticação. */
+
+html,body{min-width:100%!important;min-height:100%!important}
+body:has(#thorOperatorGate){overflow:hidden!important}
+
+#thorOperatorGate.operator-gate{
+  position:fixed!important;
+  inset:0!important;
+  width:100vw!important;
+  height:100vh!important;
+  min-width:100vw!important;
+  min-height:100vh!important;
+  max-width:none!important;
+  max-height:none!important;
+  margin:0!important;
+  padding:20px!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  overflow:auto!important;
+  transform:none!important;
+  translate:none!important;
+  scale:1!important;
+  z-index:2147483000!important;
+  background:linear-gradient(118deg,#2d1467 0%,#6433cf 48%,#376fcb 100%)!important;
+  color:#201a2d!important;
+}
+
+#thorOperatorGate.operator-gate::before{
+  content:''!important;
+  position:absolute!important;
+  inset:0!important;
+  width:auto!important;
+  height:auto!important;
+  pointer-events:none!important;
+  background:radial-gradient(circle at 15% 84%,rgba(255,255,255,.08),transparent 31%),radial-gradient(circle at 82% 15%,rgba(255,255,255,.06),transparent 28%)!important;
+  mask-image:none!important;
+  transform:none!important;
+}
+
+/* O login normal tem somente um card. Qualquer appbar, raio, atalhos ou painel
+   legado deve permanecer invisível enquanto o operador não entrou. */
+#thorOperatorGate>.operator-gate-appbar,
+#thorOperatorGate>.operator-gate-shortcuts,
+#thorOperatorGate>.operator-gate-lightning,
+#thorOperatorGate .operator-gate-terminal{
+  display:none!important;
+  visibility:hidden!important;
+  width:0!important;
+  height:0!important;
+  overflow:hidden!important;
+}
+
+#thorOperatorGate>.operator-gate-card{
+  position:relative!important;
+  inset:auto!important;
+  display:block!important;
+  flex:0 0 auto!important;
+  width:min(450px,calc(100vw - 40px))!important;
+  min-width:0!important;
+  max-width:450px!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:calc(100vh - 40px)!important;
+  margin:auto!important;
+  padding:32px 42px 34px!important;
+  overflow:auto!important;
+  box-sizing:border-box!important;
+  transform:none!important;
+  translate:none!important;
+  border:0!important;
+  border-radius:24px!important;
+  background:rgba(255,255,255,.985)!important;
+  box-shadow:0 28px 70px rgba(19,10,58,.30)!important;
+}
+
+#thorOperatorGate .operator-login-actions{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  width:100%!important;
+}
+
+#thorOperatorGate .operator-gate-primary,
+#thorOperatorGate .operator-gate-card-access{
+  width:100%!important;
+  max-width:100%!important;
+}
+
+#thorOperatorGate .operator-sync-progress,
+#thorOperatorGate .operator-login-sync-state,
+#thorOperatorGate .operator-login-fields{
+  width:100%!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+}
+
+@media(max-height:760px){
+  #thorOperatorGate.operator-gate{padding:12px!important}
+  #thorOperatorGate>.operator-gate-card{max-height:calc(100vh - 24px)!important;padding:20px 36px 22px!important}
+}
+
+@media(max-width:520px){
+  #thorOperatorGate.operator-gate{padding:12px!important}
+  #thorOperatorGate>.operator-gate-card{width:100%!important;max-width:450px!important;padding:24px 20px!important;border-radius:20px!important}
+}
