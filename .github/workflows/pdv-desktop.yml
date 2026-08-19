@@ -68,6 +68,7 @@ jobs:
             'agent/sales-options-v071.js',
             'agent/sales-settlement-v073.js',
             'agent/product-images-v090.js',
+            'agent/product-catalog-read-v114.js',
             'agent/receipt-print-v829.js',
             'agent/sale-identity-v830.js',
             'renderer/app.js',
@@ -120,6 +121,7 @@ jobs:
             'renderer/redesign-v100.js',
             'renderer/redesign-v101.js',
             'renderer/term-finalize-v102.js',
+            'renderer/product-consulta-tab-v114.js',
             'renderer/receipt-print-v829.js',
             'renderer/sale-identity-v830.js'
           )
