@@ -45,11 +45,25 @@ jobs:
         name: Extract exact app.asar
         run: |
           EXE="$RUNNER_TEMP/stable/ThorPDV-Desktop-0.8.79-x64.exe"
+          PAYLOAD="$RUNNER_TEMP/stable/payload.7z"
           mkdir -p "$RUNNER_TEMP/unpacked" "$RUNNER_TEMP/stable-app"
-          7z x -y "$EXE" -o"$RUNNER_TEMP/unpacked" >/dev/null
+          python <<'PY'
+          import os
+          from pathlib import Path
+          exe=Path(os.environ['RUNNER_TEMP'])/'stable'/'ThorPDV-Desktop-0.8.79-x64.exe'
+          payload=Path(os.environ['RUNNER_TEMP'])/'stable'/'payload.7z'
+          data=exe.read_bytes()
+          magic=b'\x37\x7a\xbc\xaf\x27\x1c'
+          offset=data.find(magic)
+          if offset < 0:
+              raise SystemExit('embedded 7z payload not found')
+          payload.write_bytes(data[offset:])
+          print('Embedded 7z payload offset:', offset)
+          PY
+          7z x -y "$PAYLOAD" -o"$RUNNER_TEMP/unpacked" >/dev/null
           ASAR=$(find "$RUNNER_TEMP/unpacked" -type f -path '*/resources/app.asar' | head -1)
           if [ -z "$ASAR" ]; then
-            echo 'app.asar not found' >&2
+            echo 'app.asar not found in embedded payload' >&2
             find "$RUNNER_TEMP/unpacked" -maxdepth 4 -type f | head -150
             exit 1
           fi
