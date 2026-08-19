@@ -34,7 +34,7 @@
       "renderer/**/*",
       "package.json"
     ],
-    "npmRebuild": true,
+    "npmRebuild": false,
     "asar": true,
     "win": {
       "target": [
