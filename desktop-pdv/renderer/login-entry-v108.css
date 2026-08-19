@@ -1,1 +1,325 @@
-.operator-gate-terminal{display:none!important}.operator-gate.show-terminal-config .operator-gate-terminal{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:2px 0 18px;padding:10px;border:1px solid #ece8f2;border-radius:12px;background:#faf9fc}.operator-gate.show-terminal-config .operator-gate-terminal span{display:grid;gap:2px;min-width:0}.operator-gate.show-terminal-config .operator-gate-terminal small{font-size:9px;color:#81798b;text-transform:uppercase;letter-spacing:.06em}.operator-gate.show-terminal-config .operator-gate-terminal b{font-size:10px;color:#3f3946;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.operator-gate-card{width:min(560px,94vw)!important;padding:38px 42px 32px!important}.operator-login-fields,.operator-sync-progress,.operator-login-sync-state{width:100%;max-width:470px;margin-left:auto;margin-right:auto}.operator-login-fields{padding-top:8px}.operator-gate-field{margin:15px 0}.operator-input-shell input{height:54px}.operator-login-actions{margin-top:14px}.operator-login-sync-state{margin-top:20px}.operator-login-brand-row{margin-bottom:14px}.operator-login-accent{margin-bottom:24px}@media(max-height:760px){.operator-gate-card{padding:24px 34px 22px!important}.operator-login-fields{padding-top:0}.operator-gate-field{margin:10px 0}.operator-input-shell input{height:47px}.operator-login-sync-state{margin-top:12px}}@media(max-width:680px){.operator-gate-card{padding:26px 20px 22px!important}.operator-login-fields,.operator-sync-progress,.operator-login-sync-state{max-width:none}.operator-gate.show-terminal-config .operator-gate-terminal{grid-template-columns:1fr}}
+.operator-gate{
+  position:fixed!important;
+  inset:0!important;
+  z-index:100000!important;
+  display:grid!important;
+  place-items:center!important;
+  min-height:100vh!important;
+  padding:30px 20px!important;
+  overflow:auto!important;
+  background:linear-gradient(118deg,#2d1467 0%,#6433cf 48%,#376fcb 100%)!important;
+  color:#201a2d!important;
+}
+
+.operator-gate::before{
+  content:''!important;
+  position:absolute!important;
+  inset:0!important;
+  pointer-events:none!important;
+  background:
+    radial-gradient(circle at 15% 84%,rgba(255,255,255,.08),transparent 31%),
+    radial-gradient(circle at 82% 15%,rgba(255,255,255,.06),transparent 28%)!important;
+  mask-image:none!important;
+}
+
+/* Volta ao login em uma única tela. Os atalhos continuam funcionando pelo teclado. */
+.operator-gate-appbar,
+.operator-gate-shortcuts,
+.operator-gate-lightning{
+  display:none!important;
+}
+
+.operator-gate-card{
+  position:relative!important;
+  width:min(450px,calc(100vw - 40px))!important;
+  max-width:450px!important;
+  max-height:none!important;
+  overflow:visible!important;
+  box-sizing:border-box!important;
+  padding:38px 42px 42px!important;
+  border:0!important;
+  border-radius:24px!important;
+  background:rgba(255,255,255,.975)!important;
+  box-shadow:0 28px 70px rgba(19,10,58,.30)!important;
+}
+
+.operator-login-brand-row{
+  display:flex!important;
+  flex-wrap:wrap!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  margin:0 0 4px!important;
+  text-align:center!important;
+}
+
+.operator-login-mark{
+  position:relative!important;
+  flex:0 0 118px!important;
+  width:118px!important;
+  height:118px!important;
+  margin:0 calc(50% - 59px) 10px!important;
+  display:grid!important;
+  place-items:center!important;
+  border:1px solid rgba(108,53,212,.12)!important;
+  border-radius:50%!important;
+  background:
+    radial-gradient(circle at 50% 50%,rgba(108,53,212,.08) 0 48%,transparent 49%),
+    #f7f5ff!important;
+  box-shadow:none!important;
+}
+
+.operator-login-mark::before{
+  content:''!important;
+  position:absolute!important;
+  inset:10px!important;
+  width:auto!important;
+  height:auto!important;
+  top:10px!important;
+  border:2px dashed rgba(18,185,214,.28)!important;
+  border-radius:50%!important;
+}
+
+.operator-login-mark span{
+  position:relative!important;
+  z-index:1!important;
+  color:#6637d5!important;
+  font-size:46px!important;
+  font-weight:900!important;
+  line-height:1!important;
+  text-shadow:none!important;
+  transform:rotate(-8deg)!important;
+}
+
+.operator-login-wordmark{
+  font-size:27px!important;
+  font-weight:500!important;
+  letter-spacing:-1.1px!important;
+  color:#6434d7!important;
+  line-height:1.1!important;
+}
+
+.operator-login-wordmark::before{
+  content:'ϟ'!important;
+  display:inline-block!important;
+  margin-right:5px!important;
+  font-size:25px!important;
+  font-weight:900!important;
+  vertical-align:1px!important;
+}
+
+.operator-login-wordmark span{color:#12a9d1!important}
+.operator-login-brand-row>i,
+.operator-login-brand-row>b{display:none!important}
+
+.operator-login-accent{
+  height:auto!important;
+  display:block!important;
+  margin:17px 0 31px!important;
+  text-align:center!important;
+}
+
+.operator-login-accent::before{
+  content:'Bem-vindo ao ThorPDV'!important;
+  display:block!important;
+  margin-bottom:6px!important;
+  color:#252030!important;
+  font-size:20px!important;
+  font-weight:800!important;
+  line-height:1.25!important;
+}
+
+.operator-login-accent::after{
+  content:'Informe seu usuário e senha para iniciar'!important;
+  display:block!important;
+  color:#918a99!important;
+  font-size:11px!important;
+  font-weight:400!important;
+  letter-spacing:.02em!important;
+}
+
+.operator-login-accent i,
+.operator-login-accent b{display:none!important}
+
+.operator-gate-terminal{display:none!important}
+.operator-login-fields,
+.operator-sync-progress,
+.operator-login-sync-state{
+  width:100%!important;
+  max-width:none!important;
+  margin-left:auto!important;
+  margin-right:auto!important;
+}
+
+.operator-login-fields{padding-top:0!important}
+
+.operator-gate-field{
+  display:grid!important;
+  gap:7px!important;
+  margin:15px 0!important;
+}
+
+.operator-gate-field>span{
+  color:#443c4f!important;
+  font-size:10px!important;
+  font-weight:600!important;
+}
+
+.operator-gate-field:first-child>span{font-size:0!important}
+.operator-gate-field:first-child>span::after{
+  content:'Usuário PDV'!important;
+  font-size:10px!important;
+}
+.operator-gate-field:nth-child(2)>span{font-size:0!important}
+.operator-gate-field:nth-child(2)>span::after{
+  content:'PIN'!important;
+  font-size:10px!important;
+}
+
+.operator-input-shell{position:relative!important;display:flex!important;align-items:center!important}
+.operator-field-icon{display:none!important}
+
+.operator-input-shell input{
+  width:100%!important;
+  height:46px!important;
+  box-sizing:border-box!important;
+  padding:0 44px 0 15px!important;
+  border:1px solid #ddd9e5!important;
+  border-radius:12px!important;
+  background:#fff!important;
+  color:#292330!important;
+  font:inherit!important;
+  font-size:11px!important;
+  outline:none!important;
+  transition:border-color .18s,box-shadow .18s!important;
+}
+
+.operator-input-shell input::placeholder{color:#aba5b0!important}
+.operator-input-shell input:focus{
+  border-color:#7545df!important;
+  box-shadow:0 0 0 3px rgba(117,69,223,.10)!important;
+}
+
+.operator-pin-toggle{
+  position:absolute!important;
+  right:6px!important;
+  width:34px!important;
+  height:34px!important;
+  border:0!important;
+  border-radius:8px!important;
+  background:transparent!important;
+  color:#8a8292!important;
+  cursor:pointer!important;
+}
+.operator-pin-toggle:hover,.operator-pin-toggle.active{background:#f3effc!important;color:#6533ce!important}
+
+.operator-gate-error{
+  min-height:18px!important;
+  margin:4px 0 0!important;
+  color:#b42318!important;
+  font-size:10px!important;
+  font-weight:650!important;
+}
+
+.operator-login-actions{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:9px!important;
+  margin-top:26px!important;
+}
+
+.operator-gate-primary,
+.operator-gate-card-access,
+.operator-gate-secondary{
+  width:100%!important;
+  height:51px!important;
+  border-radius:12px!important;
+  font:inherit!important;
+  font-size:11px!important;
+  font-weight:800!important;
+  cursor:pointer!important;
+}
+
+.operator-gate-primary{
+  border:0!important;
+  background:linear-gradient(110deg,#7247e4 0%,#4e57dd 48%,#0caad0 100%)!important;
+  color:#fff!important;
+  box-shadow:0 12px 24px rgba(66,79,202,.20)!important;
+}
+.operator-gate-primary:hover{transform:translateY(-1px)!important;box-shadow:0 15px 28px rgba(66,79,202,.25)!important}
+
+.operator-gate-primary span{display:none!important}
+.operator-gate-primary kbd{display:none!important}
+.operator-gate-primary{font-size:0!important}
+.operator-gate-primary::after{content:'Entrar no caixa'!important;font-size:11px!important}
+
+/* Mantém acesso por cartão existente, mas visualmente secundário. */
+.operator-gate-card-access{
+  height:38px!important;
+  border:0!important;
+  background:transparent!important;
+  color:#755ed0!important;
+  box-shadow:none!important;
+  font-size:10px!important;
+}
+.operator-gate-card-access:hover{background:#f7f4ff!important;transform:none!important}
+.operator-gate-card-access span,.operator-gate-card-access kbd{display:none!important}
+
+.operator-gate-primary:disabled,
+.operator-gate-card-access:disabled,
+.operator-gate-secondary:disabled{opacity:.55!important;cursor:wait!important;transform:none!important}
+
+.operator-sync-progress{
+  margin-top:14px!important;
+  padding:12px!important;
+  border:1px solid #e7e4ee!important;
+  border-radius:12px!important;
+  background:#faf9fd!important;
+}
+.operator-sync-progress[hidden]{display:none!important}
+
+.operator-login-sync-state{
+  display:grid!important;
+  grid-template-columns:auto 1fr auto!important;
+  align-items:center!important;
+  gap:9px!important;
+  margin-top:14px!important;
+  padding:9px 11px!important;
+  border:0!important;
+  border-radius:10px!important;
+  background:#f8f7fb!important;
+}
+.operator-login-sync-state.online{background:#f3faf6!important}
+.operator-sync-check{
+  display:grid!important;
+  place-items:center!important;
+  width:26px!important;
+  height:26px!important;
+  border-radius:50%!important;
+  background:#eee9f8!important;
+  color:#7041cf!important;
+  font-size:12px!important;
+  font-weight:900!important;
+}
+.operator-login-sync-state.online .operator-sync-check{background:#2da56e!important;color:#fff!important}
+.operator-login-sync-state b{font-size:9.5px!important;color:#3c3544!important}
+.operator-login-sync-state small{font-size:8.5px!important;color:#8b8490!important}
+
+@media(max-height:720px){
+  .operator-gate{padding:16px!important}
+  .operator-gate-card{padding:20px 38px 24px!important}
+  .operator-login-mark{width:82px!important;height:82px!important;flex-basis:82px!important;margin:0 calc(50% - 41px) 6px!important}
+  .operator-login-mark span{font-size:35px!important}
+  .operator-login-accent{margin:10px 0 16px!important}
+  .operator-gate-field{margin:9px 0!important}
+  .operator-input-shell input{height:42px!important}
+  .operator-login-actions{margin-top:13px!important}
+  .operator-gate-primary{height:46px!important}
+  .operator-gate-card-access{height:30px!important}
+  .operator-login-sync-state{margin-top:8px!important;padding:7px 9px!important}
+}
+
+@media(max-width:520px){
+  .operator-gate{padding:16px!important}
+  .operator-gate-card{width:100%!important;padding:28px 22px 28px!important;border-radius:20px!important}
+}
