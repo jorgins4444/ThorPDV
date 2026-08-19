@@ -6,7 +6,7 @@
   "main": "main-v090.js",
   "dependencies": {
     "bcryptjs": "^3.0.2",
-    "better-sqlite3": "12.4.1",
+    "better-sqlite3": "13.0.3",
     "qrcode": "^1.5.4"
   },
   "scripts": {
