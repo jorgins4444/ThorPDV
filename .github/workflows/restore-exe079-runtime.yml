@@ -25,7 +25,7 @@ jobs:
         name: Install extraction tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y p7zip-full rsync
+          sudo apt-get install -y libarchive-tools rsync
           npm install --no-save @electron/asar@3.2.10
 
       - id: download
@@ -47,7 +47,6 @@ jobs:
           set -euo pipefail
           STAGE="$RUNNER_TEMP/extract-stage.txt"
           echo 'start' > "$STAGE"
-          EXE="$RUNNER_TEMP/stable/ThorPDV-Desktop-0.8.79-x64.exe"
           PAYLOAD="$RUNNER_TEMP/stable/payload.7z"
           mkdir -p "$RUNNER_TEMP/unpacked" "$RUNNER_TEMP/stable-app"
           python <<'PY'
@@ -64,7 +63,7 @@ jobs:
           print('Embedded 7z payload offset:', offset)
           PY
           echo 'payload-sliced' > "$STAGE"
-          7z x -y "$PAYLOAD" -o"$RUNNER_TEMP/unpacked"
+          bsdtar -xf "$PAYLOAD" -C "$RUNNER_TEMP/unpacked"
           echo 'payload-extracted' > "$STAGE"
           ASAR=$(find "$RUNNER_TEMP/unpacked" -type f -path '*/resources/app.asar' | head -1)
           if [ -z "$ASAR" ]; then
