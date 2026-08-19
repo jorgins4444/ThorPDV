@@ -32,6 +32,7 @@ function installProductCatalogV110(ThorAgent, Store) {
       left join price_items pi on pi.product_id=p.id`;
 
     if (!q) {
+      if (Number(limit) >= 5000) return this.db.prepare(`${base} where p.active=1 order by p.name`).all().map(this.inflateProduct);
       return this.db.prepare(`${base} where p.active=1 order by p.name limit ?`).all(limit).map(this.inflateProduct);
     }
 
