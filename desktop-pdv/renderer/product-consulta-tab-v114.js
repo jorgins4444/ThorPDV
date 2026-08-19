@@ -15,9 +15,7 @@
   const moneyValue = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const stockValue = value => Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 
-  function button() {
-    return document.getElementById('navProductConsulta');
-  }
+  function button() { return document.getElementById('navProductConsulta'); }
 
   function markProductTab(active) {
     const consult = button();
@@ -32,7 +30,6 @@
     if (!state?.status?.operator) return;
     const top = document.querySelector('.top-right');
     if (!top) return;
-
     let consult = button();
     if (!consult) {
       consult = document.createElement('button');
@@ -44,7 +41,6 @@
       if (fiscal) fiscal.insertAdjacentElement('afterend', consult);
       else top.insertBefore(consult, top.firstChild || null);
     }
-
     consult.onclick = open;
     if (productViewOpen) markProductTab(true);
   }
@@ -69,13 +65,12 @@
         <td><b>${escHtml(product.name || '—')}</b></td>
         <td>${escHtml(product.product_code || product.sku || '—')}</td>
         <td><b>${moneyValue(product.price)}</b></td>
-        <td>${stockValue(product.stock)}</td>
         <td>${escHtml(product.ncm || '—')}</td>
-      </tr>`).join('') : '<tr><td colspan="5" class="empty">Nenhum produto encontrado.</td></tr>';
+        <td>${stockValue(product.stock)}</td>
+        <td>${escHtml(product.brand || '—')}</td>
+      </tr>`).join('') : '<tr><td colspan="6" class="empty">Nenhum produto encontrado.</td></tr>';
 
-    summary.textContent = total
-      ? `${start + 1}–${Math.min(start + PAGE_SIZE, total)} de ${total} produtos`
-      : '0 produtos';
+    summary.textContent = total ? `${start + 1}–${Math.min(start + PAGE_SIZE, total)} de ${total} produtos` : '0 produtos';
     pageInfo.textContent = `Página ${page} de ${pageCount}`;
     prev.disabled = page <= 1;
     next.disabled = page >= pageCount;
@@ -89,6 +84,7 @@
       product.product_code,
       product.sku,
       product.ncm,
+      product.brand,
       ...(Array.isArray(product.barcodes) ? product.barcodes : []),
     ].some(value => String(value || '').toLowerCase().includes(query)));
     page = 1;
@@ -100,8 +96,7 @@
     const status = document.getElementById('productConsultStatus');
     const body = document.getElementById('productConsultBody');
     if (status) status.textContent = 'Carregando produtos...';
-    if (body) body.innerHTML = '<tr><td colspan="5" class="empty">Carregando catálogo...</td></tr>';
-
+    if (body) body.innerHTML = '<tr><td colspan="6" class="empty">Carregando catálogo...</td></tr>';
     try {
       const result = await window.thor.productCatalogReadV114();
       if (!productViewOpen) return;
@@ -116,7 +111,7 @@
     } catch (error) {
       if (!productViewOpen) return;
       if (status) status.textContent = 'Falha ao consultar produtos';
-      if (body) body.innerHTML = `<tr><td colspan="5" class="empty">${escHtml(error?.message || 'Não foi possível carregar a consulta.')}</td></tr>`;
+      if (body) body.innerHTML = `<tr><td colspan="6" class="empty">${escHtml(error?.message || 'Não foi possível carregar a consulta.')}</td></tr>`;
     }
   }
 
@@ -124,8 +119,6 @@
     if (!state?.status?.operator || !window.thor?.productCatalogReadV114) return;
     const workspace = document.getElementById('workspace');
     if (!workspace) return;
-
-    // Mantém o estado em uma view nativa para não interferir no ciclo original do PDV.
     state.view = 'sale';
     productViewOpen = true;
     attach();
@@ -141,23 +134,16 @@
           </div>
           <span class="fiscal-count" id="productConsultStatus">Carregando produtos...</span>
         </div>
-
         <div class="fiscal-toolbar">
-          <input id="productConsultQuery" autocomplete="off" placeholder="Pesquisar por nome, código, EAN ou NCM...">
+          <input id="productConsultQuery" autocomplete="off" placeholder="Pesquisar por nome, código, EAN, NCM ou marca...">
           <span class="fiscal-count">10 produtos por página</span>
         </div>
-
         <div class="fiscal-table-card">
           <table class="fiscal-table">
-            <thead>
-              <tr><th>Nome do produto</th><th>Código</th><th>Preço</th><th>Estoque</th><th>NCM</th></tr>
-            </thead>
-            <tbody id="productConsultBody">
-              <tr><td colspan="5" class="empty">Carregando catálogo...</td></tr>
-            </tbody>
+            <thead><tr><th>Nome</th><th>Código</th><th>Preço</th><th>NCM</th><th>Estoque</th><th>Marca</th></tr></thead>
+            <tbody id="productConsultBody"><tr><td colspan="6" class="empty">Carregando catálogo...</td></tr></tbody>
           </table>
         </div>
-
         <div class="fiscal-toolbar" style="margin-top:12px;margin-bottom:0">
           <span class="fiscal-count" id="productConsultSummary">Carregando...</span>
           <span style="margin-left:auto" class="fiscal-count" id="productConsultPageInfo">Página 1 de 1</span>
@@ -173,8 +159,6 @@
     void loadCatalog();
   }
 
-  // Venda e Fiscal continuam usando exatamente o setView/render original.
-  // Após o render nativo, apenas recolocamos o botão da consulta na mesma barra.
   document.addEventListener('click', event => {
     const target = event.target instanceof Element ? event.target.closest('#navSale,#navFiscal') : null;
     if (!target) return;
