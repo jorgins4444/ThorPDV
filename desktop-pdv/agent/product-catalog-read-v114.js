@@ -31,6 +31,40 @@ function writeCatalogCache(products) {
   } catch {}
 }
 
+function attributeValue(product, names) {
+  const wanted = new Set(names.map(name => String(name).toLowerCase()));
+  const direct = names.map(name => product?.[name]).find(value => value !== undefined && value !== null && String(value).trim() !== '');
+  if (direct !== undefined) return String(direct);
+
+  const attrs = product?.attributes || product?.atributos || product?.variation_attributes || product?.variant_attributes;
+  if (attrs && !Array.isArray(attrs) && typeof attrs === 'object') {
+    for (const [key, value] of Object.entries(attrs)) {
+      if (wanted.has(String(key).toLowerCase()) && value !== undefined && value !== null) return String(value);
+    }
+  }
+
+  if (Array.isArray(attrs)) {
+    for (const attr of attrs) {
+      const key = String(attr?.name || attr?.key || attr?.code || attr?.attribute || '').toLowerCase();
+      if (!wanted.has(key)) continue;
+      const value = attr?.value ?? attr?.label ?? attr?.description;
+      if (value !== undefined && value !== null) return String(value);
+    }
+  }
+  return '';
+}
+
+function normalizeBarcodes(product) {
+  const values = [];
+  const raw = product?.barcodes;
+  if (Array.isArray(raw)) values.push(...raw);
+  else if (raw) values.push(raw);
+  for (const value of [product?.ean, product?.ean13, product?.gtin, product?.barcode, product?.codigo_barras]) {
+    if (value !== undefined && value !== null && String(value).trim()) values.push(value);
+  }
+  return [...new Set(values.map(value => String(value).trim()).filter(Boolean))];
+}
+
 function localCatalog() {
   let db;
   try {
@@ -40,10 +74,12 @@ function localCatalog() {
     const ncmExpr = columns.has('ncm') ? "coalesce(p.ncm,'')" : "''";
     const brandColumn = ['brand','marca','brand_name'].find(name => columns.has(name));
     const brandExpr = brandColumn ? `coalesce(p.${brandColumn},'')` : "''";
+    const unitExpr = columns.has('unit') ? "coalesce(p.unit,'')" : "''";
     const rows = db.prepare(`
       select p.id,p.sku,p.name,p.sale_price,p.barcodes,
              ${ncmExpr} ncm,
              ${brandExpr} brand,
+             ${unitExpr} unit,
              coalesce(i.quantity,0) quantity
       from products p
       left join inventory i on i.product_id=p.id
@@ -60,6 +96,11 @@ function localCatalog() {
         sku: String(row.sku || ''),
         ncm: String(row.ncm || ''),
         brand: String(row.brand || ''),
+        unit: String(row.unit || ''),
+        color: '',
+        size: '',
+        variation: '',
+        parent_id: '',
         barcodes: (() => { try { return JSON.parse(row.barcodes || '[]'); } catch { return []; } })(),
         price: Number(row.sale_price || 0),
         stock: Number(row.quantity || 0),
@@ -81,6 +122,12 @@ function mergeOfflineCatalog(localProducts, cachedProducts) {
       ...product,
       ncm: String(product.ncm || cached.ncm || ''),
       brand: String(product.brand || cached.brand || ''),
+      unit: String(product.unit || cached.unit || ''),
+      color: String(product.color || cached.color || ''),
+      size: String(product.size || cached.size || ''),
+      variation: String(product.variation || cached.variation || ''),
+      parent_id: String(product.parent_id || cached.parent_id || ''),
+      barcodes: Array.isArray(product.barcodes) && product.barcodes.length ? product.barcodes : (Array.isArray(cached.barcodes) ? cached.barcodes : []),
       price: Number(product.price ?? cached.price ?? 0),
       stock: Number(product.stock ?? cached.stock ?? 0),
     };
@@ -95,6 +142,10 @@ function normalizePull(data) {
     .filter(product => product && product.active !== false)
     .map(product => {
       const id = String(product.id || '');
+      const color = attributeValue(product, ['color', 'cor']);
+      const size = attributeValue(product, ['size', 'tamanho', 'tam']);
+      const explicitVariation = String(product.variation_name || product.variant_name || product.variation || product.variacao || '').trim();
+      const variation = explicitVariation || [color && `Cor: ${color}`, size && `Tam: ${size}`].filter(Boolean).join(' • ');
       return {
         id,
         name: String(product.name || ''),
@@ -102,7 +153,12 @@ function normalizePull(data) {
         sku: String(product.sku || ''),
         ncm: String(product.ncm || product.ncm_code || ''),
         brand: String(product.brand || product.marca || product.brand_name || product.manufacturer || ''),
-        barcodes: Array.isArray(product.barcodes) ? product.barcodes.map(String) : [],
+        unit: String(product.unit || product.unidade || 'UN'),
+        color,
+        size,
+        variation,
+        parent_id: String(product.parent_id || product.parent_product_id || product.product_parent_id || ''),
+        barcodes: normalizeBarcodes(product),
         price: prices.has(id) ? Number(prices.get(id)) : Number(product.sale_price || 0),
         stock: Number(inventory.get(id) ?? 0),
       };
