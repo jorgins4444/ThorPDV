@@ -1,4 +1,4 @@
-function installProductCatalogV110(Store) {
+function installProductCatalogV110(ThorAgent, Store) {
   if (!Store || Store.prototype.__productCatalogV110Installed) return;
   Store.prototype.__productCatalogV110Installed = true;
 
@@ -53,6 +53,19 @@ function installProductCatalogV110(Store) {
         p.name
       limit ?`).all(like, like, like, like, like, q, q, limit).map(this.inflateProduct);
   };
+
+  if (ThorAgent && !ThorAgent.prototype.__productCatalogV110StartInstalled) {
+    ThorAgent.prototype.__productCatalogV110StartInstalled = true;
+    const originalStart = ThorAgent.prototype.start;
+    ThorAgent.prototype.start = async function startProductCatalogV110(...args) {
+      ensureCatalogColumns(this.store);
+      if (this.store.get('product_catalog_v110_full_pull') !== '1') {
+        this.store.set('cursor', '');
+        this.store.set('product_catalog_v110_full_pull', '1');
+      }
+      return originalStart.apply(this, args);
+    };
+  }
 }
 
 module.exports = { installProductCatalogV110 };
