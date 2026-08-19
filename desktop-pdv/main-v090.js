@@ -1,5 +1,6 @@
 require('./agent/product-images-v090').installProductImagesV090();
 require('./main.js');
+require('./agent/product-catalog-ipc-v112').installProductCatalogIpcV112();
 
 const { ThorAgent } = require('./agent');
 const { Store } = require('./agent/store');
