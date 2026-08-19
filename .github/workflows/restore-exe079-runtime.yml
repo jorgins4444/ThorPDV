@@ -14,19 +14,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout isolated restore branch
+      - id: checkout
+        name: Checkout isolated restore branch
         uses: actions/checkout@v4
         with:
           ref: restore/exe079-runtime
           fetch-depth: 0
 
-      - name: Install extraction tools
+      - id: tools
+        name: Install extraction tools
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full rsync
           npm install --no-save @electron/asar@3.2.10
 
-      - name: Download and verify known-good 0.8.79 installer
+      - id: download
+        name: Download and verify known-good 0.8.79 installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -38,7 +41,8 @@ jobs:
           echo "Installer SHA256: $ACTUAL"
           test "$ACTUAL" = "$EXPECTED"
 
-      - name: Extract exact app.asar
+      - id: extract
+        name: Extract exact app.asar
         run: |
           EXE="$RUNNER_TEMP/stable/ThorPDV-Desktop-0.8.79-x64.exe"
           mkdir -p "$RUNNER_TEMP/unpacked" "$RUNNER_TEMP/stable-app"
@@ -56,7 +60,8 @@ jobs:
           test -f "$RUNNER_TEMP/stable-app/agent/sync-request-worker.js"
           test -f "$RUNNER_TEMP/stable-app/agent/sqlite-optimization-v124.js"
 
-      - name: Reconstruct desktop source from installer runtime
+      - id: reconstruct
+        name: Reconstruct desktop source from installer runtime
         run: |
           cp desktop-pdv/package.json "$RUNNER_TEMP/build-package.json"
           rm -rf desktop-pdv
@@ -80,7 +85,8 @@ jobs:
           fs.writeFileSync('desktop-pdv/package.json',JSON.stringify(stable,null,2)+'\n');
           NODE
 
-      - name: Prove entry and sync are the stable architecture
+      - id: verify
+        name: Prove entry and sync are the stable architecture
         run: |
           set -euo pipefail
           grep -q 'thorpdv.bundle.css' desktop-pdv/renderer/index.html
@@ -97,7 +103,8 @@ jobs:
           node --check desktop-pdv/agent/sync.js
           node --check desktop-pdv/agent/sync-request-worker.js
 
-      - name: Commit exact reconstructed runtime to isolated branch
+      - id: commit
+        name: Commit exact reconstructed runtime to isolated branch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -105,3 +112,15 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'restore(desktop): reconstruct runtime from stable 0.8.79 installer'
           git push origin HEAD:restore/exe079-runtime
+
+      - name: Persist restore diagnostic
+        if: always()
+        run: |
+          printf 'checkout=%s\ntools=%s\ndownload=%s\nextract=%s\nreconstruct=%s\nverify=%s\ncommit=%s\n' \
+            '${{ steps.checkout.outcome }}' '${{ steps.tools.outcome }}' '${{ steps.download.outcome }}' '${{ steps.extract.outcome }}' \
+            '${{ steps.reconstruct.outcome }}' '${{ steps.verify.outcome }}' '${{ steps.commit.outcome }}' > restore-exe079-diagnostic.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add restore-exe079-diagnostic.txt
+          git commit -m 'chore: record stable runtime restore diagnostic' || true
+          git push origin HEAD:restore/exe079-runtime || true
