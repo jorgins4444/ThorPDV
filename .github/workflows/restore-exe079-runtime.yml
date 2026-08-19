@@ -1,0 +1,129 @@
+name: Restore ThorPDV runtime from stable 0.8.79
+
+on:
+  push:
+    branches:
+      - restore/exe079-runtime
+    paths:
+      - '.github/workflows/restore-exe079-runtime.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  restore-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout restore branch
+        uses: actions/checkout@v4
+        with:
+          ref: restore/exe079-runtime
+          fetch-depth: 0
+
+      - name: Install extraction tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full rsync
+          npm install --no-save @electron/asar@3.2.10
+
+      - name: Download known-good 0.8.79 installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/stable"
+          gh release download pdv-v0.8.79 \
+            --pattern 'ThorPDV-Desktop-0.8.79-x64.exe' \
+            --dir "$RUNNER_TEMP/stable"
+          EXE="$RUNNER_TEMP/stable/ThorPDV-Desktop-0.8.79-x64.exe"
+          test -f "$EXE"
+          ACTUAL=$(sha256sum "$EXE" | awk '{print $1}')
+          EXPECTED='631621d0164e5f924e0f2dc63626a02219ade6c1af619fcd98278473f416d512'
+          echo "Installer SHA256: $ACTUAL"
+          test "$ACTUAL" = "$EXPECTED"
+
+      - name: Extract exact app.asar from installer
+        run: |
+          EXE="$RUNNER_TEMP/stable/ThorPDV-Desktop-0.8.79-x64.exe"
+          mkdir -p "$RUNNER_TEMP/unpacked" "$RUNNER_TEMP/stable-app"
+          7z x -y "$EXE" -o"$RUNNER_TEMP/unpacked" >/dev/null
+          ASAR=$(find "$RUNNER_TEMP/unpacked" -type f -path '*/resources/app.asar' | head -1)
+          if [ -z "$ASAR" ]; then
+            echo 'app.asar not found inside stable installer' >&2
+            find "$RUNNER_TEMP/unpacked" -maxdepth 3 -type f | head -100
+            exit 1
+          fi
+          npx asar extract "$ASAR" "$RUNNER_TEMP/stable-app"
+          node -e "const p=require(process.env.RUNNER_TEMP+'/stable-app/package.json'); if(p.version!=='0.8.79') process.exit(1); console.log('Stable runtime version',p.version)"
+          test -f "$RUNNER_TEMP/stable-app/renderer/thorpdv.bundle.js"
+          test -f "$RUNNER_TEMP/stable-app/renderer/thorpdv.bundle.css"
+          test -f "$RUNNER_TEMP/stable-app/agent/sync-request-worker.js"
+          test -f "$RUNNER_TEMP/stable-app/agent/sqlite-optimization-v124.js"
+
+      - name: Replace desktop source with exact stable runtime
+        run: |
+          cp desktop-pdv/package.json "$RUNNER_TEMP/build-package.json"
+          rm -rf desktop-pdv
+          mkdir -p desktop-pdv
+          rsync -a --exclude='node_modules/' "$RUNNER_TEMP/stable-app/" desktop-pdv/
+
+          node <<'NODE'
+          const fs=require('fs');
+          const stable=JSON.parse(fs.readFileSync('desktop-pdv/package.json','utf8'));
+          const previous=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/build-package.json','utf8'));
+          stable.version='0.8.86';
+          stable.scripts={
+            dev:'electron .',
+            start:'electron .',
+            'dist:win':'electron-builder --win nsis',
+            'pack:win':'electron-builder --win dir'
+          };
+          stable.dependencies=stable.dependencies||{};
+          stable.dependencies['better-sqlite3']='12.4.1';
+          stable.devDependencies=previous.devDependencies||{electron:'latest','electron-builder':'latest'};
+          stable.build={
+            appId:'br.com.thorpdv.desktop',
+            productName:'ThorPDV Desktop',
+            artifactName:'ThorPDV-Desktop-${version}-${arch}.${ext}',
+            files:[
+              'main-v090.js','main.js','preload.js','ipc-store-credit-v105.js','ipc-receivable-v115.js','updater.js',
+              'agent/**/*','renderer/**/*','package.json'
+            ],
+            npmRebuild:true,
+            asar:true,
+            win:{target:['nsis']},
+            nsis:{oneClick:false,allowToChangeInstallationDirectory:true,createDesktopShortcut:true,createStartMenuShortcut:true}
+          };
+          fs.writeFileSync('desktop-pdv/package.json',JSON.stringify(stable,null,2)+'\n');
+          NODE
+
+      - name: Verify restored entry and synchronization architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'thorpdv.bundle.css' desktop-pdv/renderer/index.html
+          grep -q 'thorpdv.bundle.js' desktop-pdv/renderer/index.html
+          ! grep -q 'login-entry-v108' desktop-pdv/renderer/index.html
+          ! grep -q 'setup-flow-v109' desktop-pdv/renderer/index.html
+          grep -q 'sync-request-worker.js' desktop-pdv/agent/sync.js
+          grep -q 'worker_threads' desktop-pdv/agent/sync.js
+          grep -q 'sqlite-optimization-v124' desktop-pdv/main-v090.js
+          ! grep -q 'product-catalog-read' desktop-pdv/main-v090.js
+          node --check desktop-pdv/main-v090.js
+          node --check desktop-pdv/main.js
+          node --check desktop-pdv/preload.js
+          node --check desktop-pdv/agent/sync.js
+          node --check desktop-pdv/agent/sync-request-worker.js
+          echo 'Stable entry and sync architecture restored.'
+
+      - name: Commit reconstructed stable runtime
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add desktop-pdv
+          if git diff --cached --quiet; then
+            echo 'No desktop changes to commit.'
+            exit 0
+          fi
+          git commit -m 'restore(desktop): reconstruct runtime from stable 0.8.79 installer'
+          git push origin HEAD:restore/exe079-runtime
