@@ -1,4 +1,28 @@
 (function () {
+  let v114Loading = false;
+
+  function v47LoadProductConsultaV114() {
+    if (state.view !== 'sale' || !state.status?.operator) return;
+    if (window.ThorProductConsultaTabV114) {
+      window.ThorProductConsultaTabV114.attach();
+      return;
+    }
+    if (v114Loading || document.getElementById('v114ProductConsultaScript')) return;
+    v114Loading = true;
+    const script = document.createElement('script');
+    script.id = 'v114ProductConsultaScript';
+    script.src = 'product-consulta-tab-v114.js';
+    script.onload = () => {
+      v114Loading = false;
+      window.ThorProductConsultaTabV114?.attach();
+    };
+    script.onerror = () => {
+      v114Loading = false;
+      script.remove();
+    };
+    document.body.appendChild(script);
+  }
+
   function v47Allowed(path, fallback = false) {
     try {
       if (typeof p41Allowed === 'function') return p41Allowed(path, fallback);
@@ -174,6 +198,7 @@
 
     v47UpdateChrome();
     v47RenderProductsState();
+    v47LoadProductConsultaV114();
   }
 
   function v47RenderProductsState() {
