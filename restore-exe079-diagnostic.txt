@@ -1,7 +1,9 @@
+run_id=32292555302
+extract_stage=verified
 checkout=success
 tools=success
 download=success
-extract=failure
-reconstruct=skipped
-verify=skipped
-commit=skipped
+extract=success
+reconstruct=success
+verify=success
+commit=success
