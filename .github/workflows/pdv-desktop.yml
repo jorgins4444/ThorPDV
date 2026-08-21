@@ -11,7 +11,6 @@ on:
 permissions:
   contents: write
 
-# ThorPDV Desktop build + durable release assets for ThorControl rollouts.
 jobs:
   windows-installer:
     runs-on: windows-latest
@@ -27,107 +26,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: desktop-pdv/package.json
 
       - name: Validate JavaScript syntax
         shell: pwsh
         run: |
-          $files = @(
-            'main-v090.js',
-            'main.js',
-            'preload.js',
-            'ipc-store-credit-v105.js',
-            'ipc-cash-movement-v106.js',
-            'updater.js',
-            'agent/store.js',
-            'agent/hardware.js',
-            'agent/sync.js',
-            'agent/index.js',
-            'agent/v3.js',
-            'agent/v3-return.js',
-            'agent/v3-enroll.js',
-            'agent/v3-profile-permissions.js',
-            'agent/v4-permissions.js',
-            'agent/product-rules-v046.js',
-            'agent/customer-credit-v050.js',
-            'agent/store-credit-return-v105.js',
-            'agent/return-quantity-guard-v106.js',
-            'agent/store-credit-payment-v106.js',
-            'agent/cash-movement-receipt-v106.js',
-            'agent/sales-session-v107.js',
-            'agent/license-guard-v107.js',
-            'agent/scale-label-v060.js',
-            'agent/sync-policy.js',
-            'agent/recovery.js',
-            'agent/consistency.js',
-            'agent/cash-closing.js',
-            'agent/production.js',
-            'agent/pre-sale-v064.js',
-            'agent/commercial-v070.js',
-            'agent/sales-options-v071.js',
-            'agent/sales-settlement-v073.js',
-            'agent/product-images-v090.js',
-            'agent/product-catalog-read-v114.js',
-            'agent/receipt-print-v829.js',
-            'agent/sale-identity-v830.js',
-            'renderer/app.js',
-            'renderer/update-center.js',
-            'renderer/checkout-v3.js',
-            'renderer/hotfix-v042.js',
-            'renderer/validation-v3.js',
-            'renderer/sync-recovery.js',
-            'renderer/operator-gate.js',
-            'renderer/login-entry-v108.js',
-            'renderer/setup-flow-v109.js',
-            'renderer/cash-closing.js',
-            'renderer/ux-v038.js',
-            'renderer/ux-v039.js',
-            'renderer/scanner-v039.js',
-            'renderer/cash-cycle-v040.js',
-            'renderer/permissions-v041.js',
-            'renderer/cart-ui-v043.js',
-            'renderer/messages-v044.js',
-            'renderer/discount-v045.js',
-            'renderer/weighable-v046.js',
-            'renderer/product-policy-v046.js',
-            'renderer/sale-layout-v047.js',
-            'renderer/state-hotfix-v048.js',
-            'renderer/customer-identification-v049.js',
-            'renderer/store-credit-v050.js',
-            'renderer/return-credit-v105.js',
-            'renderer/return-quantity-guard-v106.js',
-            'renderer/store-credit-payment-v106.js',
-            'renderer/cash-movement-receipt-v106.js',
-            'renderer/sales-session-v107.js',
-            'renderer/license-guard-v107.js',
-            'renderer/scale-label-v060.js',
-            'renderer/scale-label-v061.js',
-            'renderer/quick-entry-v063.js',
-            'renderer/commercial-v070.js',
-            'renderer/sales-options-v071.js',
-            'renderer/term-settlement-v072.js',
-            'renderer/sales-settlement-v073.js',
-            'renderer/first-sale-sync-v087.js',
-            'renderer/redesign-v088.js',
-            'renderer/redesign-v088-hotfix.js',
-            'renderer/redesign-v089.js',
-            'renderer/redesign-v089-fixes.js',
-            'renderer/redesign-v090.js',
-            'renderer/redesign-v092.js',
-            'renderer/redesign-v093.js',
-            'renderer/redesign-v098.js',
-            'renderer/redesign-v099.js',
-            'renderer/redesign-v100.js',
-            'renderer/redesign-v101.js',
-            'renderer/term-finalize-v102.js',
-            'renderer/product-consulta-tab-v114.js',
-            'renderer/receipt-print-v829.js',
-            'renderer/sale-identity-v830.js'
-          )
+          $files = Get-ChildItem -Path . -Recurse -Filter *.js -File | Where-Object {
+            $_.FullName -notmatch '\\node_modules\\' -and $_.FullName -notmatch '\\dist\\'
+          }
+          if (-not $files) { throw 'No JavaScript files found to validate' }
           foreach ($file in $files) {
-            Write-Host "Checking $file"
-            node --check $file
+            $relative = Resolve-Path -Relative $file.FullName
+            Write-Host "Checking $relative"
+            node --check $file.FullName
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
@@ -146,8 +56,7 @@ jobs:
           Set-Content -Path ($exe.FullName + '.sha256') -Value ($hash + '  ' + $exe.Name) -Encoding ascii
           Write-Host ('SHA256 ' + $hash)
 
-      - name: Upload temporary installer artifact
-        continue-on-error: true
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: ThorPDV-Desktop-Windows
@@ -157,7 +66,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish durable GitHub Release assets
+      - name: Publish GitHub Release assets
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -165,9 +74,10 @@ jobs:
           $pkg = Get-Content package.json | ConvertFrom-Json
           $tag = 'pdv-v' + $pkg.version
           $exe = Get-ChildItem dist\ThorPDV-Desktop-*-x64.exe | Select-Object -First 1
+          if (-not $exe) { throw 'Installer not found for release' }
           $sha = $exe.FullName + '.sha256'
           gh release view $tag 2>$null | Out-Null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --title ('ThorPDV Desktop ' + $pkg.version) --notes ('ThorPDV Desktop ' + $pkg.version + '. A distribuição aos clientes é controlada pelo ThorControl.')
+            gh release create $tag --title ('ThorPDV Desktop ' + $pkg.version) --notes ('ThorPDV Desktop ' + $pkg.version + '. Build Windows estável baseado na série 0.8.79 com correções de sincronização.')
           }
           gh release upload $tag $exe.FullName $sha --clobber
