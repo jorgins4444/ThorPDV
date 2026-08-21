@@ -32,19 +32,35 @@ class SyncEngine {
     this.intervalMs=5*60*1000;
     this.requestWorker=null;
     this.requestPending=new Map();
+    this.stopping=false;
+  }
+
+  rejectWorkerPending(worker,error){
+    for(const [id,pending] of this.requestPending.entries()){
+      if(pending.worker!==worker) continue;
+      this.requestPending.delete(id);
+      pending.reject(error);
+    }
   }
 
   ensureRequestWorker(){
     if(this.requestWorker)return this.requestWorker;
     const worker=new Worker(path.join(__dirname,'sync-request-worker.js'));
     worker.on('message',(row)=>{
-      const pending=this.requestPending.get(String(row.id));if(!pending)return;
+      const pending=this.requestPending.get(String(row.id));if(!pending||pending.worker!==worker)return;
       this.requestPending.delete(String(row.id));
       this.store.metric('sync.http',row.durationMs||0,{path:pending.path,ok:row.ok,status:row.status||0});
       if(row.ok)pending.resolve(row.data);else pending.reject(new Error(row.error||row.data?.error||`http_${row.status||0}`));
     });
-    worker.on('error',(error)=>{for(const pending of this.requestPending.values())pending.reject(error);this.requestPending.clear();this.requestWorker=null;});
-    worker.on('exit',()=>{this.requestWorker=null;});
+    worker.on('error',(error)=>{
+      this.rejectWorkerPending(worker,error instanceof Error?error:new Error(String(error||'sync_worker_error')));
+      if(this.requestWorker===worker)this.requestWorker=null;
+    });
+    worker.on('exit',(code)=>{
+      const error=new Error(this.stopping?'sync_stopped':`sync_worker_exit_${Number(code)||0}`);
+      this.rejectWorkerPending(worker,error);
+      if(this.requestWorker===worker)this.requestWorker=null;
+    });
     this.requestWorker=worker;return worker;
   }
 
@@ -68,13 +84,20 @@ class SyncEngine {
     const id=crypto.randomUUID();
     const worker=this.ensureRequestWorker();
     return new Promise((resolve,reject)=>{
-      this.requestPending.set(id,{resolve,reject,path:pathname});
-      worker.postMessage({id,url:`${this.apiBase}${pathname}`,headers:this.headers(),body,timeoutMs});
+      this.requestPending.set(id,{resolve,reject,path:pathname,worker});
+      try{
+        worker.postMessage({id,url:`${this.apiBase}${pathname}`,headers:this.headers(),body,timeoutMs});
+      }catch(error){
+        this.requestPending.delete(id);
+        if(this.requestWorker===worker)this.requestWorker=null;
+        reject(error instanceof Error?error:new Error(String(error||'sync_worker_post_failed')));
+      }
     });
   }
 
   start(){
     if(this.timer) return;
+    this.stopping=false;
     // v0.8.27+: one authoritative pull repairs legacy local inventory drift.
     if(this.store.get('stock_authoritative_pull_v105')!=='1'){
       this.store.set('cursor','');
@@ -85,10 +108,13 @@ class SyncEngine {
   }
 
   stop(){
+    this.stopping=true;
     if(this.timer) clearInterval(this.timer);
     this.timer=null;
-    try{this.requestWorker?.terminate();}catch{}
-    this.requestWorker=null;
+    const worker=this.requestWorker;
+    if(worker)this.rejectWorkerPending(worker,new Error('sync_stopped'));
+    try{worker?.terminate();}catch{}
+    if(this.requestWorker===worker)this.requestWorker=null;
   }
 
   nextBackoff(){
