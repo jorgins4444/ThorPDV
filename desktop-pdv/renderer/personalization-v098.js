@@ -33,7 +33,7 @@
   function preset(name,current){return {...current,theme:name,...THEMES[name]};}
   let current=read();apply(current);
 
-  function escHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));}
+  function escHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
   function openPersonalization(){
     const original={...current};let draft={...current};
@@ -57,23 +57,25 @@
   }
 
   function ensureTab(){
-    if(document.getElementById('thorPersonalizationTab'))return;
-    const sidebar=document.querySelector('.v088-sidebar');
-    const mainNav=sidebar?.querySelector('.v088-nav');
-    const bottomNav=sidebar?.querySelector('.v088-nav-bottom');
-    const fallback=document.querySelector('.top-right');
-    const host=mainNav||bottomNav||fallback;if(!host)return;
-    const btn=document.createElement('button');btn.type='button';btn.id='thorPersonalizationTab';btn.dataset.thorPersonalization='1';
-    if(host.classList.contains('top-right')){btn.className='secondary';btn.textContent='Personalização';}
-    else btn.innerHTML='<i>◐</i><span>Personalização</span>';
-    btn.title='Temas, cores e tamanho das fontes';btn.onclick=openPersonalization;
-    if(mainNav){
-      const settings=mainNav.querySelector('[data-v088-action="settings"]');
-      if(settings?.nextSibling)mainNav.insertBefore(btn,settings.nextSibling);else mainNav.appendChild(btn);
-    }else host.appendChild(btn);
+    const quick=document.querySelector('.v089-quick');
+    if(!quick)return;
+    let btn=document.getElementById('thorPersonalizationTab');
+    if(btn&&btn.parentElement!==quick){btn.remove();btn=null;}
+    if(!btn){
+      btn=document.createElement('button');
+      btn.type='button';
+      btn.id='thorPersonalizationTab';
+      btn.className='thor-personalization-quick';
+      btn.dataset.thorPersonalization='1';
+      btn.innerHTML='<span>◐</span><b>Personalização<small>Tema</small></b>';
+      btn.title='Temas, cores e tamanho das fontes';
+      btn.onclick=openPersonalization;
+      const surcharge=quick.querySelector('#v089Surcharge');
+      if(surcharge?.nextSibling)quick.insertBefore(btn,surcharge.nextSibling);else quick.appendChild(btn);
+    }
   }
 
-  setInterval(ensureTab,800);
+  setInterval(ensureTab,500);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{apply(current);ensureTab();},{once:true});else{apply(current);ensureTab();}
   window.openThorPersonalization=openPersonalization;
 })();
