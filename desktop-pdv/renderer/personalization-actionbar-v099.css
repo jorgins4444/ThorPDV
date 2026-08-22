@@ -1,0 +1,33 @@
+/* ThorPDV 0.9.10 - Personalização ao lado de Acréscimo */
+@media(min-width:1181px){
+  .thor-v089 .v089-actionbar{
+    grid-template-columns:minmax(215px,1.02fr) minmax(245px,.96fr) minmax(205px,.78fr) minmax(365px,1.42fr)!important;
+  }
+  .thor-v089 .v089-action-left{gap:9px!important;padding:0 10px!important}
+  .thor-v089 .v089-party{gap:12px!important}
+  .thor-v089 .v089-party button{min-width:108px!important;padding:5px!important}
+  .thor-v089 .v089-items-title{padding:0 8px!important;gap:6px!important}
+  .thor-v089 .v089-quick{gap:5px!important;padding:0 7px!important}
+  .thor-v089 .v089-quick button{min-width:82px!important;height:44px!important;padding:0 7px!important;grid-template-columns:21px minmax(0,1fr)!important;gap:3px!important}
+  .thor-v089 .v089-quick button span{font-size:16px!important}
+  .thor-v089 .v089-quick button b{font-size:9px!important;white-space:nowrap!important}
+  .thor-v089 .v089-quick button small{display:block!important;font-size:7px!important;margin-top:1px!important}
+}
+
+.thor-v089 .v089-quick #thorPersonalizationTab{
+  background:linear-gradient(135deg,var(--thor-button,#7443d3),var(--thor-accent-2,#0bbf79))!important;
+  border:0!important;
+  color:#fff!important;
+  box-shadow:0 5px 13px rgba(30,25,50,.13),inset 0 1px 0 rgba(255,255,255,.17)!important;
+  border-radius:16px!important;
+}
+.thor-v089 .v089-quick #thorPersonalizationTab span,
+.thor-v089 .v089-quick #thorPersonalizationTab b,
+.thor-v089 .v089-quick #thorPersonalizationTab small{color:#fff!important}
+.thor-v089 .v089-quick #thorPersonalizationTab:hover{transform:translateY(-1px);filter:brightness(1.04)}
+
+@media(max-width:1180px) and (min-width:901px){
+  .thor-v089 .v089-quick{right:5px!important;gap:4px!important;padding:0 4px!important}
+  .thor-v089 .v089-quick button{min-width:78px!important;padding:0 6px!important}
+  .thor-v089 .v089-quick #thorPersonalizationTab b{font-size:8px!important}
+}
