@@ -1,0 +1,2 @@
+Build trigger for ThorPDV Desktop 0.9.10.
+This file exists only to trigger the pdv-desktop GitHub Actions workflow after the 0.9.10 release commit.
