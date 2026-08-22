@@ -77,6 +77,8 @@
   }
 
   function ensureHeader(){
+    // Não toca no cabeçalho enquanto o operador estiver usando qualquer modal/formulário.
+    if(document.querySelector('.modal,.thorcg-modal'))return;
     installStyle();
     const input=productSearchInput();if(!input)return;
     const icons=topRightIcons(input);
