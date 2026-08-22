@@ -1,0 +1,144 @@
+/* ThorPDV 0.9.11 — tema global real em todo o sistema */
+
+/* Base global */
+html,body,#app,.shell,.workspace,.work,.fiscal-workspace,.v088-fiscal-workspace{
+  font-family:var(--thor-font-family)!important;
+  color:var(--thor-text)!important;
+}
+body[data-thor-theme],body[data-thor-theme] #app,body[data-thor-theme] .shell,body[data-thor-theme] .workspace{
+  background:var(--thor-page)!important;
+}
+body[data-thor-theme] *{scrollbar-color:color-mix(in srgb,var(--thor-accent) 48%,#cfd3d8) var(--thor-page)}
+body[data-thor-theme] ::selection{background:color-mix(in srgb,var(--thor-accent) 28%,transparent);color:var(--thor-text)}
+
+/* Texto */
+body[data-thor-theme] :where(h1,h2,h3,h4,h5,h6,label,strong,b,legend,.title,.value,.name){color:var(--thor-text)}
+body[data-thor-theme] :where(p,small,.muted,.subtitle,.description,.hint,.help,.meta){color:var(--thor-muted)}
+body[data-thor-theme] :where(input,select,textarea){color:var(--thor-text)!important;background:var(--thor-surface)!important;border-color:var(--thor-border)!important;caret-color:var(--thor-accent)!important}
+body[data-thor-theme] :where(input,select,textarea)::placeholder{color:color-mix(in srgb,var(--thor-muted) 72%,transparent)!important}
+body[data-thor-theme] :where(input,select,textarea):focus{border-color:var(--thor-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--thor-accent) 16%,transparent)!important;outline:none!important}
+
+/* Topo */
+body[data-thor-theme].thor-v089 .v089-topbar,
+body[data-thor-theme] .topbar{
+  background:linear-gradient(90deg,var(--thor-accent),color-mix(in srgb,var(--thor-accent) 82%,var(--thor-accent-2)))!important;
+  border-color:color-mix(in srgb,var(--thor-accent) 72%,#0000)!important;
+}
+body[data-thor-theme] .v089-head-search{background:var(--thor-surface)!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--thor-border) 80%,transparent)!important}
+body[data-thor-theme] .v089-main-search{color:var(--thor-text)!important}
+body[data-thor-theme] .v089-head-tools button{background:var(--thor-surface)!important;color:var(--thor-accent)!important}
+body[data-thor-theme] .v089-head-tools #v089ScanFocus{background:transparent!important;color:#fff!important}
+body[data-thor-theme] .v089-head-tools #v089BrandChip{background:var(--thor-surface)!important;color:var(--thor-accent)!important}
+
+/* Menu lateral / navegação */
+body[data-thor-theme] :where(.v088-sidebar,.v089-sidebar,.sidebar){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.v088-nav,.v088-nav-bottom,.v089-nav,.v089-nav-bottom) button{color:var(--thor-text)!important;background:transparent!important}
+body[data-thor-theme] :where(.v088-nav,.v088-nav-bottom,.v089-nav,.v089-nav-bottom) button:hover{background:color-mix(in srgb,var(--thor-accent) 9%,var(--thor-surface))!important;color:var(--thor-accent)!important}
+body[data-thor-theme] :where(.v088-nav,.v088-nav-bottom,.v089-nav,.v089-nav-bottom) button.active{background:color-mix(in srgb,var(--thor-accent) 14%,var(--thor-surface))!important;color:var(--thor-accent)!important}
+body[data-thor-theme] :where(.v088-brand,.v089-brand,.logo){color:var(--thor-accent)!important}
+
+/* Barra de ações da venda */
+body[data-thor-theme] .v089-actionbar{background:var(--thor-surface)!important;border-color:var(--thor-border)!important;box-shadow:0 5px 18px color-mix(in srgb,var(--thor-accent) 10%,transparent)!important}
+body[data-thor-theme] .v089-actions-pill{background:linear-gradient(135deg,var(--thor-accent),color-mix(in srgb,var(--thor-accent) 78%,var(--thor-accent-2)))!important;color:#fff!important}
+body[data-thor-theme] .v089-action-left>i{background:var(--thor-accent)!important}
+body[data-thor-theme] .v089-sale-label{color:var(--thor-accent)!important}
+body[data-thor-theme] .v089-party button{color:var(--thor-text)!important}
+body[data-thor-theme] .v089-party button:hover{background:color-mix(in srgb,var(--thor-accent) 7%,var(--thor-surface))!important}
+body[data-thor-theme] .v089-party-icon.green,body[data-thor-theme] .v089-party-icon.cyan{background:color-mix(in srgb,var(--thor-accent-2) 15%,var(--thor-surface))!important;color:var(--thor-accent-2)!important}
+body[data-thor-theme] .v089-items-title{border-color:var(--thor-border)!important}
+body[data-thor-theme] .v089-items-title>em{background:var(--thor-accent-2)!important;color:#fff!important}
+body[data-thor-theme] .v089-quick button,
+body[data-thor-theme] #thorPersonalizationTab{background:linear-gradient(135deg,var(--thor-button),color-mix(in srgb,var(--thor-button) 76%,var(--thor-accent-2)))!important;color:#fff!important;border-color:transparent!important}
+body[data-thor-theme] .v089-quick button span,body[data-thor-theme] .v089-quick button b,body[data-thor-theme] .v089-quick button small{color:#fff!important}
+
+/* Venda / catálogo */
+body[data-thor-theme] :where(.v089-catalog,.v089-product-zone,.catalog,.products,.v090-product-list,.v089-products,.v088-products){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.v089-breadcrumb,.v090-view-switch,.v088-sale-tabs){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-muted)!important}
+body[data-thor-theme] .v089-breadcrumb b{color:var(--thor-accent)!important}
+body[data-thor-theme] :where(.product,.v089-product-card,.v090-product-list>*,.v088-product-card){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.product,.v089-product-card,.v090-product-list>*,.v088-product-card):hover{background:color-mix(in srgb,var(--thor-accent) 5%,var(--thor-surface))!important}
+body[data-thor-theme] :where(.catalog-add,.product-add,.v089-product-card button,.v090-product-list button){background:var(--thor-button)!important;border-color:var(--thor-button)!important;color:#fff!important}
+body[data-thor-theme] :where(.price,.v089-pricing strong,.product-price){color:var(--thor-accent)!important}
+
+/* Carrinho e resumo */
+body[data-thor-theme] :where(.cart-panel,.v3-cart-panel,.v089-right,.v089-items-card,.v089-sale-summary,.v47-financial-card,.v089-financial-card,.cart){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.cart-item,.v089-cart-item,.cart-v43-row){border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.totals,.v3-totals,.v089-totals,.payment-summary){border-color:var(--thor-border)!important;background:var(--thor-surface)!important}
+body[data-thor-theme] :where(.grand,#grand,.total-grand,.v089-total-grand){color:var(--thor-accent)!important}
+body[data-thor-theme] :where(.finalize,#finalize,.payment-open,#paymentsButton){background:var(--thor-button)!important;border-color:var(--thor-button)!important;color:#fff!important}
+
+/* Pagamentos */
+body[data-thor-theme] :where(.payment-methods,.v089-pay-methods,.v089-payment-card,.v089-payment-left,.v089-payment-right,.payment-card){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.pay,.v089-pay-methods button,.payment-method){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.pay,.v089-pay-methods button,.payment-method).active,
+body[data-thor-theme] :where(.pay,.v089-pay-methods button,.payment-method):hover{background:color-mix(in srgb,var(--thor-accent) 12%,var(--thor-surface))!important;border-color:var(--thor-accent)!important;color:var(--thor-accent)!important}
+body[data-thor-theme] :where(.v089-add-payment,#addPayment,.v089-integrated,#integratedPay){background:var(--thor-button)!important;border-color:var(--thor-button)!important;color:#fff!important}
+
+/* Modais — Caixa, Recebimento, Operações, Configurações, Fiscal e demais */
+body[data-thor-theme] .modal{background:color-mix(in srgb,#0b1020 55%,transparent)!important}
+body[data-thor-theme] .modal-card,
+body[data-thor-theme] :where(.v089-payment-card,.v089-gate,.v089-gate-login,.cash-modal,.receivable-modal,.operations-modal,.settings-modal){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] .modal-card :where(section,article,.card,.panel,.box,.summary-card,.info-card){border-color:var(--thor-border)!important}
+body[data-thor-theme] .modal-card :where(button.primary,.primary){background:var(--thor-button)!important;border-color:var(--thor-button)!important;color:#fff!important}
+body[data-thor-theme] .modal-card :where(button.secondary,.secondary){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] .modal-card :where(button.secondary,.secondary):hover{background:color-mix(in srgb,var(--thor-accent) 7%,var(--thor-surface))!important;border-color:var(--thor-accent)!important;color:var(--thor-accent)!important}
+
+/* Caixa / fechamento */
+body[data-thor-theme] :where(.cash-card,.cash-summary,.cash-session,.cash-grid,.cash-count,.cash-closing,.cash-history){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.cash-kpi,.cash-total,.cash-balance){background:color-mix(in srgb,var(--thor-accent) 7%,var(--thor-surface))!important;border-color:color-mix(in srgb,var(--thor-accent) 18%,var(--thor-border))!important}
+
+/* Recebimentos / crediário / boleto */
+body[data-thor-theme] :where(.receivable-card,.receivable-list,.receivable-item,.credit-card,.installment-card,.customer-card,.boleto-card,.v105-card,.v115-card){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] :where(.receivable-item,.installment-card,.boleto-card).selected{background:color-mix(in srgb,var(--thor-accent) 10%,var(--thor-surface))!important;border-color:var(--thor-accent)!important}
+
+/* Central operacional / operações suspensas */
+body[data-thor-theme] :where(.operations-center,.operations-card,.draft-card,.draft-sale,.operation-card,.operation-list,.v089-menu-grid,.v089-actions-menu){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] .v089-menu-grid button{background:linear-gradient(135deg,var(--thor-button),color-mix(in srgb,var(--thor-button) 78%,var(--thor-accent-2)))!important;color:#fff!important;border-color:transparent!important}
+body[data-thor-theme] .v089-menu-grid button b,body[data-thor-theme] .v089-menu-grid button small{color:#fff!important}
+
+/* Fiscal completo */
+body[data-thor-theme] :where(.fiscal-workspace,.v088-fiscal-workspace){background:var(--thor-page)!important}
+body[data-thor-theme] :where(.fiscal-head,.fiscal-toolbar,.fiscal-filter-chips,.fiscal-table-card,.fiscal-meta,.fiscal-progress-head,.fiscal-progress-details,.fiscal-event-list){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] .fiscal-head small{color:var(--thor-accent)!important}
+body[data-thor-theme] .fiscal-table{background:var(--thor-surface)!important;color:var(--thor-text)!important}
+body[data-thor-theme] .fiscal-table th{background:color-mix(in srgb,var(--thor-accent) 6%,var(--thor-surface))!important;color:var(--thor-text)!important;border-color:var(--thor-border)!important}
+body[data-thor-theme] .fiscal-table td{background:var(--thor-surface)!important;color:var(--thor-text)!important;border-color:var(--thor-border)!important}
+body[data-thor-theme] :where(.fiscal-chip,.fiscal-today,.fiscal-clear,.table-action,.v090-fiscal-nav button){background:var(--thor-surface)!important;border-color:var(--thor-accent)!important;color:var(--thor-accent)!important}
+body[data-thor-theme] :where(.fiscal-chip,.fiscal-today,.fiscal-clear,.table-action,.v090-fiscal-nav button):hover{background:var(--thor-accent)!important;color:#fff!important}
+body[data-thor-theme] .fiscal-spinner{border-color:color-mix(in srgb,var(--thor-accent) 18%,var(--thor-border))!important;border-top-color:var(--thor-accent)!important}
+body[data-thor-theme] .fiscal-progress-step{background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-muted)!important}
+body[data-thor-theme] .fiscal-progress-step.active{background:color-mix(in srgb,var(--thor-accent) 9%,var(--thor-surface))!important;border-color:var(--thor-accent)!important;color:var(--thor-accent)!important}
+
+/* Configurações */
+body[data-thor-theme] :where(.settings-grid,.settings-section,.printer-info,.shortcut-list,.hardware-list,.settings-card){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] .shortcut-list input{background:color-mix(in srgb,var(--thor-accent) 4%,var(--thor-surface))!important}
+
+/* Tabelas e listas genéricas */
+body[data-thor-theme] :where(table,thead,tbody,tr,td,th,.table,.list,.list-item){border-color:var(--thor-border)!important}
+body[data-thor-theme] :where(th,thead){background:color-mix(in srgb,var(--thor-accent) 6%,var(--thor-surface));color:var(--thor-text)}
+body[data-thor-theme] :where(td,tbody tr){background:var(--thor-surface);color:var(--thor-text)}
+body[data-thor-theme] tbody tr:hover td{background:color-mix(in srgb,var(--thor-accent) 4%,var(--thor-surface))!important}
+
+/* Abas e chips */
+body[data-thor-theme] :where(.tabs button,.tab,.chip,.filter-chip,.v088-sale-tabs button,.v090-view-switch button){background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-muted)!important}
+body[data-thor-theme] :where(.tabs button.active,.tab.active,.chip.active,.filter-chip.active,.v088-sale-tabs button.active,.v090-view-switch button.active){background:color-mix(in srgb,var(--thor-accent) 12%,var(--thor-surface))!important;border-color:var(--thor-accent)!important;color:var(--thor-accent)!important}
+
+/* Rodapé */
+body[data-thor-theme] :where(.bottom,footer.bottom){background:color-mix(in srgb,var(--thor-accent) 35%,#19221d)!important;color:#fff!important;border-color:color-mix(in srgb,var(--thor-accent) 55%,#19221d)!important}
+body[data-thor-theme] :where(.bottom,footer.bottom) *{color:#fff!important}
+
+/* Botões genéricos: cobre módulos antigos sem classe semântica */
+body[data-thor-theme] button:not(.danger):not(.warning-button):not(.thor-theme-card):not(.v089-hamb):not(#v089ScanFocus){border-color:color-mix(in srgb,var(--thor-button) 42%,var(--thor-border))}
+body[data-thor-theme] button.primary{background:var(--thor-button)!important;color:#fff!important}
+
+/* Mantém semântica operacional — erro, alerta e sucesso continuam identificáveis */
+body[data-thor-theme] :where(.danger,.error,.status-cancelled,.fiscal-rejected,.fiscal-cancelled,.fiscal-transmission_error){--thor-semantic:#c9424d}
+body[data-thor-theme] :where(.warning-button,.warning,.status-pending_sync,.fiscal-processing,.fiscal-contingency){--thor-semantic:#d89228}
+body[data-thor-theme] :where(.success,.status-completed,.fiscal-authorized){--thor-semantic:#178a52}
+
+/* Personalização também respeita o próprio tema */
+body[data-thor-theme] .thor-personalization-section,
+body[data-thor-theme] .thor-preview-card,
+body[data-thor-theme] .thor-theme-card{background:var(--thor-surface)!important;border-color:var(--thor-border)!important;color:var(--thor-text)!important}
+body[data-thor-theme] .thor-theme-card.active{outline-color:var(--thor-accent)!important}
+body[data-thor-theme] .thor-preview{background:var(--thor-page)!important;border-color:var(--thor-border)!important}
