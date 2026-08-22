@@ -1,57 +1,43 @@
-/* ThorPDV payment method cards v0.9.12 */
-.v089-pay-methods,.payment-methods,[data-payment-methods],.v089-payment-methods{
-  gap:12px!important;
-}
-.v089-pay-methods button,.payment-methods button,[data-payment-methods] button,.v089-payment-methods button{
-  position:relative;
-  min-height:118px!important;
-  border-radius:18px!important;
-  border:1px solid color-mix(in srgb,var(--thor-border,#e7e4ee) 88%,#bfc3cc)!important;
-  background:linear-gradient(180deg,color-mix(in srgb,var(--thor-surface,#fff) 96%,#fff),color-mix(in srgb,var(--thor-page,#f6f5fa) 82%,#fff))!important;
-  color:var(--thor-text,#242435)!important;
-  box-shadow:0 6px 18px rgba(30,28,45,.07)!important;
-  display:flex!important;
-  flex-direction:column!important;
-  align-items:center!important;
-  justify-content:center!important;
-  gap:8px!important;
-  padding:12px 10px!important;
-  transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease,background .14s ease!important;
-  overflow:hidden;
-}
-.v089-pay-methods button:hover,.payment-methods button:hover,[data-payment-methods] button:hover,.v089-payment-methods button:hover{
-  transform:translateY(-2px)!important;
-  box-shadow:0 10px 24px rgba(30,28,45,.12)!important;
-  border-color:color-mix(in srgb,var(--thor-accent,#7443d3) 42%,var(--thor-border,#e7e4ee))!important;
-}
-.v089-pay-methods button.active,.v089-pay-methods button.selected,.payment-methods button.active,.payment-methods button.selected,[data-payment-methods] button.active,[data-payment-methods] button.selected,.v089-payment-methods button.active,.v089-payment-methods button.selected{
-  border:2px solid var(--thor-accent,#7443d3)!important;
-  box-shadow:0 0 0 3px color-mix(in srgb,var(--thor-accent,#7443d3) 14%,transparent),0 9px 22px rgba(30,28,45,.12)!important;
-}
+/* ThorPDV payment icons v0.9.13 — somente símbolos; preserva os botões originais */
 .thor-pay-icon{
-  width:52px;height:52px;border-radius:15px;display:grid;place-items:center;flex:0 0 auto;
-  background:color-mix(in srgb,currentColor 11%,#fff);
-  color:var(--thor-accent,#7443d3);
+  width:38px!important;
+  height:38px!important;
+  display:grid!important;
+  place-items:center!important;
+  flex:0 0 auto!important;
+  margin:0 auto 3px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#fff!important;
+  opacity:.98!important;
+  pointer-events:none!important;
 }
-.thor-pay-icon svg{width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-[data-thor-payment-kind="cash"] .thor-pay-icon{color:#16b968;background:#eafaf1}
-[data-thor-payment-kind="credit_card"] .thor-pay-icon{color:#2581ee;background:#eaf4ff}
-[data-thor-payment-kind="debit_card"] .thor-pay-icon{color:#7a42df;background:#f2eaff}
-[data-thor-payment-kind="pix"] .thor-pay-icon{color:#00a99a;background:#e7faf7}
-[data-thor-payment-kind="boleto"] .thor-pay-icon{color:#2b79dc;background:#eaf3ff}
-[data-thor-payment-kind="store_credit"] .thor-pay-icon,[data-thor-payment-kind="voucher"] .thor-pay-icon{color:#19ae65;background:#e9f9ef}
-[data-thor-payment-kind="cashback"] .thor-pay-icon{color:#f28b18;background:#fff2e2}
-[data-thor-payment-kind="installment"] .thor-pay-icon,[data-thor-payment-kind="parcelamento"] .thor-pay-icon{color:#8547dd;background:#f4eaff}
-.v089-pay-methods button b,.v089-pay-methods button strong,.payment-methods button b,.payment-methods button strong,[data-payment-methods] button b,[data-payment-methods] button strong,.v089-payment-methods button b,.v089-payment-methods button strong{
-  font-size:calc(13px * var(--thor-font-scale,1))!important;font-weight:850!important;line-height:1.15!important;color:var(--thor-text,#242435)!important;text-align:center!important;
+.thor-pay-icon svg{
+  width:34px!important;
+  height:34px!important;
+  display:block!important;
+  overflow:visible!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:1.8!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.12));
 }
-.v089-pay-methods button small,.payment-methods button small,[data-payment-methods] button small,.v089-payment-methods button small{
-  font-size:calc(10px * var(--thor-font-scale,1))!important;line-height:1.2!important;color:var(--thor-muted,#67697a)!important;text-align:center!important;
-}
-.v089-pay-methods button kbd,.payment-methods button kbd,[data-payment-methods] button kbd,.v089-payment-methods button kbd{
-  margin-top:1px!important;border-radius:8px!important;padding:3px 8px!important;background:color-mix(in srgb,var(--thor-accent,#7443d3) 7%,#fff)!important;border-color:color-mix(in srgb,var(--thor-accent,#7443d3) 25%,var(--thor-border,#e7e4ee))!important;color:var(--thor-accent,#7443d3)!important;font-size:9px!important;font-weight:850!important;
-}
+/* Cada botão mantém a cor original do ThorPDV; os símbolos usam branco para máximo contraste. */
+[data-thor-payment-kind] .thor-pay-icon{color:#fff!important;background:transparent!important}
+/* PIX recebe leve assinatura ciano somente se o botão tiver fundo muito claro em algum tema. */
+body[data-thor-theme="custom"] [data-thor-payment-kind="pix"] .thor-pay-icon,
+body[data-thor-theme="thor"] [data-thor-payment-kind="pix"] .thor-pay-icon{color:#fff!important}
+/* Não altera layout, fundo, borda, texto ou sombra dos botões existentes. */
+.v089-pay-methods button .thor-pay-icon,
+.payment-methods button .thor-pay-icon,
+[data-payment-methods] button .thor-pay-icon,
+.v089-payment-methods button .thor-pay-icon{position:relative!important;z-index:1!important}
 @media(max-height:760px){
-  .v089-pay-methods button,.payment-methods button,[data-payment-methods] button,.v089-payment-methods button{min-height:96px!important;gap:5px!important;padding:8px!important}
-  .thor-pay-icon{width:44px;height:44px;border-radius:13px}.thor-pay-icon svg{width:29px;height:29px}
+  .thor-pay-icon{width:32px!important;height:32px!important;margin-bottom:2px!important}
+  .thor-pay-icon svg{width:29px!important;height:29px!important}
 }
