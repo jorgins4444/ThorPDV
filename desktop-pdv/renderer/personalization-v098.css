@@ -1,0 +1,77 @@
+/* ThorPDV visual accessibility + personalization v0.9.8 */
+:root{
+  --thor-font-family: Calibri, Arial, "Segoe UI", sans-serif;
+  --thor-font-scale: 1;
+  --thor-accent: #7443d3;
+  --thor-accent-2: #0bbf79;
+  --thor-button: #7443d3;
+  --thor-text: #242435;
+  --thor-muted: #67697a;
+  --thor-surface: #ffffff;
+  --thor-page: #f6f5fa;
+  --thor-border: #e7e4ee;
+}
+html,body,button,input,select,textarea{font-family:var(--thor-font-family)!important;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{font-size:calc(15px * var(--thor-font-scale));color:var(--thor-text)}
+button,input,select,textarea{font-size:calc(14px * var(--thor-font-scale))!important}
+input,select,textarea{color:var(--thor-text)!important}
+small,.muted{font-size:calc(12px * var(--thor-font-scale))!important;color:var(--thor-muted)}
+
+/* legibilidade geral */
+.v089-nav button,.v089-nav-bottom button{font-size:calc(12px * var(--thor-font-scale))!important}
+.v089-nav button span,.v089-nav-bottom button span{font-size:calc(10px * var(--thor-font-scale))!important}
+.v089-product-card .v088-product-copy>strong{font-size:calc(12px * var(--thor-font-scale))!important;line-height:1.3!important}
+.v089-product-card .v088-product-copy>small{font-size:calc(10px * var(--thor-font-scale))!important}
+.v089-product-card .v089-pricing strong{font-size:calc(14px * var(--thor-font-scale))!important}
+.v089-cart-item .cart-v43-product strong{font-size:calc(12px * var(--thor-font-scale))!important}
+.v089-cart-item .cart-v43-product small{font-size:calc(10px * var(--thor-font-scale))!important}
+.v089-cart-item .v089-cart-total b,.v089-cart-item .cart-v43-total b{font-size:calc(14px * var(--thor-font-scale))!important}
+.modal-card h3{font-size:calc(22px * var(--thor-font-scale))!important}
+.modal-card label,.field label{font-size:calc(12px * var(--thor-font-scale))!important}
+.modal-card input,.modal-card select,.modal-card textarea{font-size:calc(15px * var(--thor-font-scale))!important}
+
+/* Fiscal: reforço específico de leitura */
+.fiscal-workspace,.v088-fiscal-workspace{font-size:calc(15px * var(--thor-font-scale))!important}
+.fiscal-head h1{font-size:calc(30px * var(--thor-font-scale))!important;line-height:1.12!important}
+.fiscal-head p{font-size:calc(14px * var(--thor-font-scale))!important}
+.fiscal-toolbar label,.fiscal-filter-field label{font-size:calc(12px * var(--thor-font-scale))!important;font-weight:800!important}
+.fiscal-toolbar input,.fiscal-toolbar select{font-size:calc(14px * var(--thor-font-scale))!important;min-height:46px!important}
+.fiscal-count{font-size:calc(12px * var(--thor-font-scale))!important}
+.fiscal-table{font-size:calc(14px * var(--thor-font-scale))!important}
+.fiscal-table th{font-size:calc(12px * var(--thor-font-scale))!important;padding:14px!important;font-weight:900!important}
+.fiscal-table td{font-size:calc(14px * var(--thor-font-scale))!important;padding:14px!important;line-height:1.35!important}
+.fiscal-table td small{font-size:calc(11px * var(--thor-font-scale))!important}
+.table-action,.fiscal-chip,.fiscal-today,.fiscal-clear{font-size:calc(12px * var(--thor-font-scale))!important;min-height:38px!important}
+.sale-status,.fiscal-status{font-size:calc(11px * var(--thor-font-scale))!important}
+
+/* cores personalizáveis, sem destruir a hierarquia visual */
+body[data-thor-theme]{background:var(--thor-page)!important;color:var(--thor-text)!important}
+body[data-thor-theme] .primary,
+body[data-thor-theme] #thorPersonalizationTab,
+body[data-thor-theme] .catalog-add{background:var(--thor-button)!important;border-color:var(--thor-button)!important;color:#fff!important}
+body[data-thor-theme] .secondary{color:var(--thor-text)!important}
+body[data-thor-theme] .modal-card,
+body[data-thor-theme] .fiscal-table-card,
+body[data-thor-theme] .v089-catalog,
+body[data-thor-theme] .v089-items-card{background:var(--thor-surface)!important;color:var(--thor-text)!important;border-color:var(--thor-border)!important}
+body[data-thor-theme] h1,body[data-thor-theme] h2,body[data-thor-theme] h3,body[data-thor-theme] h4,
+body[data-thor-theme] strong,body[data-thor-theme] b{color:var(--thor-text)}
+body[data-thor-theme] .logo,body[data-thor-theme] .fiscal-head small{color:var(--thor-accent)!important}
+body[data-thor-theme] .nav-button.active{color:var(--thor-accent)!important;background:color-mix(in srgb,var(--thor-accent) 12%,white)!important}
+body[data-thor-theme] input:focus,body[data-thor-theme] textarea:focus,body[data-thor-theme] select:focus{outline:none!important;border-color:var(--thor-accent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--thor-accent) 16%,transparent)!important}
+
+/* Personalização */
+#thorPersonalizationTab{border:0;border-radius:10px;cursor:pointer;font-weight:850}
+.thor-personalization-modal>.modal-card{width:min(980px,95vw)!important}
+.thor-personalization-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:1px solid var(--thor-border);padding-bottom:14px}
+.thor-personalization-head h3{margin:3px 0 5px!important}.thor-personalization-head p{margin:0;color:var(--thor-muted)}
+.thor-personalization-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:18px;margin-top:18px}
+.thor-personalization-section{border:1px solid var(--thor-border);border-radius:14px;padding:15px;background:var(--thor-surface)}
+.thor-personalization-section h4{margin:0 0 12px;font-size:16px}.thor-theme-list{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.thor-theme-card{border:1px solid var(--thor-border);background:#fff;border-radius:12px;padding:11px;text-align:left;cursor:pointer;display:grid;grid-template-columns:38px 1fr;gap:10px;align-items:center}
+.thor-theme-card.active{outline:2px solid var(--thor-accent);border-color:transparent}.thor-theme-swatch{width:38px;height:38px;border-radius:11px;display:block}
+.thor-theme-card b,.thor-theme-card small{display:block}.thor-theme-card small{margin-top:2px}
+.thor-control-list{display:grid;gap:12px}.thor-control{display:grid;grid-template-columns:1fr 130px;gap:12px;align-items:center}.thor-control span{font-weight:800}.thor-control input[type=color]{width:100%;height:42px;padding:3px;border:1px solid var(--thor-border);border-radius:9px;background:#fff}.thor-control select{height:42px;border:1px solid var(--thor-border);border-radius:9px;background:#fff;padding:0 9px}
+.thor-preview{border:1px solid var(--thor-border);border-radius:14px;padding:15px;background:var(--thor-page);margin-top:15px}.thor-preview-card{background:var(--thor-surface);border:1px solid var(--thor-border);border-radius:12px;padding:15px}.thor-preview-card h4{margin:0 0 5px}.thor-preview-card p{margin:0 0 12px;color:var(--thor-muted)}.thor-preview-actions{display:flex;gap:8px}.thor-preview-actions button{border:0;border-radius:9px;padding:9px 14px}.thor-preview-actions .p{background:var(--thor-button);color:#fff}.thor-preview-actions .s{background:#fff;color:var(--thor-text);border:1px solid var(--thor-border)}
+.thor-personalization-actions{display:flex;justify-content:space-between;gap:10px;margin-top:18px}.thor-personalization-actions>div{display:flex;gap:8px}
+@media(max-width:850px){.thor-personalization-grid{grid-template-columns:1fr}.thor-theme-list{grid-template-columns:1fr}}
