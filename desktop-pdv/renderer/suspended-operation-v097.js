@@ -6,6 +6,20 @@
     try{return state.cart.reduce((sum,item)=>sum+Number(item.quantity||0)*Number(item.unitPrice??item.unit_price??0),0);}catch{return 0;}
   }
   function money(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}
+  function productSearch(){
+    return document.getElementById('search')||[...document.querySelectorAll('input')].find(input=>{
+      const p=String(input.getAttribute('placeholder')||'').toLocaleLowerCase('pt-BR');
+      return p.includes('buscar produto')||(p.includes('produto')&&(p.includes('ean')||p.includes('código')||p.includes('codigo')));
+    })||null;
+  }
+  function focusProductSearch(select=false){
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const search=productSearch();
+      if(!search||search.disabled||search.readOnly)return;
+      try{search.focus({preventScroll:true});}catch{try{search.focus();}catch{}}
+      if(select)try{search.select();}catch{}
+    }));
+  }
 
   async function saveSuspended(){
     if(suspending)return;
@@ -27,9 +41,11 @@
       try{if(typeof v3ResetSale==='function')v3ResetSale();}catch{}
       try{if(typeof renderSaleWorkspace==='function')renderSaleWorkspace();else if(typeof renderWorkspace==='function')renderWorkspace();}catch{}
       try{queueMicrotask(()=>{if(typeof v3RenderCart==='function')v3RenderCart();});}catch{}
+      focusProductSearch(false);
       try{if(typeof showToast==='function')showToast(`Operação ${result.number} suspensa. Recupere em Central operacional → Operações.`);}catch{}
     }catch(err){
       try{if(typeof infoModal==='function')infoModal('Operação',typeof friendlyError==='function'?friendlyError(err?.message||String(err)):(err?.message||String(err)));else alert(err?.message||String(err));}catch{}
+      focusProductSearch(false);
     }finally{suspending=false;}
   }
 
@@ -73,7 +89,7 @@
     e.preventDefault();
     e.stopImmediatePropagation();
     const ok=window.confirm(`Suspender operação de venda?\n\n${state.cart.length} item(ns) • ${money(cartTotal())}\n\nOs produtos serão salvos em Central operacional → Operações.`);
-    if(!ok)return;
+    if(!ok){focusProductSearch(false);return;}
     await saveSuspended();
   },true);
 
