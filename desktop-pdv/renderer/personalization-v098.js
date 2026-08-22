@@ -14,13 +14,10 @@
   };
   const FONTS={calibri:'Calibri, Arial, "Segoe UI", sans-serif',arial:'Arial, "Segoe UI", sans-serif',segoe:'"Segoe UI", Arial, sans-serif'};
 
-  function read(){
-    try{return {...DEFAULTS,...JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')};}catch{return {...DEFAULTS};}
-  }
+  function read(){try{return {...DEFAULTS,...JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')};}catch{return {...DEFAULTS};}}
   function write(value){localStorage.setItem(STORAGE_KEY,JSON.stringify(value));}
   function apply(value){
-    const root=document.documentElement;
-    const body=document.body;
+    const root=document.documentElement,body=document.body;
     body.dataset.thorTheme=value.theme||'custom';
     root.style.setProperty('--thor-font-family',FONTS[value.font]||FONTS.calibri);
     root.style.setProperty('--thor-font-scale',String(value.scale||1.08));
@@ -34,44 +31,25 @@
     root.style.setProperty('--thor-border',value.border);
   }
   function preset(name,current){return {...current,theme:name,...THEMES[name]};}
-
   let current=read();apply(current);
 
-  function escHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function escHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));}
+
   function openPersonalization(){
-    const original={...current};
-    let draft={...current};
+    const original={...current};let draft={...current};
     const html=`<div class="thor-personalization-head"><div><small>APARÊNCIA DO TERMINAL</small><h3>Personalização</h3><p>Escolha a identidade visual deste caixa e aumente a legibilidade das telas.</p></div><span>Preferência salva neste terminal</span></div>
       <div class="thor-personalization-grid">
-        <section class="thor-personalization-section"><h4>Tema</h4><div class="thor-theme-list">${Object.entries(THEMES).map(([key,t])=>`<button type="button" class="thor-theme-card ${draft.theme===key?'active':''}" data-theme="${key}"><span class="thor-theme-swatch" style="background:${t.swatch}"></span><span><b>${escHtml(t.name)}</b><small>${escHtml(t.desc)}</small></span></button>`).join('')}</div>
-          <div class="thor-preview"><div class="thor-preview-card"><h4>Pré-visualização</h4><p>Produto selecionado • Estoque disponível • R$ 29,90</p><div class="thor-preview-actions"><button class="p">Ação principal</button><button class="s">Ação secundária</button></div></div></div>
-        </section>
-        <section class="thor-personalization-section"><h4>Leitura e cores</h4><div class="thor-control-list">
-          <label class="thor-control"><span>Fonte</span><select id="thorPersFont"><option value="calibri">Calibri</option><option value="arial">Arial</option><option value="segoe">Segoe UI</option></select></label>
-          <label class="thor-control"><span>Tamanho da fonte</span><select id="thorPersScale"><option value="1">Normal</option><option value="1.08">Grande</option><option value="1.16">Extra grande</option><option value="1.24">Máxima leitura</option></select></label>
-          <label class="thor-control"><span>Cor principal</span><input type="color" id="thorPersAccent" value="${draft.accent}"></label>
-          <label class="thor-control"><span>Cor dos botões</span><input type="color" id="thorPersButton" value="${draft.button}"></label>
-          <label class="thor-control"><span>Cor das letras</span><input type="color" id="thorPersText" value="${draft.text}"></label>
-          <label class="thor-control"><span>Cor secundária</span><input type="color" id="thorPersAccent2" value="${draft.accent2}"></label>
-        </div></section>
-      </div>
-      <div class="thor-personalization-actions"><button type="button" class="secondary" id="thorPersReset">Restaurar padrão</button><div><button type="button" class="secondary" id="thorPersCancel">Cancelar</button><button type="button" class="primary" id="thorPersSave">Salvar personalização</button></div></div>`;
-
-    const m=typeof modal==='function'?modal(html,'wide'):null;
-    if(!m)return;
+        <section class="thor-personalization-section"><h4>Tema</h4><div class="thor-theme-list">${Object.entries(THEMES).map(([key,t])=>`<button type="button" class="thor-theme-card ${draft.theme===key?'active':''}" data-theme="${key}"><span class="thor-theme-swatch" style="background:${t.swatch}"></span><span><b>${escHtml(t.name)}</b><small>${escHtml(t.desc)}</small></span></button>`).join('')}</div><div class="thor-preview"><div class="thor-preview-card"><h4>Pré-visualização</h4><p>Produto selecionado • Estoque disponível • R$ 29,90</p><div class="thor-preview-actions"><button class="p">Ação principal</button><button class="s">Ação secundária</button></div></div></div></section>
+        <section class="thor-personalization-section"><h4>Leitura e cores</h4><div class="thor-control-list"><label class="thor-control"><span>Fonte</span><select id="thorPersFont"><option value="calibri">Calibri</option><option value="arial">Arial</option><option value="segoe">Segoe UI</option></select></label><label class="thor-control"><span>Tamanho da fonte</span><select id="thorPersScale"><option value="1">Normal</option><option value="1.08">Grande</option><option value="1.16">Extra grande</option><option value="1.24">Máxima leitura</option></select></label><label class="thor-control"><span>Cor principal</span><input type="color" id="thorPersAccent" value="${draft.accent}"></label><label class="thor-control"><span>Cor dos botões</span><input type="color" id="thorPersButton" value="${draft.button}"></label><label class="thor-control"><span>Cor das letras</span><input type="color" id="thorPersText" value="${draft.text}"></label><label class="thor-control"><span>Cor secundária</span><input type="color" id="thorPersAccent2" value="${draft.accent2}"></label></div></section>
+      </div><div class="thor-personalization-actions"><button type="button" class="secondary" id="thorPersReset">Restaurar padrão</button><div><button type="button" class="secondary" id="thorPersCancel">Cancelar</button><button type="button" class="primary" id="thorPersSave">Salvar personalização</button></div></div>`;
+    const m=typeof modal==='function'?modal(html,'wide'):null;if(!m)return;
     m.classList.add('thor-personalization-modal');
     const font=m.querySelector('#thorPersFont'),scale=m.querySelector('#thorPersScale'),accent=m.querySelector('#thorPersAccent'),button=m.querySelector('#thorPersButton'),text=m.querySelector('#thorPersText'),accent2=m.querySelector('#thorPersAccent2');
     font.value=draft.font;scale.value=String(draft.scale);
-
     const syncControls=()=>{font.value=draft.font;scale.value=String(draft.scale);accent.value=draft.accent;button.value=draft.button;text.value=draft.text;accent2.value=draft.accent2;m.querySelectorAll('[data-theme]').forEach(x=>x.classList.toggle('active',x.dataset.theme===draft.theme));};
-    const preview=()=>{apply(draft);};
+    const preview=()=>apply(draft);
     m.querySelectorAll('[data-theme]').forEach(card=>card.onclick=()=>{draft=preset(card.dataset.theme,draft);syncControls();preview();});
-    font.onchange=()=>{draft.font=font.value;draft.theme='custom';preview();};
-    scale.onchange=()=>{draft.scale=scale.value;preview();};
-    accent.oninput=()=>{draft.accent=accent.value;draft.theme='custom';preview();};
-    button.oninput=()=>{draft.button=button.value;draft.theme='custom';preview();};
-    text.oninput=()=>{draft.text=text.value;draft.theme='custom';preview();};
-    accent2.oninput=()=>{draft.accent2=accent2.value;draft.theme='custom';preview();};
+    font.onchange=()=>{draft.font=font.value;draft.theme='custom';preview();};scale.onchange=()=>{draft.scale=scale.value;preview();};accent.oninput=()=>{draft.accent=accent.value;draft.theme='custom';preview();};button.oninput=()=>{draft.button=button.value;draft.theme='custom';preview();};text.oninput=()=>{draft.text=text.value;draft.theme='custom';preview();};accent2.oninput=()=>{draft.accent2=accent2.value;draft.theme='custom';preview();};
     m.querySelector('#thorPersReset').onclick=()=>{draft={...DEFAULTS};syncControls();preview();};
     m.querySelector('#thorPersCancel').onclick=()=>{apply(original);m.remove();};
     m.querySelector('#thorPersSave').onclick=()=>{current={...draft};write(current);apply(current);m.remove();if(typeof showToast==='function')showToast('Personalização salva neste terminal.');};
@@ -80,15 +58,22 @@
 
   function ensureTab(){
     if(document.getElementById('thorPersonalizationTab'))return;
-    const host=document.querySelector('.v089-nav-bottom')||document.querySelector('.v089-nav')||document.querySelector('.top-right');
-    if(!host)return;
+    const sidebar=document.querySelector('.v088-sidebar');
+    const mainNav=sidebar?.querySelector('.v088-nav');
+    const bottomNav=sidebar?.querySelector('.v088-nav-bottom');
+    const fallback=document.querySelector('.top-right');
+    const host=mainNav||bottomNav||fallback;if(!host)return;
     const btn=document.createElement('button');btn.type='button';btn.id='thorPersonalizationTab';btn.dataset.thorPersonalization='1';
-    if(host.classList.contains('top-right')){btn.className='secondary';btn.innerHTML='Personalização';}
+    if(host.classList.contains('top-right')){btn.className='secondary';btn.textContent='Personalização';}
     else btn.innerHTML='<i>◐</i><span>Personalização</span>';
-    btn.title='Temas, cores e tamanho das fontes';btn.onclick=openPersonalization;host.appendChild(btn);
+    btn.title='Temas, cores e tamanho das fontes';btn.onclick=openPersonalization;
+    if(mainNav){
+      const settings=mainNav.querySelector('[data-v088-action="settings"]');
+      if(settings?.nextSibling)mainNav.insertBefore(btn,settings.nextSibling);else mainNav.appendChild(btn);
+    }else host.appendChild(btn);
   }
 
-  setInterval(ensureTab,1200);
+  setInterval(ensureTab,800);
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{apply(current);ensureTab();},{once:true});else{apply(current);ensureTab();}
   window.openThorPersonalization=openPersonalization;
 })();
