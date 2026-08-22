@@ -34,57 +34,70 @@
     })||null;
   }
 
-  function findToolbar(input){
-    if(!input)return null;
-    let node=input.parentElement;
-    for(let i=0;node&&i<7;i++,node=node.parentElement){
-      const r=node.getBoundingClientRect();
-      if(r.width>window.innerWidth*.72&&r.height>=38&&r.height<=105&&r.top<130)return node;
-    }
-    return input.parentElement?.parentElement||null;
-  }
-
   function installStyle(){
     if(document.getElementById('thorSyncHeaderStyle'))return;
     const style=document.createElement('style');
     style.id='thorSyncHeaderStyle';
     style.textContent=`
       .thor-sync-replaced-icon{display:none!important}
-      #thorSyncHeader{height:42px;min-width:176px;max-width:210px;display:flex;align-items:center;gap:9px;padding:5px 11px;border-radius:11px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);color:#fff;box-sizing:border-box;flex:0 0 auto;margin-left:8px;margin-right:4px;font-family:inherit;line-height:1.08}
+      #thorSyncHeader{height:42px;min-width:174px;display:flex;align-items:center;gap:9px;padding:5px 11px;border-radius:12px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);color:#fff;box-sizing:border-box;flex:0 0 auto;font-family:inherit;line-height:1.08;margin:0 8px 0 6px;align-self:center}
       #thorSyncHeader .thor-sync-dot{width:9px;height:9px;border-radius:50%;background:#aeb7c2;flex:0 0 auto;box-shadow:0 0 0 3px rgba(255,255,255,.10)}
       #thorSyncHeader.online .thor-sync-dot{background:#2ee48b}#thorSyncHeader.syncing .thor-sync-dot{background:#ffd25a}#thorSyncHeader.error .thor-sync-dot{background:#ff7e89}
       #thorSyncHeader .thor-sync-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.thor-sync-title{font-size:11px;font-weight:900;white-space:nowrap}.thor-sync-next{font-size:10px;color:rgba(255,255,255,.88);white-space:nowrap}.thor-sync-next b{font-size:11px;color:#fff}
-      @media(max-width:1180px){#thorSyncHeader{min-width:150px;padding:5px 8px}.thor-sync-title{font-size:10px}.thor-sync-next{font-size:9px}}
+      @media(max-width:1180px){#thorSyncHeader{min-width:148px;padding:5px 8px}.thor-sync-title{font-size:10px}.thor-sync-next{font-size:9px}}
     `;
     document.head.appendChild(style);
+  }
+
+  function visibleRect(el){
+    const r=el.getBoundingClientRect();
+    const cs=getComputedStyle(el);
+    return r.width>0&&r.height>0&&cs.display!=='none'&&cs.visibility!=='hidden'?r:null;
+  }
+
+  function topRightIcons(input){
+    const ir=input?.getBoundingClientRect();
+    if(!ir)return [];
+    return [...document.querySelectorAll('button,a,[role="button"]')]
+      .filter(el=>{
+        if(el.id==='thorConsultaGeralBtn'||el.id==='thorSyncHeader'||el.closest('#thorSyncHeader'))return false;
+        const r=visibleRect(el);if(!r)return false;
+        return r.top>=24&&r.top<92&&r.left>ir.right+2&&r.width<=58&&r.height<=58;
+      })
+      .sort((a,b)=>a.getBoundingClientRect().left-b.getBoundingClientRect().left)
+      .slice(0,3);
+  }
+
+  function commonControlHost(icons){
+    if(!icons.length)return null;
+    const parents=[];
+    let node=icons[0].parentElement;
+    for(let depth=0;node&&depth<5;depth++,node=node.parentElement)parents.push(node);
+    return parents.find(parent=>icons.every(icon=>parent.contains(icon)))||icons[0].parentElement;
   }
 
   function ensureHeader(){
     installStyle();
     const input=productSearchInput();if(!input)return;
-    const host=input.parentElement;if(!host)return;
-    const toolbar=findToolbar(input);if(!toolbar)return;
-    const hostRect=host.getBoundingClientRect();
-    const controls=[...toolbar.querySelectorAll('button,a,[role="button"]')]
-      .filter(el=>{
-        if(el.id==='thorConsultaGeralBtn'||el.id==='thorSyncHeader'||el.closest('#thorSyncHeader'))return false;
-        if(el.classList.contains('thor-sync-replaced-icon'))return false;
-        const r=el.getBoundingClientRect();
-        return r.width>0&&r.height>0&&r.width<=68&&r.height<=68&&r.left>=hostRect.right-2;
-      })
-      .sort((a,b)=>a.getBoundingClientRect().left-b.getBoundingClientRect().left)
-      .slice(0,3);
-    controls.forEach(el=>el.classList.add('thor-sync-replaced-icon'));
+    const icons=topRightIcons(input);
+    icons.forEach(el=>el.classList.add('thor-sync-replaced-icon'));
 
     let chip=document.getElementById('thorSyncHeader');
-    if(chip&&chip.parentElement===toolbar){renderHeader();return;}
+    if(!icons.length){renderHeader();return;}
+    const host=commonControlHost(icons);if(!host)return;
+    const first=icons[0];
+
+    if(chip&&host.contains(chip)){renderHeader();return;}
     chip?.remove();
     chip=document.createElement('div');
     chip.id='thorSyncHeader';
     chip.innerHTML='<span class="thor-sync-dot"></span><span class="thor-sync-copy"><span class="thor-sync-title" id="thorSyncHeaderTitle">Sincronização</span><span class="thor-sync-next">Próxima: <b id="thorSyncHeaderNext">--:--</b></span></span>';
-    if(controls[0]?.parentElement===toolbar)toolbar.insertBefore(chip,controls[0]);
-    else if(host.parentElement===toolbar)host.insertAdjacentElement('afterend',chip);
-    else toolbar.appendChild(chip);
+
+    if(first.parentElement===host)host.insertBefore(chip,first);
+    else{
+      const direct=[...host.children].find(child=>child===first||child.contains(first));
+      if(direct)host.insertBefore(chip,direct);else host.appendChild(chip);
+    }
     renderHeader();
   }
 
