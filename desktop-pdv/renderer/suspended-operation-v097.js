@@ -33,19 +33,36 @@
     }finally{suspending=false;}
   }
 
-  function renameOperations(){
+  function renameOperationsOnce(){
     document.querySelectorAll('[data-oc120-center]').forEach(btn=>{
       const b=btn.querySelector('b'),sm=btn.querySelector('small');
-      if(b)b.textContent='Central operacional';
-      if(sm)sm.textContent='2ª via, pendências e operações';
+      if(b&&b.textContent!=='Central operacional')b.textContent='Central operacional';
+      if(sm&&sm.textContent!=='2ª via, pendências e operações')sm.textContent='2ª via, pendências e operações';
     });
     document.querySelectorAll('.oc120-modal').forEach(modal=>{
-      const head=modal.querySelector('.oc120-head h3');if(head)head.textContent='Histórico, contingência e operações';
-      const tab=modal.querySelector('[data-tab="drafts"]');if(tab)tab.textContent='Operações';
-      modal.querySelectorAll('.oc120-list.drafts article small').forEach(el=>{el.textContent=el.textContent.replace(/PRÉ-VENDA/gi,'OPERAÇÃO SUSPENSA');});
-      modal.querySelectorAll('.oc120-empty').forEach(el=>{if(/pré-venda/i.test(el.textContent||''))el.textContent='Nenhuma operação suspensa em aberto.';});
+      const head=modal.querySelector('.oc120-head h3');
+      if(head&&head.textContent!=='Histórico, contingência e operações')head.textContent='Histórico, contingência e operações';
+      const tab=modal.querySelector('[data-tab="drafts"]');
+      if(tab&&tab.textContent!=='Operações')tab.textContent='Operações';
+      modal.querySelectorAll('.oc120-list.drafts article small').forEach(el=>{
+        const next=(el.textContent||'').replace(/PRÉ-VENDA/gi,'OPERAÇÃO SUSPENSA');
+        if(el.textContent!==next)el.textContent=next;
+      });
+      modal.querySelectorAll('.oc120-empty').forEach(el=>{
+        if(/pré-venda/i.test(el.textContent||''))el.textContent='Nenhuma operação suspensa em aberto.';
+      });
     });
   }
+
+  function scheduleRename(){
+    setTimeout(renameOperationsOnce,0);
+    setTimeout(renameOperationsOnce,80);
+    setTimeout(renameOperationsOnce,250);
+  }
+
+  document.addEventListener('click',e=>{
+    if(e.target?.closest?.('[data-oc120-center], [data-tab="drafts"]'))scheduleRename();
+  },false);
 
   document.addEventListener('keydown',async e=>{
     if(e.key!=='Escape'||suspending)return;
@@ -55,14 +72,16 @@
     }catch{return;}
     e.preventDefault();
     e.stopImmediatePropagation();
-    const total=cartTotal();
-    const ok=window.confirm(`Suspender operação de venda?\n\n${state.cart.length} item(ns) • ${money(total)}\n\nOs produtos serão salvos em Central operacional → Operações.`);
+    const ok=window.confirm(`Suspender operação de venda?\n\n${state.cart.length} item(ns) • ${money(cartTotal())}\n\nOs produtos serão salvos em Central operacional → Operações.`);
     if(!ok)return;
     await saveSuspended();
   },true);
 
-  window.openSuspendedOperationsV097=()=>window.openOperationsCenterV120?.('drafts');
-  const observer=new MutationObserver(renameOperations);
-  observer.observe(document.documentElement,{childList:true,subtree:true});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',renameOperations,{once:true});else renameOperations();
+  window.openSuspendedOperationsV097=()=>{
+    window.openOperationsCenterV120?.('drafts');
+    scheduleRename();
+  };
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',renameOperationsOnce,{once:true});
+  else renameOperationsOnce();
 })();
