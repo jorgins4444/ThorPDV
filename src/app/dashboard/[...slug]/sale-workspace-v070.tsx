@@ -7,6 +7,7 @@ import { erpCreateSale, erpSaleCatalog } from './actions';
 type Row=Record<string,unknown>;
 type CartItem={product_id:string;name:string;sku:string;unit:string;quantity:number;price:number;discount:number;stock:number};
 type SalesOptions={payment_methods:Row[];payment_terms:Row[];card_brands:Row[];card_acquirers:Row[];credit_installments:Row[]};
+type DiscountTarget={scope:'item'|'sale';index?:number}|null;
 const money=(v:unknown)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v??0));
 const num=(v:unknown)=>{const n=Number(v??0);return Number.isFinite(n)?n:0};
 const str=(v:unknown)=>String(v??'');
@@ -33,12 +34,13 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
   const [catalog,setCatalog]=useState<Row[]>([]);
   const [resolvedTable,setResolvedTable]=useState('');
   const [customer,setCustomer]=useState('');
-  const [product,setProduct]=useState('');
   const [search,setSearch]=useState('');
   const [qty,setQty]=useState(1);
-  const [itemDiscount,setItemDiscount]=useState(0);
   const [cart,setCart]=useState<CartItem[]>([]);
   const [saleDiscount,setSaleDiscount]=useState(0);
+  const [discountTarget,setDiscountTarget]=useState<DiscountTarget>(null);
+  const [discountMode,setDiscountMode]=useState<'percent'|'value'>('percent');
+  const [discountInput,setDiscountInput]=useState(0);
   const [condition,setCondition]=useState<'immediate'|'term'>('immediate');
   const [method,setMethod]=useState(str(defaultMethod?.code||''));
   const [entryMethod,setEntryMethod]=useState(str(defaultMethod?.code||''));
@@ -74,7 +76,6 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
   const financed=remaining+interestAmount;
   const isImmediateCard=method==='credit_card'||method==='debit_card';
   const isEntryCard=entryMethod==='credit_card'||entryMethod==='debit_card';
-  const selectedProduct=catalog.find(x=>str(x.id)===product);
   const hasSearch=search.trim().length>0;
 
   const filteredCatalog=useMemo(()=>{
@@ -89,23 +90,43 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     if(qty<=0){setMessage('Quantidade inválida.');return;}
     if(qty>available){setMessage(`Estoque insuficiente. Disponível: ${available}.`);return;}
     const price=num(p.effective_price);
-    if(itemDiscount>qty*price){setMessage('Desconto do item maior que o valor do item.');return;}
     const id=str(p.id);
+    let added=true;
     setCart(current=>{
-      const index=current.findIndex(i=>i.product_id===id&&i.discount===itemDiscount);
-      if(index<0)return [...current,{product_id:id,name:str(p.name),sku:str(p.sku??''),unit:str(p.unit??'UN'),quantity:qty,price,discount:itemDiscount,stock:available}];
+      const index=current.findIndex(i=>i.product_id===id&&i.discount===0);
+      if(index<0)return [...current,{product_id:id,name:str(p.name),sku:str(p.sku??''),unit:str(p.unit??'UN'),quantity:qty,price,discount:0,stock:available}];
       const next=[...current];
       const merged=next[index].quantity+qty;
-      if(merged>available){setMessage(`Estoque insuficiente. Disponível: ${available}.`);return current;}
+      if(merged>available){setMessage(`Estoque insuficiente. Disponível: ${available}.`);added=false;return current;}
       next[index]={...next[index],quantity:merged};
       return next;
     });
-    setProduct('');setQty(1);setItemDiscount(0);setSearch('');setMessage('');
+    if(added){setQty(1);setSearch('');setMessage('');}
   }
-  function add(){addProduct(selectedProduct);}
   function searchKeyDown(e:React.KeyboardEvent<HTMLInputElement>){
-    if(e.key!=='Enter'||!hasSearch)return;
-    if(filteredCatalog.length===1){e.preventDefault();setProduct(str(filteredCatalog[0].id));addProduct(filteredCatalog[0]);}
+    if(e.key==='Enter'&&hasSearch&&filteredCatalog.length===1){e.preventDefault();addProduct(filteredCatalog[0]);}
+  }
+
+  function openDiscount(target:DiscountTarget){
+    if(!target)return;
+    const current=target.scope==='sale'?saleDiscount:cart[target.index??-1]?.discount??0;
+    setDiscountTarget(target);setDiscountMode(current>0?'value':'percent');setDiscountInput(current>0?current:0);
+  }
+  function applyDiscount(){
+    if(!discountTarget)return;
+    const targetBase=discountTarget.scope==='sale'?subtotal:(()=>{const i=cart[discountTarget.index??-1];return i?i.quantity*i.price:0})();
+    const raw=Math.max(discountInput,0);
+    const value=discountMode==='percent'?targetBase*Math.min(raw,100)/100:Math.min(raw,targetBase);
+    const rounded=Math.round(value*100)/100;
+    if(discountTarget.scope==='sale')setSaleDiscount(rounded);
+    else setCart(current=>current.map((i,n)=>n===discountTarget.index?{...i,discount:rounded}:i));
+    setDiscountTarget(null);setDiscountInput(0);setMessage('');
+  }
+  function clearDiscount(){
+    if(!discountTarget)return;
+    if(discountTarget.scope==='sale')setSaleDiscount(0);
+    else setCart(current=>current.map((i,n)=>n===discountTarget.index?{...i,discount:0}:i));
+    setDiscountTarget(null);setDiscountInput(0);
   }
 
   function paymentPayload(paymentMethod:string,amount:number,brand:string,acquirer:string,inst:number){
@@ -138,7 +159,7 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     if(r.ok){
       const termInfo=r.term as Row|undefined;
       setMessage(condition==='term'?`Venda nº ${String(r.number)} concluída. ${String(termInfo?.installments??installments)} parcela(s) de ${str(selectedTerm?.method)==='boleto'?'Boleto':'Crediário'} foram enviadas para Contas a Receber.`:`Venda nº ${String(r.number)} concluída e quitada por ${money(r.total)}.`);
-      setCart([]);setSaleDiscount(0);setEntryAmount(0);setProduct('');setSearch('');await loadCatalog();
+      setCart([]);setSaleDiscount(0);setEntryAmount(0);setSearch('');await loadCatalog();
     }else setMessage(`Não foi possível finalizar: ${String(r.error??'erro')}`);
   }
 
@@ -154,6 +175,9 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     return <div className="erp-so-card-options erp-sale-card-options"><label>Bandeira<select value={brand} onChange={e=>setBrand(e.target.value)}><option value="">Selecione...</option>{brands.map(x=><option key={str(x.code)} value={str(x.code)}>{str(x.name)}</option>)}</select></label><label>Credenciadora<select value={acquirer} onChange={e=>setAcquirer(e.target.value)}><option value="">Selecione...</option>{acquirers.map(x=><option key={str(x.cnpj)} value={str(x.cnpj)}>{str(x.name)} — {str(x.cnpj)}</option>)}</select></label>{payMethod==='credit_card'&&<label>Parcelas<select value={inst} onChange={e=>setInst(Math.max(num(e.target.value),1))}>{creditInstallments.map(x=><option key={num(x.installments)} value={num(x.installments)}>{num(x.installments)}x{num(x.interest_percent)>0?` · taxa ${num(x.interest_percent).toLocaleString('pt-BR')}%`:''}</option>)}</select></label>}</div>;
   };
 
+  const modalBase=discountTarget?.scope==='sale'?subtotal:(discountTarget?.scope==='item'&&discountTarget.index!==undefined?((cart[discountTarget.index]?.quantity??0)*(cart[discountTarget.index]?.price??0)):0);
+  const modalPreview=discountMode==='percent'?modalBase*Math.min(Math.max(discountInput,0),100)/100:Math.min(Math.max(discountInput,0),modalBase);
+
   return <div className="erp-sale-fullscreen-shell">
     <header className="erp-sale-fullscreen-header">
       <Link href="/dashboard/vendas" className="erp-sale-back">← Voltar para o ThorGestão</Link>
@@ -162,9 +186,9 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     </header>
     <div className="erp-sale-workspace erp-sale-pdv-look">
       <div className="erp-sale-commandbar">
-        <div className="erp-sale-searchbox"><span>⌕</span><input value={search} onChange={e=>{setSearch(e.target.value);setProduct('')}} onKeyDown={searchKeyDown} placeholder="Digite código, nome ou código de barras do produto..." autoComplete="off" autoFocus/></div>
+        <div className="erp-sale-searchbox"><span>⌕</span><input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={searchKeyDown} placeholder="Digite código, nome ou código de barras do produto..." autoComplete="off" autoFocus/></div>
         <div className="erp-sale-command-meta">
-          <label><span>Tabela</span><select value={tableId} onChange={e=>{setTableId(e.target.value);setCart([]);}}><option value="">Tabela padrão vigente</option>{priceTables.filter(t=>t.active!==false).map(t=><option key={str(t.id)} value={str(t.id)}>{str(t.name)}</option>)}</select></label>
+          <label><span>Tabela</span><select value={tableId} onChange={e=>{setTableId(e.target.value);setCart([]);setSaleDiscount(0)}}><option value="">Tabela padrão vigente</option>{priceTables.filter(t=>t.active!==false).map(t=><option key={str(t.id)} value={str(t.id)}>{str(t.name)}</option>)}</select></label>
           <label className="customer"><span>Cliente {condition==='term'&&<b>• obrigatório no prazo</b>}</span><select value={customer} onChange={e=>setCustomer(e.target.value)}><option value="">Consumidor não identificado</option>{customers.filter(c=>c.active!==false).map(c=><option key={str(c.id)} value={str(c.id)}>{str(c.name)}</option>)}</select></label>
         </div>
       </div>
@@ -173,9 +197,9 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
         <section className="erp-sale-catalog-panel">
           <header className="erp-sale-panel-head"><div><small>PRODUTOS</small><h3>Pesquisa de produtos</h3></div><span>{hasSearch?`${filteredCatalog.length} encontrado(s)`:'Aguardando pesquisa'}</span></header>
           <div className="erp-sale-product-list">
-            {!hasSearch?<div className="erp-sale-empty-state search"><span className="erp-sale-search-empty-icon">⌕</span><b>Pesquise para localizar um produto</b><span>Digite nome, código interno, SKU ou código de barras. A lista só aparece durante a pesquisa.</span></div>:filteredCatalog.length===0?<div className="erp-sale-empty-state"><b>Nenhum produto encontrado</b><span>Confira o código/nome informado ou o estoque disponível.</span></div>:filteredCatalog.map(p=>{
-              const active=str(p.id)===product;const image=productImage(p);
-              return <button type="button" key={str(p.id)} className={`erp-sale-product-row ${active?'active':''}`} onClick={()=>setProduct(str(p.id))} onDoubleClick={()=>{setProduct(str(p.id));addProduct(p)}}>
+            {!hasSearch?<div className="erp-sale-empty-state search"><span className="erp-sale-search-empty-icon">⌕</span><b>Pesquise para localizar um produto</b><span>Digite nome, código interno, SKU ou código de barras. Um clique no resultado já adiciona à venda.</span></div>:filteredCatalog.length===0?<div className="erp-sale-empty-state"><b>Nenhum produto encontrado</b><span>Confira o código/nome informado ou o estoque disponível.</span></div>:filteredCatalog.map(p=>{
+              const image=productImage(p);
+              return <button type="button" key={str(p.id)} className="erp-sale-product-row" onClick={()=>addProduct(p)} title="Clique para adicionar à venda">
                 <span className="erp-sale-product-thumb"><span>▦</span>{image&&<img src={image} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display='none'}}/>}</span>
                 <span className="erp-sale-product-code">{str(p.product_code||p.sku||'—')}</span>
                 <span className="erp-sale-product-name"><b>{str(p.name)}</b><small>{str(p.barcode||p.sku||'Sem código de barras')} · estoque {num(p.stock)} {str(p.unit||'UN')}</small></span>
@@ -183,21 +207,16 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
               </button>;
             })}
           </div>
-          <div className="erp-sale-item-entry">
-            <div className="erp-sale-selected-product"><span>Produto selecionado</span><b>{selectedProduct?str(selectedProduct.name):'Pesquise e selecione um produto'}</b>{selectedProduct&&<small>{money(selectedProduct.effective_price)} · estoque {num(selectedProduct.stock)} {str(selectedProduct.unit||'UN')}</small>}</div>
-            <label>Qtd.<input type="number" min="0.001" step="0.001" value={qty} onChange={e=>setQty(num(e.target.value))}/></label>
-            <label>Desc. item<input type="number" min="0" step="0.01" value={itemDiscount} onChange={e=>setItemDiscount(num(e.target.value))}/></label>
-            <button className="erp-sale-add-button" type="button" onClick={add} disabled={!product}>+ Adicionar</button>
-          </div>
+          <div className="erp-sale-item-entry erp-sale-quick-add"><div className="erp-sale-selected-product"><span>ADIÇÃO RÁPIDA</span><b>1 clique no produto adiciona ao carrinho</b><small>Ajuste a quantidade antes de clicar quando necessário.</small></div><label>Qtd.<input type="number" min="0.001" step="0.001" value={qty} onChange={e=>setQty(num(e.target.value))}/></label></div>
         </section>
 
         <aside className="erp-sale-cart-panel">
-          <header className="erp-sale-panel-head cart"><div><small>VENDA</small><h3>Itens ({cart.length})</h3></div>{cart.length>0&&<button type="button" onClick={()=>setCart([])}>Limpar</button>}</header>
+          <header className="erp-sale-panel-head cart"><div><small>VENDA</small><h3>Itens ({cart.length})</h3></div>{cart.length>0&&<button type="button" onClick={()=>{setCart([]);setSaleDiscount(0)}}>Limpar</button>}</header>
           <div className="erp-sale-cart-list">
-            {cart.length===0?<div className="erp-sale-empty-cart"><span>▤</span><b>Nenhum item na venda</b><small>Pesquise um produto e adicione ao carrinho.</small></div>:cart.map((i,n)=><article className="erp-sale-cart-item" key={`${i.product_id}-${n}`}><div className="erp-sale-cart-index">{n+1}</div><div className="erp-sale-cart-copy"><b>{i.name}</b><small>{i.sku||'Sem referência'} · {i.quantity} {i.unit} × {money(i.price)}{i.discount>0?` · desc. ${money(i.discount)}`:''}</small></div><strong>{money(i.quantity*i.price-i.discount)}</strong><button type="button" title="Remover item" onClick={()=>setCart(c=>c.filter((_,x)=>x!==n))}>×</button></article>)}
+            {cart.length===0?<div className="erp-sale-empty-cart"><span>▤</span><b>Nenhum item na venda</b><small>Pesquise um produto e clique uma vez para adicionar.</small></div>:cart.map((i,n)=><article className="erp-sale-cart-item erp-sale-cart-item-actions" key={`${i.product_id}-${n}`}><div className="erp-sale-cart-index">{n+1}</div><div className="erp-sale-cart-copy"><b>{i.name}</b><small>{i.sku||'Sem referência'} · {i.quantity} {i.unit} × {money(i.price)}{i.discount>0?` · desconto ${money(i.discount)}`:''}</small></div><div className="erp-sale-cart-value"><strong>{money(i.quantity*i.price-i.discount)}</strong>{i.discount>0&&<small>-{money(i.discount)}</small>}</div><div className="erp-sale-cart-actions"><button type="button" className="discount" onClick={()=>openDiscount({scope:'item',index:n})}>Desconto</button><button type="button" className="remove" title="Remover item" onClick={()=>setCart(c=>c.filter((_,x)=>x!==n))}>×</button></div></article>)}
           </div>
 
-          <div className="erp-sale-totals"><label><span>Desconto geral</span><input type="number" min="0" step="0.01" value={saleDiscount} onChange={e=>setSaleDiscount(num(e.target.value))}/></label><div><span>Subtotal</span><b>{money(subtotal)}</b></div><div className="liquid"><span>Total da venda</span><strong>{money(total)}</strong></div></div>
+          <div className="erp-sale-totals erp-sale-totals-actions"><div className="erp-sale-discount-summary"><span>Desconto total</span><button type="button" onClick={()=>openDiscount({scope:'sale'})}>{saleDiscount>0?`Editar · ${money(saleDiscount)}`:'+ Aplicar desconto'}</button></div><div><span>Subtotal</span><b>{money(subtotal)}</b></div><div className="liquid"><span>Total da venda</span><strong>{money(total)}</strong></div></div>
 
           <div className="erp-sale-payment-drawer">
             <div className="erp-so-condition erp-sale-condition"><button type="button" className={condition==='immediate'?'active':''} onClick={()=>{setCondition('immediate');setEntryAmount(0)}}>À vista</button><button type="button" className={condition==='term'?'active':''} onClick={()=>setCondition('term')}>Venda a Prazo</button></div>
@@ -209,5 +228,7 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
         </aside>
       </div>
     </div>
+
+    {discountTarget&&<div className="erp-sale-modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDiscountTarget(null)}}><section className="erp-sale-discount-modal" role="dialog" aria-modal="true" aria-label="Aplicar desconto"><header><div><small>DESCONTO</small><h3>{discountTarget.scope==='sale'?'Desconto total da venda':'Desconto do item'}</h3></div><button type="button" onClick={()=>setDiscountTarget(null)}>×</button></header><div className="erp-sale-discount-modes"><button type="button" className={discountMode==='percent'?'active':''} onClick={()=>{setDiscountMode('percent');setDiscountInput(0)}}>Percentual (%)</button><button type="button" className={discountMode==='value'?'active':''} onClick={()=>{setDiscountMode('value');setDiscountInput(0)}}>Valor (R$)</button></div><label>{discountMode==='percent'?'Percentual de desconto':'Valor do desconto'}<div className="erp-sale-discount-input"><span>{discountMode==='percent'?'%':'R$'}</span><input type="number" min="0" max={discountMode==='percent'?100:modalBase} step="0.01" value={discountInput} onChange={e=>setDiscountInput(num(e.target.value))} autoFocus/></div></label><div className="erp-sale-discount-preview"><span>Base</span><b>{money(modalBase)}</b><span>Desconto</span><b>- {money(modalPreview)}</b><span>Resultado</span><strong>{money(Math.max(modalBase-modalPreview,0))}</strong></div><footer><button type="button" className="clear" onClick={clearDiscount}>Remover desconto</button><button type="button" className="apply" onClick={applyDiscount}>Aplicar desconto</button></footer></section></div>}
   </div>;
 }
