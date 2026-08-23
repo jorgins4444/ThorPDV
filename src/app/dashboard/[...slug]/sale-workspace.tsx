@@ -1,23 +1,41 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { erpCreateSale, erpSaleCatalog } from './actions';
+import { useEffect, useState } from 'react';
+import { SaleWorkspaceV070 } from './sale-workspace-v070';
+import { salesOptionsGet } from './sales-options-actions';
 
 type Row=Record<string,unknown>;
-type CartItem={product_id:string;name:string;sku:string;quantity:number;price:number;discount:number;stock:number};
-const money=(v:unknown)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v??0));
+type SalesOptions={payment_methods:Row[];payment_terms:Row[];card_brands:Row[];card_acquirers:Row[];credit_installments:Row[]};
+const EMPTY:SalesOptions={payment_methods:[],payment_terms:[],card_brands:[],card_acquirers:[],credit_installments:[]};
 
 export function SaleWorkspace({customers,priceTables}:{customers:Row[];priceTables:Row[]}){
-  const [tableId,setTableId]=useState('');const [catalog,setCatalog]=useState<Row[]>([]);const [resolvedTable,setResolvedTable]=useState('');const [customer,setCustomer]=useState('');const [product,setProduct]=useState('');const [qty,setQty]=useState(1);const [itemDiscount,setItemDiscount]=useState(0);const [cart,setCart]=useState<CartItem[]>([]);const [saleDiscount,setSaleDiscount]=useState(0);const [method,setMethod]=useState('pix');const [paid,setPaid]=useState<number|''>('');const [dueDate,setDueDate]=useState('');const [message,setMessage]=useState('');const [saving,setSaving]=useState(false);
-  async function loadCatalog(id=tableId){const r=await erpSaleCatalog(id||undefined);if(r.ok){setCatalog(r.data);setResolvedTable(String(r.price_table_id??''));}else setMessage(String(r.error??'Falha ao carregar catálogo'));}
-  useEffect(()=>{void loadCatalog(tableId);},[tableId]);
-  const subtotal=useMemo(()=>cart.reduce((s,i)=>s+(i.quantity*i.price-i.discount),0),[cart]);const total=Math.max(subtotal-saleDiscount,0);const paidNumber=paid===''?total:Number(paid);const change=Math.max(paidNumber-total,0);
-  function add(){const p=catalog.find(x=>String(x.id)===product);if(!p)return;const available=Number(p.stock??0);if(qty<=0){setMessage('Quantidade inválida.');return;}if(qty>available){setMessage(`Estoque insuficiente. Disponível: ${available}.`);return;}const price=Number(p.effective_price??0);if(itemDiscount>qty*price){setMessage('Desconto do item maior que o valor do item.');return;}setCart(c=>[...c,{product_id:String(p.id),name:String(p.name),sku:String(p.sku??''),quantity:qty,price,discount:itemDiscount,stock:available}]);setProduct('');setQty(1);setItemDiscount(0);setMessage('');}
-  async function finish(){if(!cart.length)return;if(saleDiscount>subtotal){setMessage('Desconto da venda maior que o subtotal.');return;}if(paidNumber>total){setMessage('O valor registrado como pagamento não pode superar o total. Registre apenas o valor efetivamente aplicado à venda.');return;}setSaving(true);const payments=paidNumber>0?[{method,amount:paidNumber}]:[];const r=await erpCreateSale({customer_id:customer||null,price_table_id:tableId||resolvedTable||null,channel:'pdv',discount:saleDiscount,due_date:dueDate||null,items:cart.map(i=>({product_id:i.product_id,quantity:i.quantity,discount:i.discount})),payments});setSaving(false);if(r.ok){setMessage(`Venda nº ${String(r.number)} concluída por ${money(r.total)}. Estoque baixado e ${paidNumber<total?'saldo lançado em contas a receber':'pagamento registrado'}.`);setCart([]);setSaleDiscount(0);setPaid('');await loadCatalog();}else{const error=String(r.error??'erro');setMessage(error==='insufficient_stock'?`Estoque insuficiente durante a finalização. Disponível: ${String(r.available??0)}.`:`Não foi possível finalizar: ${error}`);}}
-  return <div className="erp-sale-workspace"><section className="erp-module-card erp-sale-catalog"><div className="erp-sale-settings"><label>Tabela de preços<select value={tableId} onChange={e=>{setTableId(e.target.value);setCart([]);}}><option value="">Tabela padrão vigente</option>{priceTables.filter(t=>t.active!==false).map(t=><option key={String(t.id)} value={String(t.id)}>{String(t.name)}</option>)}</select></label><label>Cliente<select value={customer} onChange={e=>setCustomer(e.target.value)}><option value="">Consumidor não identificado</option>{customers.filter(c=>c.active!==false).map(c=><option key={String(c.id)} value={String(c.id)}>{String(c.name)}</option>)}</select></label></div><div className="erp-sale-add"><label>Produto<select value={product} onChange={e=>setProduct(e.target.value)}><option value="">Selecione um produto...</option>{catalog.filter(p=>Number(p.stock)>0).map(p=><option key={String(p.id)} value={String(p.id)}>{String(p.sku??'')} · {String(p.name)} · {money(p.effective_price)} · estoque {String(p.stock)}</option>)}</select></label><label>Qtd.<input type="number" min="0.001" step="0.001" value={qty} onChange={e=>setQty(Number(e.target.value))}/></label><label>Desc. item<input type="number" min="0" step="0.01" value={itemDiscount} onChange={e=>setItemDiscount(Number(e.target.value))}/></label><button className="erp-primary" type="button" onClick={add} disabled={!product}>Adicionar</button></div></section>
-    <section className="erp-module-card"><div className="erp-table-scroll"><table className="erp-data-table"><thead><tr><th>Código</th><th>Produto</th><th>Qtd.</th><th>Preço servidor</th><th>Desconto</th><th>Total</th><th></th></tr></thead><tbody>{cart.length===0?<tr><td className="erp-empty" colSpan={7}>Adicione produtos para iniciar a venda.</td></tr>:cart.map((i,n)=><tr key={`${i.product_id}-${n}`}><td>{i.sku}</td><td>{i.name}</td><td>{i.quantity}</td><td>{money(i.price)}</td><td>{money(i.discount)}</td><td><strong>{money(i.quantity*i.price-i.discount)}</strong></td><td><button className="erp-row-action" onClick={()=>setCart(c=>c.filter((_,x)=>x!==n))}>Remover</button></td></tr>)}</tbody></table></div>
-      <div className="erp-sale-checkout"><div className="erp-sale-values"><label>Desconto geral<input type="number" min="0" step="0.01" value={saleDiscount} onChange={e=>setSaleDiscount(Number(e.target.value))}/></label><div><span>Subtotal</span><b>{money(subtotal)}</b></div><div className="total"><span>Total</span><strong>{money(total)}</strong></div></div><div className="erp-sale-payment"><label>Forma de pagamento<select value={method} onChange={e=>setMethod(e.target.value)}><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="credit_card">Cartão de crédito</option><option value="debit_card">Cartão de débito</option><option value="voucher">Voucher</option><option value="store_credit">Crédito da loja</option><option value="other">Outro</option></select></label><label>Valor pago agora<input type="number" min="0" step="0.01" placeholder={total.toFixed(2)} value={paid} onChange={e=>setPaid(e.target.value===''?'':Number(e.target.value))}/></label>{paidNumber<total&&<label>Vencimento do saldo<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label>}<button className="erp-primary erp-finish-sale" disabled={!cart.length||saving} onClick={finish}>{saving?'Finalizando...':'Finalizar venda'}</button></div></div>
-      {change>0&&<p className="erp-message">Troco informado: {money(change)}. Para esta V1 registre no campo pago apenas o valor aplicado à venda.</p>}{message&&<p className="erp-message">{message}</p>}
-    </section>
-  </div>;
+  const [salesOptions,setSalesOptions]=useState<SalesOptions>(EMPTY);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState('');
+
+  useEffect(()=>{
+    let active=true;
+    void salesOptionsGet().then(r=>{
+      if(!active)return;
+      if(r.ok){
+        setSalesOptions({
+          payment_methods:Array.isArray(r.payment_methods)?r.payment_methods:[],
+          payment_terms:Array.isArray(r.payment_terms)?r.payment_terms:[],
+          card_brands:Array.isArray(r.card_brands)?r.card_brands:[],
+          card_acquirers:Array.isArray(r.card_acquirers)?r.card_acquirers:[],
+          credit_installments:Array.isArray(r.credit_installments)?r.credit_installments:[],
+        });
+      }else setError(String(r.error??'Não foi possível carregar as formas de pagamento.'));
+      setLoading(false);
+    }).catch(e=>{
+      if(!active)return;
+      setError(e instanceof Error?e.message:'Não foi possível carregar as formas de pagamento.');
+      setLoading(false);
+    });
+    return()=>{active=false};
+  },[]);
+
+  if(loading)return <div className="erp-sale-fullscreen-loading"><strong>ThorGestão PDV</strong><span>Carregando opções da venda...</span></div>;
+  if(error)return <div className="erp-sale-fullscreen-loading error"><strong>Não foi possível abrir a Nova Venda</strong><span>{error}</span><a href="/dashboard/vendas">← Voltar para o ThorGestão</a></div>;
+  return <SaleWorkspaceV070 customers={customers} priceTables={priceTables} salesOptions={salesOptions}/>;
 }
