@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import './sale-checkout-enhancements.css';
 import { erpCreateSale, erpSaleCatalog } from './actions';
 
 type Row=Record<string,unknown>;
