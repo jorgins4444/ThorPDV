@@ -11,9 +11,10 @@ const money=(v:unknown)=>new Intl.NumberFormat('pt-BR',{style:'currency',currenc
 const num=(v:unknown)=>{const n=Number(v??0);return Number.isFinite(n)?n:0};
 const str=(v:unknown)=>String(v??'');
 const normalize=(v:unknown)=>str(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const productImage=(p:Row)=>str(p.image_url||p.menu_image_url||p.self_service_image_url||'');
 
 function PaymentIcon({code}:{code:string}){
-  const icon:Record<string,string>={cash:'$',pix:'◇',debit_card:'▣',credit_card:'▤',voucher:'◆',store_credit:'★',other:'•••'};
+  const icon:Record<string,string>={cash:'$',pix:'◇',debit_card:'▣',credit_card:'▤',voucher:'◆',store_credit:'★',store_credit_voucher:'✦',other:'•••'};
   return <span className={`erp-sale-pay-icon pay-${code}`}>{icon[code]??'●'}</span>;
 }
 
@@ -58,6 +59,10 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     else setMessage(String(r.error??'Falha ao carregar catálogo'));
   }
   useEffect(()=>{void loadCatalog(tableId);},[tableId]);
+  useEffect(()=>{
+    if(!method&&defaultMethod)setMethod(str(defaultMethod.code));
+    if(!entryMethod&&defaultMethod)setEntryMethod(str(defaultMethod.code));
+  },[defaultMethod,entryMethod,method]);
 
   const subtotal=useMemo(()=>cart.reduce((s,i)=>s+(i.quantity*i.price-i.discount),0),[cart]);
   const total=Math.max(subtotal-saleDiscount,0);
@@ -70,12 +75,12 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
   const isImmediateCard=method==='credit_card'||method==='debit_card';
   const isEntryCard=entryMethod==='credit_card'||entryMethod==='debit_card';
   const selectedProduct=catalog.find(x=>str(x.id)===product);
+  const hasSearch=search.trim().length>0;
 
   const filteredCatalog=useMemo(()=>{
     const q=normalize(search.trim());
-    const rows=catalog.filter(p=>num(p.stock)>0);
-    if(!q)return rows.slice(0,24);
-    return rows.filter(p=>[p.product_code,p.name,p.sku,p.reference,p.ean,p.barcode].some(v=>normalize(v).includes(q))).slice(0,40);
+    if(!q)return [];
+    return catalog.filter(p=>num(p.stock)>0&&[p.product_code,p.name,p.sku,p.barcode].some(v=>normalize(v).includes(q))).slice(0,40);
   },[catalog,search]);
 
   function addProduct(p:Row|null|undefined){
@@ -98,6 +103,10 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     setProduct('');setQty(1);setItemDiscount(0);setSearch('');setMessage('');
   }
   function add(){addProduct(selectedProduct);}
+  function searchKeyDown(e:React.KeyboardEvent<HTMLInputElement>){
+    if(e.key!=='Enter'||!hasSearch)return;
+    if(filteredCatalog.length===1){e.preventDefault();setProduct(str(filteredCatalog[0].id));addProduct(filteredCatalog[0]);}
+  }
 
   function paymentPayload(paymentMethod:string,amount:number,brand:string,acquirer:string,inst:number){
     const card=paymentMethod==='credit_card'||paymentMethod==='debit_card';
@@ -112,21 +121,24 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
   }
   async function finish(){
     if(!cart.length)return;
+    if(total<=0){setMessage('O total da venda precisa ser maior que zero.');return;}
     if(saleDiscount>subtotal){setMessage('Desconto da venda maior que o subtotal.');return;}
+    if(condition==='immediate'&&!method){setMessage('Selecione uma forma de pagamento.');return;}
     if(condition==='term'&&!customer){setMessage('Venda a prazo exige cliente identificado.');return;}
     if(condition==='term'&&!selectedTerm){setMessage('Selecione um plano de venda a prazo configurado em Opções de Vendas.');return;}
     if(condition==='term'&&remaining<=0.009){setMessage('Não há saldo para financiar. Reduza a entrada ou use venda à vista.');return;}
+    if(condition==='term'&&entryAmount>0&&!entryMethod){setMessage('Selecione a forma de pagamento da entrada.');return;}
     const cardError=condition==='immediate'?validateCard(method,cardBrand,cardAcquirer,cardInstallments):(entryAmount>0?validateCard(entryMethod,entryCardBrand,entryCardAcquirer,entryCardInstallments):'');
     if(cardError){setMessage(cardError);return;}
-    setSaving(true);
+    setSaving(true);setMessage('');
     const payments=condition==='immediate'?[paymentPayload(method,total,cardBrand,cardAcquirer,cardInstallments)]:(entryAmount>0?[paymentPayload(entryMethod,entryAmount,entryCardBrand,entryCardAcquirer,entryCardInstallments)]:[]);
     const term=condition==='term'?{payment_term_id:termId}:null;
     const r=await erpCreateSale({customer_id:customer||null,price_table_id:tableId||resolvedTable||null,channel:'pdv',discount:saleDiscount,items:cart.map(i=>({product_id:i.product_id,quantity:i.quantity,discount:i.discount})),payments,term});
     setSaving(false);
     if(r.ok){
       const termInfo=r.term as Row|undefined;
-      setMessage(condition==='term'?`Venda nº ${String(r.number)} concluída. ${String(termInfo?.installments??installments)} parcela(s) de ${str(selectedTerm?.method)==='boleto'?'Boleto':'Crediário'} foram enviadas para Contas a Receber.`:`Venda nº ${String(r.number)} concluída e quitada por ${money(r.total)}. Nenhum título foi criado em Contas a Receber.`);
-      setCart([]);setSaleDiscount(0);setEntryAmount(0);await loadCatalog();
+      setMessage(condition==='term'?`Venda nº ${String(r.number)} concluída. ${String(termInfo?.installments??installments)} parcela(s) de ${str(selectedTerm?.method)==='boleto'?'Boleto':'Crediário'} foram enviadas para Contas a Receber.`:`Venda nº ${String(r.number)} concluída e quitada por ${money(r.total)}.`);
+      setCart([]);setSaleDiscount(0);setEntryAmount(0);setProduct('');setSearch('');await loadCatalog();
     }else setMessage(`Não foi possível finalizar: ${String(r.error??'erro')}`);
   }
 
@@ -142,71 +154,60 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     return <div className="erp-so-card-options erp-sale-card-options"><label>Bandeira<select value={brand} onChange={e=>setBrand(e.target.value)}><option value="">Selecione...</option>{brands.map(x=><option key={str(x.code)} value={str(x.code)}>{str(x.name)}</option>)}</select></label><label>Credenciadora<select value={acquirer} onChange={e=>setAcquirer(e.target.value)}><option value="">Selecione...</option>{acquirers.map(x=><option key={str(x.cnpj)} value={str(x.cnpj)}>{str(x.name)} — {str(x.cnpj)}</option>)}</select></label>{payMethod==='credit_card'&&<label>Parcelas<select value={inst} onChange={e=>setInst(Math.max(num(e.target.value),1))}>{creditInstallments.map(x=><option key={num(x.installments)} value={num(x.installments)}>{num(x.installments)}x{num(x.interest_percent)>0?` · taxa ${num(x.interest_percent).toLocaleString('pt-BR')}%`:''}</option>)}</select></label>}</div>;
   };
 
-  return <div className="erp-sale-workspace erp-sale-pdv-look">
-    <div className="erp-sale-commandbar">
-      <div className="erp-sale-searchbox"><span>⌕</span><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar produto por código, nome, referência ou EAN..." autoComplete="off"/></div>
-      <div className="erp-sale-command-meta">
-        <label><span>Tabela</span><select value={tableId} onChange={e=>{setTableId(e.target.value);setCart([]);}}><option value="">Tabela padrão vigente</option>{priceTables.filter(t=>t.active!==false).map(t=><option key={str(t.id)} value={str(t.id)}>{str(t.name)}</option>)}</select></label>
-        <label className="customer"><span>Cliente {condition==='term'&&<b>• obrigatório no prazo</b>}</span><select value={customer} onChange={e=>setCustomer(e.target.value)}><option value="">Consumidor não identificado</option>{customers.filter(c=>c.active!==false).map(c=><option key={str(c.id)} value={str(c.id)}>{str(c.name)}</option>)}</select></label>
+  return <div className="erp-sale-fullscreen-shell">
+    <header className="erp-sale-fullscreen-header">
+      <Link href="/dashboard/vendas" className="erp-sale-back">← Voltar para o ThorGestão</Link>
+      <div><small>THORGESTÃO</small><strong>Nova Venda · PDV incorporado</strong></div>
+      <span className="erp-sale-fullscreen-status">● Operação de venda</span>
+    </header>
+    <div className="erp-sale-workspace erp-sale-pdv-look">
+      <div className="erp-sale-commandbar">
+        <div className="erp-sale-searchbox"><span>⌕</span><input value={search} onChange={e=>{setSearch(e.target.value);setProduct('')}} onKeyDown={searchKeyDown} placeholder="Digite código, nome ou código de barras do produto..." autoComplete="off" autoFocus/></div>
+        <div className="erp-sale-command-meta">
+          <label><span>Tabela</span><select value={tableId} onChange={e=>{setTableId(e.target.value);setCart([]);}}><option value="">Tabela padrão vigente</option>{priceTables.filter(t=>t.active!==false).map(t=><option key={str(t.id)} value={str(t.id)}>{str(t.name)}</option>)}</select></label>
+          <label className="customer"><span>Cliente {condition==='term'&&<b>• obrigatório no prazo</b>}</span><select value={customer} onChange={e=>setCustomer(e.target.value)}><option value="">Consumidor não identificado</option>{customers.filter(c=>c.active!==false).map(c=><option key={str(c.id)} value={str(c.id)}>{str(c.name)}</option>)}</select></label>
+        </div>
       </div>
-    </div>
 
-    <div className="erp-sale-main-grid">
-      <section className="erp-sale-catalog-panel">
-        <header className="erp-sale-panel-head"><div><small>PRODUTOS</small><h3>Catálogo da venda</h3></div><span>{filteredCatalog.length} exibido(s)</span></header>
-        <div className="erp-sale-product-list">
-          {filteredCatalog.length===0?<div className="erp-sale-empty-state"><b>Nenhum produto encontrado</b><span>Altere a pesquisa ou confira o estoque disponível.</span></div>:filteredCatalog.map(p=>{
-            const active=str(p.id)===product;
-            return <button type="button" key={str(p.id)} className={`erp-sale-product-row ${active?'active':''}`} onClick={()=>setProduct(str(p.id))} onDoubleClick={()=>{setProduct(str(p.id));addProduct(p)}}>
-              <span className="erp-sale-product-code">{str(p.product_code||p.sku||'—')}</span>
-              <span className="erp-sale-product-name"><b>{str(p.name)}</b><small>{str(p.sku||p.reference||p.ean||'Sem referência')} · estoque {num(p.stock)} {str(p.unit||'UN')}</small></span>
-              <strong>{money(p.effective_price)}</strong>
-            </button>;
-          })}
-        </div>
-        <div className="erp-sale-item-entry">
-          <div className="erp-sale-selected-product"><span>Produto selecionado</span><b>{selectedProduct?str(selectedProduct.name):'Selecione no catálogo'}</b>{selectedProduct&&<small>{money(selectedProduct.effective_price)} · estoque {num(selectedProduct.stock)} {str(selectedProduct.unit||'UN')}</small>}</div>
-          <label>Qtd.<input type="number" min="0.001" step="0.001" value={qty} onChange={e=>setQty(num(e.target.value))}/></label>
-          <label>Desc. item<input type="number" min="0" step="0.01" value={itemDiscount} onChange={e=>setItemDiscount(num(e.target.value))}/></label>
-          <button className="erp-sale-add-button" type="button" onClick={add} disabled={!product}>+ Adicionar</button>
-        </div>
-      </section>
+      <div className="erp-sale-main-grid">
+        <section className="erp-sale-catalog-panel">
+          <header className="erp-sale-panel-head"><div><small>PRODUTOS</small><h3>Pesquisa de produtos</h3></div><span>{hasSearch?`${filteredCatalog.length} encontrado(s)`:'Aguardando pesquisa'}</span></header>
+          <div className="erp-sale-product-list">
+            {!hasSearch?<div className="erp-sale-empty-state search"><span className="erp-sale-search-empty-icon">⌕</span><b>Pesquise para localizar um produto</b><span>Digite nome, código interno, SKU ou código de barras. A lista só aparece durante a pesquisa.</span></div>:filteredCatalog.length===0?<div className="erp-sale-empty-state"><b>Nenhum produto encontrado</b><span>Confira o código/nome informado ou o estoque disponível.</span></div>:filteredCatalog.map(p=>{
+              const active=str(p.id)===product;const image=productImage(p);
+              return <button type="button" key={str(p.id)} className={`erp-sale-product-row ${active?'active':''}`} onClick={()=>setProduct(str(p.id))} onDoubleClick={()=>{setProduct(str(p.id));addProduct(p)}}>
+                <span className="erp-sale-product-thumb"><span>▦</span>{image&&<img src={image} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display='none'}}/>}</span>
+                <span className="erp-sale-product-code">{str(p.product_code||p.sku||'—')}</span>
+                <span className="erp-sale-product-name"><b>{str(p.name)}</b><small>{str(p.barcode||p.sku||'Sem código de barras')} · estoque {num(p.stock)} {str(p.unit||'UN')}</small></span>
+                <strong>{money(p.effective_price)}</strong>
+              </button>;
+            })}
+          </div>
+          <div className="erp-sale-item-entry">
+            <div className="erp-sale-selected-product"><span>Produto selecionado</span><b>{selectedProduct?str(selectedProduct.name):'Pesquise e selecione um produto'}</b>{selectedProduct&&<small>{money(selectedProduct.effective_price)} · estoque {num(selectedProduct.stock)} {str(selectedProduct.unit||'UN')}</small>}</div>
+            <label>Qtd.<input type="number" min="0.001" step="0.001" value={qty} onChange={e=>setQty(num(e.target.value))}/></label>
+            <label>Desc. item<input type="number" min="0" step="0.01" value={itemDiscount} onChange={e=>setItemDiscount(num(e.target.value))}/></label>
+            <button className="erp-sale-add-button" type="button" onClick={add} disabled={!product}>+ Adicionar</button>
+          </div>
+        </section>
 
-      <aside className="erp-sale-cart-panel">
-        <header className="erp-sale-panel-head cart"><div><small>VENDA</small><h3>Itens ({cart.length})</h3></div>{cart.length>0&&<button type="button" onClick={()=>setCart([])}>Limpar</button>}</header>
-        <div className="erp-sale-cart-list">
-          {cart.length===0?<div className="erp-sale-empty-cart"><span>▤</span><b>Nenhum item na venda</b><small>Pesquise um produto e adicione ao carrinho.</small></div>:cart.map((i,n)=><article className="erp-sale-cart-item" key={`${i.product_id}-${n}`}>
-            <div className="erp-sale-cart-index">{n+1}</div>
-            <div className="erp-sale-cart-copy"><b>{i.name}</b><small>{i.sku||'Sem referência'} · {i.quantity} {i.unit} × {money(i.price)}{i.discount>0?` · desc. ${money(i.discount)}`:''}</small></div>
-            <strong>{money(i.quantity*i.price-i.discount)}</strong>
-            <button type="button" title="Remover item" onClick={()=>setCart(c=>c.filter((_,x)=>x!==n))}>×</button>
-          </article>)}
-        </div>
+        <aside className="erp-sale-cart-panel">
+          <header className="erp-sale-panel-head cart"><div><small>VENDA</small><h3>Itens ({cart.length})</h3></div>{cart.length>0&&<button type="button" onClick={()=>setCart([])}>Limpar</button>}</header>
+          <div className="erp-sale-cart-list">
+            {cart.length===0?<div className="erp-sale-empty-cart"><span>▤</span><b>Nenhum item na venda</b><small>Pesquise um produto e adicione ao carrinho.</small></div>:cart.map((i,n)=><article className="erp-sale-cart-item" key={`${i.product_id}-${n}`}><div className="erp-sale-cart-index">{n+1}</div><div className="erp-sale-cart-copy"><b>{i.name}</b><small>{i.sku||'Sem referência'} · {i.quantity} {i.unit} × {money(i.price)}{i.discount>0?` · desc. ${money(i.discount)}`:''}</small></div><strong>{money(i.quantity*i.price-i.discount)}</strong><button type="button" title="Remover item" onClick={()=>setCart(c=>c.filter((_,x)=>x!==n))}>×</button></article>)}
+          </div>
 
-        <div className="erp-sale-totals">
-          <label><span>Desconto geral</span><input type="number" min="0" step="0.01" value={saleDiscount} onChange={e=>setSaleDiscount(num(e.target.value))}/></label>
-          <div><span>Subtotal</span><b>{money(subtotal)}</b></div>
-          <div className="liquid"><span>Total da venda</span><strong>{money(total)}</strong></div>
-        </div>
+          <div className="erp-sale-totals"><label><span>Desconto geral</span><input type="number" min="0" step="0.01" value={saleDiscount} onChange={e=>setSaleDiscount(num(e.target.value))}/></label><div><span>Subtotal</span><b>{money(subtotal)}</b></div><div className="liquid"><span>Total da venda</span><strong>{money(total)}</strong></div></div>
 
-        <div className="erp-sale-payment-drawer">
-          <div className="erp-so-condition erp-sale-condition"><button type="button" className={condition==='immediate'?'active':''} onClick={()=>{setCondition('immediate');setEntryAmount(0)}}>À vista</button><button type="button" className={condition==='term'?'active':''} onClick={()=>setCondition('term')}>Venda a Prazo</button></div>
-          {condition==='immediate'?<>
-            <div className="erp-sale-payment-methods">{methods.map(x=>{const code=str(x.code);return <button type="button" key={code} className={method===code?'active':''} onClick={()=>setMethod(code)}><PaymentIcon code={code}/><span>{str(x.name)}</span></button>})}</div>
-            {isImmediateCard&&cardFields(false)}
-            {isImmediateCard&&!acquirers.length&&<p className="erp-so-config-warning">Habilite uma credenciadora em <Link href="/dashboard/configuracoes/opcoes-vendas">Opções de Vendas →</Link></p>}
-          </>:<>
-            <label className="erp-sale-term-field">Plano de venda a prazo<select value={termId} onChange={e=>setTermId(e.target.value)}><option value="">Selecione um plano...</option>{terms.map(t=><option key={str(t.id)} value={str(t.id)}>{str(t.name)}</option>)}</select></label>
-            {selectedTerm&&<div className="erp-so-finance-preview"><b>{str(selectedTerm.method)==='boleto'?'Boleto':'Crediário'}</b> · {installments}x · primeiro vencimento em {num(selectedTerm.first_due_days)} dias · intervalo {num(selectedTerm.interval_days)} dias · taxa {interest.toLocaleString('pt-BR')}%.</div>}
-            <div className="erp-so-grid erp-sale-entry-grid"><label>Entrada agora<input type="number" min="0" max={total} step="0.01" value={entryAmount} onChange={e=>setEntryAmount(Math.min(Math.max(num(e.target.value),0),total))}/></label><label>Forma da entrada<select value={entryMethod} onChange={e=>setEntryMethod(e.target.value)}>{paymentOptions}</select></label></div>
-            {entryAmount>0&&isEntryCard&&cardFields(true)}
-            <div className="erp-so-finance-preview">Saldo {money(remaining)} + taxa {money(interestAmount)} = <strong>{money(financed)}</strong> em {installments}x de aprox. {money(financed/Math.max(installments,1))}. Somente esse saldo irá para Contas a Receber.</div>
-          </>}
-        </div>
+          <div className="erp-sale-payment-drawer">
+            <div className="erp-so-condition erp-sale-condition"><button type="button" className={condition==='immediate'?'active':''} onClick={()=>{setCondition('immediate');setEntryAmount(0)}}>À vista</button><button type="button" className={condition==='term'?'active':''} onClick={()=>setCondition('term')}>Venda a Prazo</button></div>
+            {condition==='immediate'?<>{methods.length?<div className="erp-sale-payment-methods">{methods.map(x=>{const code=str(x.code);return <button type="button" key={code} className={method===code?'active':''} onClick={()=>{setMethod(code);setMessage('')}}><PaymentIcon code={code}/><span>{str(x.name)}</span></button>})}</div>:<p className="erp-so-config-warning">Nenhuma forma de pagamento ativa. Configure as Opções de Vendas.</p>}{isImmediateCard&&cardFields(false)}{isImmediateCard&&!acquirers.length&&<p className="erp-so-config-warning">Habilite uma credenciadora em <Link href="/dashboard/configuracoes/opcoes-vendas">Opções de Vendas →</Link></p>}</>:<><label className="erp-sale-term-field">Plano de venda a prazo<select value={termId} onChange={e=>setTermId(e.target.value)}><option value="">Selecione um plano...</option>{terms.map(t=><option key={str(t.id)} value={str(t.id)}>{str(t.name)}</option>)}</select></label>{selectedTerm&&<div className="erp-so-finance-preview"><b>{str(selectedTerm.method)==='boleto'?'Boleto':'Crediário'}</b> · {installments}x · primeiro vencimento em {num(selectedTerm.first_due_days)} dias · intervalo {num(selectedTerm.interval_days)} dias · taxa {interest.toLocaleString('pt-BR')}%.</div>}<div className="erp-so-grid erp-sale-entry-grid"><label>Entrada agora<input type="number" min="0" max={total} step="0.01" value={entryAmount} onChange={e=>setEntryAmount(Math.min(Math.max(num(e.target.value),0),total))}/></label><label>Forma da entrada<select value={entryMethod} onChange={e=>setEntryMethod(e.target.value)}>{paymentOptions}</select></label></div>{entryAmount>0&&isEntryCard&&cardFields(true)}<div className="erp-so-finance-preview">Saldo {money(remaining)} + taxa {money(interestAmount)} = <strong>{money(financed)}</strong> em {installments}x de aprox. {money(financed/Math.max(installments,1))}. Somente esse saldo irá para Contas a Receber.</div></>}
+          </div>
 
-        <button className="erp-sale-finish" disabled={!cart.length||saving||(condition==='term'&&!customer)} onClick={finish}>{saving?'Finalizando...':`Concluir venda · ${money(total)}`}</button>
-        {message&&<p className="erp-message erp-sale-message">{message}</p>}
-      </aside>
+          <button className="erp-sale-finish" disabled={!cart.length||saving||(condition==='term'&&!customer)||!methods.length} onClick={finish}>{saving?'Finalizando...':`Concluir venda · ${money(total)}`}</button>
+          {message&&<p className="erp-message erp-sale-message">{message}</p>}
+        </aside>
+      </div>
     </div>
   </div>;
 }
