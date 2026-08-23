@@ -36,6 +36,8 @@ export async function erpInventoryClose(inventoryId:string){const token=await ge
 export async function erpCashList(){const token=await getSessionToken();const result=await rpc('erp_cash_list',{p_token:token});return {ok:Boolean(result.ok),error:result.error,data:Array.isArray(result.data)?result.data:[]};}
 export async function erpCashOpen(posId:string,opening:number){const token=await getSessionToken();return rpc('erp_cash_open',{p_token:token,p_pos_id:posId,p_opening:opening});}
 export async function erpCashClose(cashId:string,closing:number,notes?:string){const token=await getSessionToken();return rpc('erp_cash_close',{p_token:token,p_cash_id:cashId,p_closing:closing,p_notes:notes||null});}
+export async function erpUserCashGet(){const token=await getSessionToken();return rpc('erp_user_cash_get',{p_token:token});}
+export async function erpUserCashClose(closing:number,notes?:string){const token=await getSessionToken();return rpc('erp_user_cash_close',{p_token:token,p_closing:closing,p_notes:notes||null});}
 
 export async function erpSalesCashDashboard(filters:{start?:string;end?:string;operatorId?:string;branchId?:string;status?:string;operationFilter?:string}={}){
   const token=await getSessionToken();
@@ -47,8 +49,8 @@ export async function erpSalesCashDashboard(filters:{start?:string;end?:string;o
 }
 export async function erpSalesCashSaleDetail(saleId:string){const token=await getSessionToken();return rpc('erp_sales_cash_sale_detail',{p_token:token,p_sale:saleId});}
 export async function erpSalesCashCancelSale(saleId:string,reason:string){const token=await getSessionToken();return rpc('erp_sales_cash_cancel_sale',{p_token:token,p_sale:saleId,p_reason:reason});}
-export async function erpSalesCashCancelNfce(saleId:string,reason:string){const token=await getSessionToken();return rpc('erp_sales_cash_cancel_nfce',{p_token:token,p_sale:saleId,p_reason:reason});}
-export async function erpSalesCashFiscalXml(documentId:string){const token=await getSessionToken();return rpc('erp_sales_cash_fiscal_xml',{p_token:token,p_document:documentId});}
+export async function erpSalesCashCancelNfce(saleId:string,reason:string){const token=await getSessionToken();return rpc('erp_sales_cash_cancel_nfce',{p_token:token,p_sale_id:saleId,p_reason:reason});}
+export async function erpSalesCashFiscalXml(documentId:string){const token=await getSessionToken();return rpc('erp_sales_cash_fiscal_xml',{p_token:token,p_document_id:documentId});}
 export async function erpCashClosureHistory(filters:{start?:string;end?:string;operatorId?:string;branchId?:string}={}){const token=await getSessionToken();const result=await rpc('erp_cash_closure_history',{p_token:token,p_start:filters.start||null,p_end:filters.end||null,p_operator:filters.operatorId||null,p_branch:filters.branchId||null});return {ok:Boolean(result.ok),error:result.error,data:Array.isArray(result.data)?result.data:[]};}
 export async function erpCashManagementClose(cashId:string,closing:number,notes?:string){const token=await getSessionToken();return rpc('erp_cash_management_close',{p_token:token,p_cash_id:cashId,p_closing:closing,p_notes:notes||null});}
 export async function erpCashManagementReopen(cashId:string,reason:string){const token=await getSessionToken();return rpc('erp_cash_management_reopen',{p_token:token,p_cash_id:cashId,p_reason:reason});}
@@ -58,7 +60,6 @@ export async function erpFiscalSettingsGet(){const token=await getSessionToken()
 export async function erpFiscalSettingsSave(payload:Record<string,unknown>){const token=await getSessionToken();return rpc('erp_fiscal_settings_save',{p_token:token,p_payload:payload});}
 export async function erpFiscalPrepare(saleId:string,documentType:'nfe'|'nfce'){const token=await getSessionToken();return rpc('erp_fiscal_prepare',{p_token:token,p_sale_id:saleId,p_document_type:documentType});}
 export async function erpFiscalSend(documentId:string){const token=await getSessionToken();return rpc('erp_fiscal_send',{p_token:token,p_document_id:documentId});}
-
 
 export async function erpManagementAudit(filters:{start?:string;end?:string;branchId?:string;operatorId?:string;eventType?:string;search?:string;risk?:string;cursorAt?:string;cursorId?:string;pageSize?:number}={}){
   const token=await getSessionToken();
