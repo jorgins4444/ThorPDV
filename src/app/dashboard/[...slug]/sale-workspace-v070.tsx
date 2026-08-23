@@ -116,10 +116,10 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     if(condition==='term'&&!customer){setMessage('Venda a prazo exige cliente identificado.');return;}
     if(condition==='term'&&!selectedTerm){setMessage('Selecione um plano de venda a prazo configurado em Opções de Vendas.');return;}
     if(condition==='term'&&remaining<=0.009){setMessage('Não há saldo para financiar. Reduza a entrada ou use venda à vista.');return;}
-    const cardError=condition==='immediate'?validateCard(method,cardBrand,cardAcquirer,cardInstallments):(entryAmount>0?validateCard(entryMethod,entryCardBrand,entryCardInstallments):'');
+    const cardError=condition==='immediate'?validateCard(method,cardBrand,cardAcquirer,cardInstallments):(entryAmount>0?validateCard(entryMethod,entryCardBrand,entryCardAcquirer,entryCardInstallments):'');
     if(cardError){setMessage(cardError);return;}
     setSaving(true);
-    const payments=condition==='immediate'?[paymentPayload(method,total,cardBrand,cardAcquirer,cardInstallments)]:(entryAmount>0?[paymentPayload(entryMethod,entryAmount,entryCardBrand,entryCardInstallments)]:[]);
+    const payments=condition==='immediate'?[paymentPayload(method,total,cardBrand,cardAcquirer,cardInstallments)]:(entryAmount>0?[paymentPayload(entryMethod,entryAmount,entryCardBrand,entryCardAcquirer,entryCardInstallments)]:[]);
     const term=condition==='term'?{payment_term_id:termId}:null;
     const r=await erpCreateSale({customer_id:customer||null,price_table_id:tableId||resolvedTable||null,channel:'pdv',discount:saleDiscount,items:cart.map(i=>({product_id:i.product_id,quantity:i.quantity,discount:i.discount})),payments,term});
     setSaving(false);
