@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import './sale-checkout-enhancements.css';
 import { erpCreateSale, erpSaleCatalog } from './actions';
+import { SaleUserCashControl } from './sale-user-cash-control';
+import { SalePrintControl } from './sale-print-control';
 
 type Row=Record<string,unknown>;
 type CartItem={product_id:string;name:string;sku:string;unit:string;quantity:number;price:number;discount:number;stock:number};
@@ -159,6 +161,8 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     setSaving(false);
     if(r.ok){
       const termInfo=r.term as Row|undefined;
+      const customerName=customer?str(customers.find(c=>str(c.id)===customer)?.name):'Consumidor não identificado';
+      window.dispatchEvent(new CustomEvent('thorgestao:sale-completed',{detail:{sale_id:str(r.sale_id??''),number:r.number,subtotal,discount:saleDiscount,total:num(r.total??total),items:cart.map(i=>({name:i.name,sku:i.sku,quantity:i.quantity,price:i.price,discount:i.discount})),payment:condition==='immediate'?str(method):'Venda a prazo',customer:customerName,date:new Date().toLocaleString('pt-BR')}}));
       setMessage(condition==='term'?`Venda nº ${String(r.number)} concluída. ${String(termInfo?.installments??installments)} parcela(s) de ${str(selectedTerm?.method)==='boleto'?'Boleto':'Crediário'} foram enviadas para Contas a Receber.`:`Venda nº ${String(r.number)} concluída e quitada por ${money(r.total)}.`);
       setCart([]);setSaleDiscount(0);setEntryAmount(0);setSearch('');await loadCatalog();
     }else setMessage(`Não foi possível finalizar: ${String(r.error??'erro')}`);
@@ -183,7 +187,7 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
     <header className="erp-sale-fullscreen-header">
       <Link href="/dashboard/vendas" className="erp-sale-back">← Voltar para o ThorGestão</Link>
       <div><small>THORGESTÃO</small><strong>Nova Venda · PDV incorporado</strong></div>
-      <span className="erp-sale-fullscreen-status">● Operação de venda</span>
+      <div className="erp-sale-header-actions"><SalePrintControl/><SaleUserCashControl/></div>
     </header>
     <div className="erp-sale-workspace erp-sale-pdv-look">
       <div className="erp-sale-commandbar">
