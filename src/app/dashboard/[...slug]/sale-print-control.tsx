@@ -2,10 +2,12 @@
 
 import {useEffect,useState} from 'react';
 import {erpFiscalPrepare,erpFiscalSend} from './actions';
+import {salesOptionsGet} from './sales-options-actions';
 
 type ReceiptItem={name:string;sku:string;quantity:number;price:number;discount:number};
 type ReceiptData={sale_id?:string;number?:string|number;subtotal:number;discount:number;total:number;items:ReceiptItem[];payment?:string;customer?:string;date?:string;fiscal_status?:string};
 type Model='pre_sale'|'nfce';
+type Behavior='ask'|'always'|'never';
 const KEY='thorgestao.sale.print.model';
 const money=(v:number)=>new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
 const fit=(s:string,n:number)=>{const x=(s||'').replace(/\s+/g,' ').trim();return x.length>n?x.slice(0,n):x.padEnd(n,' ')};
@@ -24,27 +26,41 @@ function printText(text:string){
 }
 
 export function SalePrintControl(){
- const [model,setModel]=useState<Model>('pre_sale');const [config,setConfig]=useState(false);const [receipt,setReceipt]=useState<ReceiptData|null>(null);const [ask,setAsk]=useState(false);const [printing,setPrinting]=useState(false);const [error,setError]=useState('');
- useEffect(()=>{const saved=localStorage.getItem(KEY);if(saved==='nfce'||saved==='pre_sale')setModel(saved)},[]);
- useEffect(()=>{const handler=(e:Event)=>{const detail=(e as CustomEvent<ReceiptData>).detail;if(detail){setReceipt(detail);setError('');setAsk(true)}};window.addEventListener('thorgestao:sale-completed',handler);return()=>window.removeEventListener('thorgestao:sale-completed',handler)},[]);
+ const [model,setModel]=useState<Model>('nfce');const [behavior,setBehavior]=useState<Behavior>('ask');const [config,setConfig]=useState(false);const [receipt,setReceipt]=useState<ReceiptData|null>(null);const [ask,setAsk]=useState(false);const [printing,setPrinting]=useState(false);const [error,setError]=useState('');const [autoPrint,setAutoPrint]=useState(false);
+ useEffect(()=>{
+   let active=true;
+   const saved=localStorage.getItem(KEY);
+   if(saved==='nfce'||saved==='pre_sale')setModel(saved);
+   void salesOptionsGet().then(r=>{
+     if(!active||!r.ok)return;
+     const rules=(r.session_rules&&typeof r.session_rules==='object'&&!Array.isArray(r.session_rules)?r.session_rules:{}) as Record<string,unknown>;
+     const centralModel=String(rules.print_document??'');
+     const centralBehavior=String(rules.print_behavior??'');
+     if(centralModel==='nfce'||centralModel==='pre_sale'){setModel(centralModel);localStorage.setItem(KEY,centralModel);}
+     if(centralBehavior==='ask'||centralBehavior==='always'||centralBehavior==='never')setBehavior(centralBehavior);
+   }).catch(()=>{});
+   return()=>{active=false};
+ },[]);
+ useEffect(()=>{const handler=(e:Event)=>{const detail=(e as CustomEvent<ReceiptData>).detail;if(!detail)return;setReceipt(detail);setError('');if(behavior==='never'){setAsk(false);setAutoPrint(false);return;}if(behavior==='always'){setAsk(false);setAutoPrint(true);return;}setAutoPrint(false);setAsk(true)};window.addEventListener('thorgestao:sale-completed',handler);return()=>window.removeEventListener('thorgestao:sale-completed',handler)},[behavior]);
+ useEffect(()=>{if(autoPrint&&receipt&&!printing){setAutoPrint(false);void doPrint();}},[autoPrint,receipt]);
  function save(next:Model){setModel(next);localStorage.setItem(KEY,next)}
  async function doPrint(){
    if(!receipt)return;setPrinting(true);setError('');
    if(model==='nfce'){
-     if(!receipt.sale_id){setPrinting(false);setError('A venda não retornou um identificador fiscal válido.');return}
+     if(!receipt.sale_id){setPrinting(false);setError('A venda não retornou um identificador fiscal válido.');setAsk(true);return}
      const prepared=await erpFiscalPrepare(receipt.sale_id,'nfce');
-     if(!prepared.ok){setPrinting(false);setError(`Não foi possível preparar a NFC-e: ${String(prepared.error??'erro')}`);return}
-     if(Array.isArray(prepared.validation_errors)&&prepared.validation_errors.length){setPrinting(false);setError(`NFC-e com pendências: ${prepared.validation_errors.map(String).join(' · ')}`);return}
+     if(!prepared.ok){setPrinting(false);setError(`Não foi possível preparar a NFC-e: ${String(prepared.error??'erro')}`);setAsk(true);return}
+     if(Array.isArray(prepared.validation_errors)&&prepared.validation_errors.length){setPrinting(false);setError(`NFC-e com pendências: ${prepared.validation_errors.map(String).join(' · ')}`);setAsk(true);return}
      const documentId=String(prepared.id??'');
-     if(!documentId){setPrinting(false);setError('A NFC-e foi preparada, mas o documento fiscal não retornou ID.');return}
+     if(!documentId){setPrinting(false);setError('A NFC-e foi preparada, mas o documento fiscal não retornou ID.');setAsk(true);return}
      const sent=await erpFiscalSend(documentId);
-     if(!sent.ok){setPrinting(false);setError(String(sent.message??`Não foi possível autorizar a NFC-e: ${String(sent.error??'erro')}`));return}
+     if(!sent.ok){setPrinting(false);setError(String(sent.message??`Não foi possível autorizar a NFC-e: ${String(sent.error??'erro')}`));setAsk(true);return}
    }
-   printText(build44(receipt,model));setPrinting(false);setAsk(false);
+   const opened=printText(build44(receipt,model));setPrinting(false);if(!opened){setError('O navegador bloqueou a janela de impressão. Libere pop-ups para o ThorGestão.');setAsk(true);return;}setAsk(false);
  }
  return <>
-  <button type="button" className="erp-sale-print-config" onClick={()=>setConfig(true)}>⚙ Documento: {model==='nfce'?'NFC-e':'Pré-venda'}</button>
-  {config&&<div className="erp-sale-print-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setConfig(false)}}><section className="erp-sale-print-modal"><header><div><small>IMPRESSÃO</small><h3>Modelo do documento</h3></div><button onClick={()=>setConfig(false)}>×</button></header><p>Escolha o modelo padrão usado após concluir a venda. A impressão é formatada para cupom térmico de 44 colunas.</p><div className="erp-sale-doc-options"><button className={model==='pre_sale'?'active':''} onClick={()=>save('pre_sale')}><b>Pré-venda</b><span>Documento comercial sem valor fiscal</span></button><button className={model==='nfce'?'active':''} onClick={()=>save('nfce')}><b>NFC-e</b><span>Tenta preparar e autorizar a NFC-e antes de imprimir</span></button></div><footer><button onClick={()=>setConfig(false)}>Concluir</button></footer></section></div>}
-  {ask&&receipt&&<div className="erp-sale-print-backdrop"><section className="erp-sale-print-modal confirm"><header><div><small>VENDA CONCLUÍDA</small><h3>Deseja imprimir a venda?</h3></div></header><p>Venda nº <b>{String(receipt.number??'')}</b> concluída por <b>R$ {money(receipt.total)}</b>. Modelo atual: <b>{model==='nfce'?'NFC-e':'Pré-venda'}</b>.</p><div className="erp-sale-print-preview"><pre>{build44(receipt,model)}</pre></div>{error&&<p className="erp-sale-print-error">{error}</p>}<footer><button className="secondary" disabled={printing} onClick={()=>setAsk(false)}>Não imprimir</button><button className="primary" disabled={printing} onClick={doPrint}>{printing?'Processando...':'Selecionar impressora'}</button></footer></section></div>}
+  <button type="button" className="erp-sale-print-config" onClick={()=>setConfig(true)}>⚙ Documento: {model==='nfce'?'NFC-e':'Pré-venda'} · {behavior==='ask'?'Perguntar':behavior==='always'?'Automático':'Sem impressão'}</button>
+  {config&&<div className="erp-sale-print-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setConfig(false)}}><section className="erp-sale-print-modal"><header><div><small>IMPRESSÃO</small><h3>Modelo do documento</h3></div><button onClick={()=>setConfig(false)}>×</button></header><p>O modelo e o comportamento padrão são definidos em Opções de Vendas → Sessão. Aqui você pode trocar apenas o modelo nesta estação.</p><div className="erp-sale-doc-options"><button className={model==='pre_sale'?'active':''} onClick={()=>save('pre_sale')}><b>Pré-venda</b><span>Documento comercial sem valor fiscal</span></button><button className={model==='nfce'?'active':''} onClick={()=>save('nfce')}><b>NFC-e</b><span>Prepara e autoriza a NFC-e antes de imprimir</span></button></div><footer><button onClick={()=>setConfig(false)}>Concluir</button></footer></section></div>}
+  {ask&&receipt&&<div className="erp-sale-print-backdrop"><section className="erp-sale-print-modal confirm"><header><div><small>VENDA CONCLUÍDA</small><h3>{model==='nfce'?'Deseja imprimir a NFC-e?':'Deseja imprimir a pré-venda?'}</h3></div></header><p>Venda nº <b>{String(receipt.number??'')}</b> concluída por <b>R$ {money(receipt.total)}</b>. Documento atual: <b>{model==='nfce'?'NFC-e':'Pré-venda'}</b>.</p><div className="erp-sale-print-preview"><pre>{build44(receipt,model)}</pre></div>{error&&<p className="erp-sale-print-error">{error}</p>}<footer><button className="secondary" disabled={printing} onClick={()=>setAsk(false)}>Não imprimir</button><button className="primary" disabled={printing} onClick={doPrint}>{printing?'Processando NFC-e...':'Selecionar impressora'}</button></footer></section></div>}
  </>;
 }
