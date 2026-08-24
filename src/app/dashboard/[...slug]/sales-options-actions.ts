@@ -84,6 +84,8 @@ export async function salesSessionRulesSave(payload:Row){
   const mode=['free','default','fixed'].includes(text(payload.customer_mode))?text(payload.customer_mode):'free';
   const requireSeller=Boolean(payload.require_seller);
   const requireCustomer=mode==='fixed'?true:Boolean(payload.require_customer);
+  const printBehavior=['ask','always','never'].includes(text(payload.print_behavior))?text(payload.print_behavior):'ask';
+  const printDocument=['nfce','pre_sale'].includes(text(payload.print_document))?text(payload.print_document):'nfce';
   let defaultCustomer:Row|null=null;
 
   if(mode!=='free'){
@@ -106,6 +108,8 @@ export async function salesSessionRulesSave(payload:Row){
     require_customer:requireCustomer,
     customer_mode:mode,
     default_customer:defaultCustomer,
+    print_behavior:printBehavior,
+    print_document:printDocument,
     updated_at:new Date().toISOString()
   };
   const next={...branch.parameters,sales_session:rules};
