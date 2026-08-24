@@ -21,5 +21,6 @@ require('./agent/receivable-print-v115').installReceivablePrintV115(ThorAgent);
 require('./ipc-store-credit-v105').installStoreCreditVoucherIpcV105(ThorAgent);
 require('./ipc-receivable-v115').installReceivableIpcV115();
 require('./agent/operations-center-v120').installOperationsCenterV120(ThorAgent);
+require('./agent/operations-server-v125').installOperationsServerV125(ThorAgent);
 require('./agent/sqlite-optimization-v124').installSqliteOptimizationV124(Store);
 require('./agent/product-catalog-meta-v081').installProductCatalogMetaV081(Store);
