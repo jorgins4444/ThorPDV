@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import './sale-modern-layout.css';
 import { SaleWorkspaceV070 } from './sale-workspace-v070';
 import { salesOptionsGet } from './sales-options-actions';
 
