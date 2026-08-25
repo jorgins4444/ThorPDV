@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import './sale-modern-layout.css';
+import './sale-document-choice-v2.css';
 import { SaleWorkspaceV070 } from './sale-workspace-v070';
 import { salesOptionsGet } from './sales-options-actions';
 
