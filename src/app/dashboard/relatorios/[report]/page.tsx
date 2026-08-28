@@ -1,10 +1,12 @@
 import { notFound } from 'next/navigation';
 import { AdvancedShell } from '../../[...slug]/advanced-shell';
 import { ReportWorkspace } from '../../[...slug]/report-workspace';
+import { FinancialManagementReport } from '../../[...slug]/financial-management-report';
 import { erpReportV2 } from '../../[...slug]/report-actions';
 import { erpLoad } from '../../[...slug]/actions';
 import '../../[...slug]/module.css';
 import '../../[...slug]/report-v2.css';
+import '../../[...slug]/financial-management-report.css';
 import '../../[...slug]/management-shell.css';
 
 const reports: Record<string,{type:string;title:string;subtitle:string}> = {
@@ -41,12 +43,19 @@ const reports: Record<string,{type:string;title:string;subtitle:string}> = {
   'listagens':{type:'products_taxation',title:'Listagem de Produtos',subtitle:'Produtos e principais dados fiscais cadastrados.'},
 };
 
+type ManagerialReport='expenses_by_category'|'cost_center_expenses'|'chart_account_ledger';
+const managerialReports=['expenses_by_category','cost_center_expenses','chart_account_ledger'];
+
 export default async function ReportPage({ params }: { params: Promise<{report:string}> }) {
   const { report } = await params;
   const meta=reports[report];
   if(!meta) notFound();
   const [branches,initial]=await Promise.all([erpLoad('branches'),erpReportV2(meta.type)]);
+  const isManagerial=managerialReports.includes(meta.type);
   return <AdvancedShell title={meta.title} subtitle={meta.subtitle} activePath={`/dashboard/relatorios/${report}`}>
-    <ReportWorkspace report={meta.type} branches={branches.data} initial={initial}/>
+    {isManagerial
+      ? <FinancialManagementReport report={meta.type as ManagerialReport} branches={branches.data} initial={initial}/>
+      : <ReportWorkspace report={meta.type} branches={branches.data} initial={initial}/>
+    }
   </AdvancedShell>;
 }
