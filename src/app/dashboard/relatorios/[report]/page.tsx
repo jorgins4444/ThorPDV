@@ -23,8 +23,10 @@ const reports: Record<string,{type:string;title:string;subtitle:string}> = {
   'balanco-patrimonial':{type:'balance_sheet',title:'Balanço Patrimonial Gerencial',subtitle:'Visão operacional de caixa, bancos, recebíveis, estoques, obrigações e saldo patrimonial.'},
   'vendas-cfop':{type:'sales_cfop',title:'Relatório de Vendas por CFOP',subtitle:'Quantidade, vendas e faturamento agrupados pelo CFOP efetivamente usado na operação.'},
   'produtos-tributacao':{type:'products_taxation',title:'Relatório de Produtos por Tributação',subtitle:'NCM, CEST, CFOP, origem e enquadramentos tributários cadastrados nos produtos.'},
-
-  'dre-gerencial':{type:'dre_managerial',title:'DRE Gerencial',subtitle:'Receita, devoluções, descontos, CMV, lucro bruto, despesas e resultado operacional.'},
+  'dre-gerencial':{type:'dre_managerial',title:'DRE Gerencial',subtitle:'Receita, devoluções, descontos, CMV, despesas classificadas por conta e resultado operacional.'},
+  'despesas-categoria':{type:'expenses_by_category',title:'Despesas por Categoria',subtitle:'Analise obrigações, valores pagos e saldos agrupados por categoria financeira e conta gerencial.'},
+  'despesas-centro-custo':{type:'cost_center_expenses',title:'Despesas por Centro de Custo',subtitle:'Compare despesas e pagamentos entre filiais, departamentos e centros de responsabilidade.'},
+  'razao-gerencial':{type:'chart_account_ledger',title:'Razão Gerencial',subtitle:'Consolidação de entradas e saídas por conta do plano gerencial, com total, realizado e saldo.'},
   'margem-produto':{type:'product_margin',title:'Margem de Lucro por Produto',subtitle:'Receita, CMV, lucro bruto e margem percentual por produto.'},
   'curva-abc':{type:'abc_curve',title:'Curva ABC de Produtos',subtitle:'Classificação A/B/C conforme participação acumulada no faturamento.'},
   'cmv':{type:'cmv',title:'CMV',subtitle:'Custo das mercadorias vendidas, receita e lucro bruto por dia.'},
@@ -34,7 +36,6 @@ const reports: Record<string,{type:string;title:string;subtitle:string}> = {
   'produtos-sem-giro':{type:'no_movement_products',title:'Produtos sem Giro',subtitle:'Produtos sem venda na janela selecionada, com estoque e valor imobilizado.'},
   'estoque-parado':{type:'stagnant_stock',title:'Estoque Parado',subtitle:'Capital parado em produtos com saldo positivo e sem giro no período.'},
   'comissao-vendedor':{type:'seller_commission',title:'Comissão por Vendedor',subtitle:'Base líquida, devoluções, percentual configurado e comissão calculada por operador.'},
-
   'vendas':{type:'product_ranking',title:'Relatório de Vendas por Produto',subtitle:'Produtos vendidos, quantidade e faturamento no período.'},
   'financeiro':{type:'cash_flow',title:'Relatório Financeiro / Fluxo de Caixa',subtitle:'Entradas, saídas e saldos financeiros por período.'},
   'listagens':{type:'products_taxation',title:'Listagem de Produtos',subtitle:'Produtos e principais dados fiscais cadastrados.'},
