@@ -34,6 +34,14 @@ export async function erpCreateReceivable(payload:Record<string,unknown>){
   return (data??{ok:false}) as Record<string,unknown>;
 }
 
+export async function erpClassifyReceivable(entryId:string,payload:Record<string,unknown>){
+  const pToken=await token();
+  const supabase=await createClient();
+  const {data,error}=await supabase.rpc('erp_financial_entry_classify',{p_token:pToken,p_entry_id:entryId,p_payload:payload});
+  if(error)return {ok:false,error:error.message};
+  return (data??{ok:false}) as Record<string,unknown>;
+}
+
 export async function erpSettleReceivable(entryId:string,payload:Record<string,unknown>){
   const pToken=await token();
   const supabase=await createClient();
