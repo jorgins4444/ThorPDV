@@ -32,17 +32,17 @@ export default defineConfig([
   },
   {
     files: [
-      'src/app/dashboard/[...slug]/bank-cnab-multi-workspace.tsx',
-      'src/app/dashboard/[...slug]/bank-cnab-reviewed-workspace.tsx',
-      'src/app/dashboard/[...slug]/bank-cnab-workspace-v2.tsx',
-      'src/app/dashboard/[...slug]/bank-homologation-workspace.tsx',
-      'src/app/dashboard/[...slug]/financial-accounts-workspace.tsx',
-      'src/app/dashboard/[...slug]/fiscal-documents-workspace.tsx',
-      'src/app/dashboard/[...slug]/fiscal-settings-workspace.tsx',
-      'src/app/dashboard/[...slug]/itau-bolecode-workspace.tsx',
-      'src/app/dashboard/[...slug]/receivable-boleto-action-modal.tsx',
-      'src/app/dashboard/[...slug]/sale-workspace.tsx',
-      'src/app/dashboard/financeiro/boleto/[itemId]/page.tsx',
+      'src/app/dashboard/**/bank-cnab-multi-workspace.tsx',
+      'src/app/dashboard/**/bank-cnab-reviewed-workspace.tsx',
+      'src/app/dashboard/**/bank-cnab-workspace-v2.tsx',
+      'src/app/dashboard/**/bank-homologation-workspace.tsx',
+      'src/app/dashboard/**/financial-accounts-workspace.tsx',
+      'src/app/dashboard/**/fiscal-documents-workspace.tsx',
+      'src/app/dashboard/**/fiscal-settings-workspace.tsx',
+      'src/app/dashboard/**/itau-bolecode-workspace.tsx',
+      'src/app/dashboard/**/receivable-boleto-action-modal.tsx',
+      'src/app/dashboard/**/sale-workspace.tsx',
+      'src/app/dashboard/financeiro/boleto/**/page.tsx',
     ],
     rules: {
       // Transitional debt: these established workspaces predate the route-consolidation pass and
