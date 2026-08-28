@@ -18,7 +18,7 @@ export default async function ReceivablesPage(){
   ]);
   const rows=Array.isArray(receivables.data)?receivables.data:[];
   const customerRows=Array.isArray(customers.data)?customers.data:[];
-  return <AdvancedShell title="Contas a Receber" subtitle="Boleto e Crediário com classificação gerencial, vencidos priorizados e recebimentos no Caixa Interno." activePath="/dashboard/financeiro/receber">
+  return <AdvancedShell title="Contas a Receber" subtitle="Boleto e Crediário com parcelamento mensal real, classificação gerencial, vencidos priorizados e recebimentos no Caixa Interno." activePath="/dashboard/financeiro/receber">
     <ReceivablesWorkspaceV2
       initial={rows}
       customers={customerRows}
