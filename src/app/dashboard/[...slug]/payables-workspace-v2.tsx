@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { payableCreate, payableSettle, payablesFinancialContext, payablesList } from './payables-actions';
 
 type Row=Record<string,unknown>;
+type PayableRow=Row&{remaining:number;operational_status:string};
 type Modal='new'|'settle'|null;
 const text=(v:unknown)=>v==null?'':String(v);
 const num=(v:unknown)=>Number(v??0)||0;
@@ -29,10 +30,10 @@ export function PayablesWorkspaceV2({initial,suppliers,accounts,paymentMethods}:
   const activeAccounts=useMemo(()=>financialAccounts.filter(a=>a.active!==false),[financialAccounts]);
   const allowedMethods=useMemo(()=>methods.filter(m=>!['term_sale','store_credit','store_credit_voucher'].includes(text(m.code))),[methods]);
 
-  const enriched=useMemo(()=>rows.map(r=>{
+  const enriched=useMemo<PayableRow[]>(()=>rows.map(r=>{
     const remaining=Math.max(num(r.amount)-num(r.paid_amount),0);
-    const overdue=remaining>0.009&&text(r.status)!=='cancelled'&&text(r.due_date)&&text(r.due_date)<today();
-    return {...r,remaining,operational_status:overdue?'overdue':text(r.status)};
+    const overdue=remaining>0.009&&text(r.status)!=='cancelled'&&Boolean(text(r.due_date))&&text(r.due_date)<today();
+    return {...r,remaining,operational_status:overdue?'overdue':text(r.status)} as PayableRow;
   }),[rows]);
 
   const filtered=useMemo(()=>enriched.filter(r=>{
