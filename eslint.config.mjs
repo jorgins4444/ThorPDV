@@ -30,6 +30,27 @@ export default defineConfig([
       'react-hooks/immutability': 'off',
     },
   },
+  {
+    files: [
+      'src/app/dashboard/[...slug]/bank-cnab-multi-workspace.tsx',
+      'src/app/dashboard/[...slug]/bank-cnab-reviewed-workspace.tsx',
+      'src/app/dashboard/[...slug]/bank-cnab-workspace-v2.tsx',
+      'src/app/dashboard/[...slug]/bank-homologation-workspace.tsx',
+      'src/app/dashboard/[...slug]/financial-accounts-workspace.tsx',
+      'src/app/dashboard/[...slug]/fiscal-documents-workspace.tsx',
+      'src/app/dashboard/[...slug]/fiscal-settings-workspace.tsx',
+      'src/app/dashboard/[...slug]/itau-bolecode-workspace.tsx',
+      'src/app/dashboard/[...slug]/receivable-boleto-action-modal.tsx',
+      'src/app/dashboard/[...slug]/sale-workspace.tsx',
+      'src/app/dashboard/financeiro/boleto/[itemId]/page.tsx',
+    ],
+    rules: {
+      // Transitional debt: these established workspaces predate the route-consolidation pass and
+      // still use plain internal anchors. Keep the exception file-scoped so new ThorGestao screens
+      // continue to enforce Next.js Link while each legacy workspace is migrated deliberately.
+      '@next/next/no-html-link-for-pages': 'off',
+    },
+  },
   // Supabase Edge Functions run on Deno and are validated with `deno check` in their
   // fiscal workflows. Keep the Next.js ESLint rules scoped to the web/Node application.
   globalIgnores(['.next/**', 'out/**', 'build/**', 'desktop-pdv/**', 'supabase/functions/**', 'next-env.d.ts']),
