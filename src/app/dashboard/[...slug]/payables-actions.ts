@@ -22,18 +22,17 @@ async function rpc(name:string,args:Record<string,unknown>){
   return (data??{ok:false,error:'empty_response'}) as RpcResult;
 }
 
-export async function payablesList(search?:string){
-  const r=await rpc('erp_list',{p_token:await token(),p_resource:'finance',p_search:search?.trim()||null});
-  const rows=Array.isArray(r.data)?r.data.filter(row=>String(row.entry_type??'')==='payable'):[];
-  return {ok:Boolean(r.ok),error:r.error,data:rows};
+export async function payablesList(){
+  const r=await rpc('erp_payables_list',{p_token:await token()});
+  return {ok:Boolean(r.ok),error:r.error,data:Array.isArray(r.data)?r.data:[]};
 }
 
 export async function payableCreate(payload:Row){
-  return rpc('erp_save',{
-    p_token:await token(),
-    p_resource:'finance',
-    p_payload:{...payload,entry_type:'payable',status:'open',paid_amount:0},
-  });
+  return rpc('erp_payable_create',{p_token:await token(),p_payload:payload});
+}
+
+export async function payableClassify(entryId:string,payload:Row){
+  return rpc('erp_financial_entry_classify',{p_token:await token(),p_entry_id:entryId,p_payload:payload});
 }
 
 export async function payableSettle(entryId:string,payload:Row){
