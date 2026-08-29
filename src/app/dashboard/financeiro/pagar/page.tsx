@@ -17,7 +17,7 @@ export default async function PayablesPage(){
 
   return <AdvancedShell
     title="Contas a Pagar"
-    subtitle="Obrigações classificadas por categoria, conta gerencial e centro de custo, com baixa integrada a bancos e conciliação."
+    subtitle="Obrigações alinhadas ao Plano de Contas e Centro de Custo cadastrados, com baixa integrada a bancos e conciliação."
     activePath="/dashboard/financeiro/pagar"
   >
     <PayablesWorkspaceV2
@@ -28,6 +28,7 @@ export default async function PayablesPage(){
       categories={structure.categories}
       chartAccounts={structure.accounts}
       costCenters={structure.cost_centers}
+      currentBranchId={structure.current_branch_id}
     />
   </AdvancedShell>;
 }
