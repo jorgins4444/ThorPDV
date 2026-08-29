@@ -19,6 +19,10 @@ export async function purchaseXmlContext(){
     links:Array.isArray(r.links)?r.links:[],
     units:Array.isArray(r.units)?r.units:[],
     branch_id:String(r.branch_id??''),
+    branch_document:String(r.branch_document??''),
+    branch_name:String(r.branch_name??''),
+    company_document:String(r.company_document??''),
+    company_name:String(r.company_name??''),
   };
 }
 export async function purchaseXmlImport(payload:Record<string,unknown>){return rpc('erp_purchase_xml_import',{p_token:await token(),p_payload:payload})}
