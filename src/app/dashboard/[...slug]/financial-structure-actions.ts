@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 
 const SESSION_COOKIE='thorpdv_test_session';
 type Row=Record<string,unknown>;
-type Result={ok?:boolean;error?:string;accounts?:Row[];categories?:Row[];cost_centers?:Row[];id?:string;[key:string]:unknown};
+type Result={ok?:boolean;error?:string;accounts?:Row[];categories?:Row[];cost_centers?:Row[];current_branch_id?:string;current_branch_name?:string;id?:string;[key:string]:unknown};
 
 async function sessionToken(){
   const store=await cookies();
@@ -29,6 +29,8 @@ export async function financialStructureGet(){
     accounts:Array.isArray(r.accounts)?r.accounts:[],
     categories:Array.isArray(r.categories)?r.categories:[],
     cost_centers:Array.isArray(r.cost_centers)?r.cost_centers:[],
+    current_branch_id:String(r.current_branch_id??''),
+    current_branch_name:String(r.current_branch_name??''),
   };
 }
 
