@@ -18,14 +18,16 @@ export default async function ReceivablesPage(){
   ]);
   const rows=Array.isArray(receivables.data)?receivables.data:[];
   const customerRows=Array.isArray(customers.data)?customers.data:[];
-  return <AdvancedShell title="Contas a Receber" subtitle="Boleto e Crediário com parcelamento mensal real, classificação gerencial, vencidos priorizados e recebimentos no Caixa Interno." activePath="/dashboard/financeiro/receber">
+  return <AdvancedShell title="Contas a Receber" subtitle="Boleto e Crediário alinhados ao Plano de Contas e Centro de Custo cadastrados, com parcelamento mensal real e baixa no Caixa Interno." activePath="/dashboard/financeiro/receber">
     <ReceivablesWorkspaceV2
       initial={rows}
       customers={customerRows}
       accounts={(finance.accounts as Record<string,unknown>[])??[]}
       paymentMethods={(finance.payment_methods as Record<string,unknown>[])??[]}
       categories={(structure.categories as Record<string,unknown>[])??[]}
+      chartAccounts={(structure.accounts as Record<string,unknown>[])??[]}
       costCenters={(structure.cost_centers as Record<string,unknown>[])??[]}
+      currentBranchId={structure.current_branch_id}
     />
   </AdvancedShell>;
 }
