@@ -18,7 +18,9 @@ type Props = {
   accounts: Row[];
   paymentMethods: Row[];
   categories: Row[];
+  chartAccounts: Row[];
   costCenters: Row[];
+  currentBranchId: string;
 };
 type Stats = { overdue: number; overdueValue: number; open: number; openValue: number; paid: number; total: number };
 
@@ -54,13 +56,13 @@ const errorLabel = (value: unknown) => {
     financial_entry_not_found: 'Conta não encontrada ou já estornada.',
     invalid_payment_method: 'Forma de recebimento indisponível.',
     invalid_financial_category: 'Selecione uma categoria financeira válida para receitas.',
-    invalid_chart_account: 'A categoria escolhida não possui uma conta gerencial válida.',
+    invalid_chart_account: 'Selecione uma conta analítica válida do Plano de Contas.',
     invalid_cost_center: 'Selecione um centro de custo válido.',
   };
   return map[e] || e;
 };
 
-export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMethods, categories, costCenters }: Props) {
+export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMethods, categories, chartAccounts, costCenters, currentBranchId }: Props) {
   const [rows, setRows] = useState<Row[]>(initial);
   const [filters, setFilters] = useState<ReceivableFilters>(empty);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -90,9 +92,17 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
     return list.length ? list : [{ code: 'cash', name: 'Dinheiro' }];
   }, [paymentMethods]);
   const receivableCategories = useMemo(() => categories.filter(c => c.active !== false && ['receivable', 'both'].includes(text(c.entry_type))), [categories]);
-  const activeCenters = useMemo(() => costCenters.filter(c => c.active !== false), [costCenters]);
+  const postingAccounts = useMemo(() => chartAccounts.filter(a => a.active !== false && a.posting !== false && ['revenue'].includes(text(a.account_type))), [chartAccounts]);
+  const activeCenters = useMemo(() => costCenters.filter(c => c.active !== false).slice().sort((a,b) => {
+    const rank=(c:Row)=>text(c.branch_id)===currentBranchId?0:!text(c.branch_id)?1:2;
+    return rank(a)-rank(b)||text(a.name).localeCompare(text(b.name),'pt-BR');
+  }), [costCenters,currentBranchId]);
   const defaultCategory = useMemo(() => receivableCategories.find(c => text(c.code) === 'SALES') ?? receivableCategories[0], [receivableCategories]);
-  const defaultCenter = useMemo(() => activeCenters.find(c => c.is_default === true) ?? activeCenters[0], [activeCenters]);
+  const defaultAccount = useMemo(() => postingAccounts.find(a => text(a.id) === text(defaultCategory?.default_chart_account_id)) ?? postingAccounts[0], [postingAccounts, defaultCategory]);
+  const defaultCenter = useMemo(() => activeCenters.find(c => text(c.branch_id)===currentBranchId && c.is_default===true)
+    ??activeCenters.find(c => text(c.branch_id)===currentBranchId)
+    ??activeCenters.find(c => !text(c.branch_id) && c.is_default===true)
+    ??activeCenters[0], [activeCenters,currentBranchId]);
   const selectedCustomer = useMemo(() => activeCustomers.find(c => String(c.id) === newCustomer), [activeCustomers, newCustomer]);
   const stats = useMemo(() => rows.reduce<Stats>((a, r) => {
     const s = String(r.status);
@@ -114,6 +124,12 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
   const clear = () => { setFilters(empty); load(empty); };
   const reload = async () => { const r = await erpReceivablesList(filters); if (r.ok) setRows(r.data); };
 
+  function syncAccountFromCategory(select:HTMLSelectElement){
+    const category=receivableCategories.find(c=>text(c.id)===select.value);
+    const account=select.form?.elements.namedItem('chart_account_id') as HTMLSelectElement|null;
+    if(account&&category?.default_chart_account_id)account.value=text(category.default_chart_account_id);
+  }
+
   async function createReceivable(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -131,6 +147,7 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
       installments: Number(fd.get('installments') || 1),
       notes: String(fd.get('notes') || ''),
       financial_category_id: String(fd.get('financial_category_id') || ''),
+      chart_account_id: String(fd.get('chart_account_id') || ''),
       cost_center_id: String(fd.get('cost_center_id') || ''),
     });
     setSaving(false);
@@ -138,7 +155,7 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
     setCreateOpen(false);
     setNewCustomer('');
     setNewDoc('boleto');
-    setMessage(`${docLabel(r.document_type)} criado, classificado e pronto para cobrança. ${newDoc === 'boleto' ? 'O título já pode entrar em Remessa/Retorno.' : 'O valor foi reservado no Crédito em loja do cliente.'}`);
+    setMessage(`${docLabel(r.document_type)} criado com Plano de Contas e Centro de Custo alinhados ao cadastro atual. ${newDoc === 'boleto' ? 'O título já pode entrar em Remessa/Retorno.' : 'O valor foi reservado no Crédito em loja do cliente.'}`);
     await reload();
   }
 
@@ -150,12 +167,13 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
     setMessage('');
     const r = await erpClassifyReceivable(String(classifyTarget.id), {
       financial_category_id: String(fd.get('financial_category_id') || ''),
+      chart_account_id: String(fd.get('chart_account_id') || ''),
       cost_center_id: String(fd.get('cost_center_id') || ''),
     });
     setSaving(false);
     if (!r.ok) { setMessage(errorLabel(r.error)); return; }
     setClassifyTarget(null);
-    setMessage('Classificação gerencial da conta a receber atualizada.');
+    setMessage('Plano de Contas, categoria e centro de custo da conta a receber atualizados.');
     await reload();
   }
 
@@ -203,17 +221,17 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
 
   return <div className="recv2">
     <section className="recv2-head">
-      <div><span>FINANCEIRO</span><h2>Contas a Receber</h2><p>Boleto e Crediário em uma carteira única, agora ligados à classificação gerencial.</p></div>
+      <div><span>FINANCEIRO</span><h2>Contas a Receber</h2><p>Boleto e Crediário ligados diretamente ao Plano de Contas e Centro de Custo cadastrados.</p></div>
       <div className="recv2-head-actions"><button type="button" className="recv2-filter-btn" onClick={() => setFilterOpen(v => !v)}>⌕ Filtros {activeFilterCount ? `(${activeFilterCount})` : ''}</button><button type="button" className="recv2-primary" onClick={() => setCreateOpen(true)}>＋ Novo lançamento</button></div>
     </section>
     {message && <div className="recv2-message"><span>{message}</span><button type="button" onClick={() => setMessage('')}>×</button></div>}
-    <section className="recv2-stats"><article className="danger"><span>Vencidos</span><strong>{stats.overdue}</strong><small>{money(stats.overdueValue)} em atraso</small></article><article><span>Em aberto</span><strong>{stats.open}</strong><small>{money(stats.openValue)} a vencer</small></article><article><span>Quitados</span><strong>{stats.paid}</strong><small>no resultado atual</small></article><article><span>Saldo da carteira</span><strong>{money(stats.total)}</strong><small>aberto + vencido</small></article></section>
+    <section className="recv2-stats"><article className="danger"><span>Vencidos</span><strong>{stats.overdue}</strong><small>{money(stats.overdueValue)} em atraso</small></article><article><span>Em aberto</span><strong>{stats.open}</strong><small>{money(stats.openValue)} a vencer</small></article><article><span>Quitados</span><strong>{stats.paid}</strong><small>no resultado atual</small></article><article><span>Plano de Contas</span><strong>{postingAccounts.length}</strong><small>contas analíticas de receita</small></article></section>
 
     {filterOpen && <section className="recv2-filters"><header><div><b>Filtros</b><span>Use somente quando precisar refinar a carteira.</span></div><button type="button" onClick={() => setFilterOpen(false)}>×</button></header><div className="recv2-filter-grid"><label className="wide">Nome do cliente<input value={filters.customerName || ''} onChange={e => set('customerName', e.target.value)} placeholder="Digite parte do nome..." /></label><label>Status<select value={filters.status || ''} onChange={e => set('status', e.target.value)}><option value="">Todos</option><option value="overdue">Vencido</option><option value="open">Aberto</option><option value="paid">Quitado</option><option value="cancelled">Estornado</option></select></label><label>Documento<select value={filters.documentType || ''} onChange={e => set('documentType', e.target.value)}><option value="">Boleto + Crediário</option><option value="boleto">Boleto</option><option value="crediario">Crediário</option></select></label><label>Cliente<select value={filters.customerId || ''} onChange={e => set('customerId', e.target.value)}><option value="">Todos</option>{activeCustomers.map(c => <option key={String(c.id)} value={String(c.id)}>{String(c.name)}</option>)}</select></label><label>Vencimento de<input type="date" value={filters.dueFrom || ''} onChange={e => set('dueFrom', e.target.value)} /></label><label>Vencimento até<input type="date" value={filters.dueTo || ''} onChange={e => set('dueTo', e.target.value)} /></label><label>Emissão de<input type="date" value={filters.issuedFrom || ''} onChange={e => set('issuedFrom', e.target.value)} /></label><label>Emissão até<input type="date" value={filters.issuedTo || ''} onChange={e => set('issuedTo', e.target.value)} /></label></div><footer><button type="button" onClick={clear}>Limpar</button><button type="button" className="recv2-primary" disabled={pending} onClick={() => load()}>{pending ? 'Consultando...' : 'Aplicar filtros'}</button></footer></section>}
 
     <section className="recv2-card">
-      <div className="recv2-list-head"><div><b>Carteira de recebimentos</b><span>Categoria, conta gerencial e centro de custo acompanham cada título.</span></div><span>{rows.length} título(s)</span></div>
-      {rows.length === 0 ? <div className="recv2-empty">Nenhuma conta encontrada.</div> : <div className="recv2-table-wrap"><table><thead><tr><th>Cliente / descrição</th><th>Documento</th><th>Classificação</th><th>Vencimento</th><th>Valor</th><th>Saldo</th><th>Status</th><th>Ações</th></tr></thead><tbody>{rows.map(row => {
+      <div className="recv2-list-head"><div><b>Carteira de recebimentos</b><span>Categoria, conta analítica e centro de custo acompanham cada título.</span></div><span>{rows.length} título(s)</span></div>
+      {rows.length === 0 ? <div className="recv2-empty">Nenhuma conta encontrada.</div> : <div className="recv2-table-wrap"><table><thead><tr><th>Cliente / descrição</th><th>Documento</th><th>Categoria / Plano de Contas</th><th>Vencimento</th><th>Valor</th><th>Saldo</th><th>Status</th><th>Ações</th></tr></thead><tbody>{rows.map(row => {
         const s = String(row.status);
         const overdue = s === 'overdue';
         const canReceive = !['paid', 'cancelled'].includes(s) && Number(row.remaining || 0) > 0;
@@ -229,9 +247,9 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
       })}</tbody></table></div>}
     </section>
 
-    {createOpen && <div className="recv2-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setCreateOpen(false); }}><section className="recv2-modal create"><header><div><span>NOVO LANÇAMENTO</span><h3>Conta a Receber</h3><p>Crie um Boleto ou Crediário já classificado para os relatórios gerenciais.</p></div><button type="button" onClick={() => setCreateOpen(false)}>×</button></header><form onSubmit={createReceivable}><div className="recv2-doc-switch"><button type="button" className={newDoc === 'boleto' ? 'active' : ''} onClick={() => setNewDoc('boleto')}><b>▤ Boleto</b><small>Elegível para Remessa / Retorno</small></button><button type="button" className={newDoc === 'crediario' ? 'active' : ''} onClick={() => setNewDoc('crediario')}><b>◫ Crediário</b><small>Exige Crédito em loja disponível</small></button></div><div className="recv2-form-grid"><label className="wide">Cliente<select required value={newCustomer} onChange={e => setNewCustomer(e.target.value)}><option value="">Selecione o cliente...</option>{activeCustomers.map(c => <option key={String(c.id)} value={String(c.id)}>{String(c.name)}{c.document ? ` · ${String(c.document)}` : ''}</option>)}</select></label>{newDoc === 'crediario' && <div className="recv2-credit-box wide"><span>Crédito em loja disponível</span><b>{money(selectedCustomer?.store_credit_balance)}</b><small>O lançamento só será gravado se houver saldo suficiente. A quitação recompõe este crédito.</small></div>}<label className="wide">Descrição<input name="description" required placeholder="Ex.: Mensalidade, serviço prestado, venda externa..." /></label><label>Referência / documento<input name="reference" placeholder="Ex.: OS 1254, contrato 18..." /></label><label>Valor<input name="amount" required type="number" min="0.01" step="0.01" placeholder="0,00" /></label><label>Data de emissão<input name="issued_at" type="date" defaultValue={today()} /></label><label>Vencimento<input name="due_date" required type="date" /></label><label>Parcela<input name="installment" type="number" min="1" defaultValue="1" /></label><label>Total de parcelas<input name="installments" type="number" min="1" defaultValue="1" /></label><label className="wide">Categoria financeira<select required name="financial_category_id" defaultValue={text(defaultCategory?.id)}><option value="">Selecione...</option>{receivableCategories.map(c => <option key={text(c.id)} value={text(c.id)}>{text(c.code)} · {text(c.name)} → {text(c.account_name)}</option>)}</select></label><label className="wide">Centro de custo<select name="cost_center_id" defaultValue={text(defaultCenter?.id)}><option value="">Automático pela filial</option>{activeCenters.map(c => <option key={text(c.id)} value={text(c.id)}>{text(c.code)} · {text(c.name)}{text(c.branch) ? ` · ${text(c.branch)}` : ''}</option>)}</select></label><label className="wide">Observação<textarea name="notes" rows={3} placeholder="Informações adicionais sobre a cobrança..." /></label></div><div className="recv2-cash-note"><b>Destino após quitação: Caixa Interno</b><span>A classificação gerencial alimenta DRE e relatórios; o recebimento continua fora do fechamento da sessão de caixa do PDV.</span></div><footer><button type="button" onClick={() => setCreateOpen(false)}>Cancelar</button><button className="recv2-primary" disabled={saving || !newCustomer || !defaultCategory}>{saving ? 'Salvando...' : 'Criar conta a receber'}</button></footer></form></section></div>}
+    {createOpen && <div className="recv2-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setCreateOpen(false); }}><section className="recv2-modal create"><header><div><span>NOVO LANÇAMENTO</span><h3>Conta a Receber</h3><p>Use exatamente os cadastros atuais de Categoria, Plano de Contas e Centro de Custo.</p></div><button type="button" onClick={() => setCreateOpen(false)}>×</button></header><form onSubmit={createReceivable}><div className="recv2-doc-switch"><button type="button" className={newDoc === 'boleto' ? 'active' : ''} onClick={() => setNewDoc('boleto')}><b>▤ Boleto</b><small>Elegível para Remessa / Retorno</small></button><button type="button" className={newDoc === 'crediario' ? 'active' : ''} onClick={() => setNewDoc('crediario')}><b>◫ Crediário</b><small>Exige Crédito em loja disponível</small></button></div><div className="recv2-form-grid"><label className="wide">Cliente<select required value={newCustomer} onChange={e => setNewCustomer(e.target.value)}><option value="">Selecione o cliente...</option>{activeCustomers.map(c => <option key={String(c.id)} value={String(c.id)}>{String(c.name)}{c.document ? ` · ${String(c.document)}` : ''}</option>)}</select></label>{newDoc === 'crediario' && <div className="recv2-credit-box wide"><span>Crédito em loja disponível</span><b>{money(selectedCustomer?.store_credit_balance)}</b><small>O lançamento só será gravado se houver saldo suficiente. A quitação recompõe este crédito.</small></div>}<label className="wide">Descrição<input name="description" required placeholder="Ex.: Mensalidade, serviço prestado, venda externa..." /></label><label>Referência / documento<input name="reference" placeholder="Ex.: OS 1254, contrato 18..." /></label><label>Valor<input name="amount" required type="number" min="0.01" step="0.01" placeholder="0,00" /></label><label>Data de emissão<input name="issued_at" type="date" defaultValue={today()} /></label><label>Vencimento<input name="due_date" required type="date" /></label><label>Parcela<input name="installment" type="number" min="1" defaultValue="1" /></label><label>Total de parcelas<input name="installments" type="number" min="1" defaultValue="1" /></label><label className="wide">Categoria financeira<select required name="financial_category_id" defaultValue={text(defaultCategory?.id)} onChange={e=>syncAccountFromCategory(e.currentTarget)}><option value="">Selecione...</option>{receivableCategories.map(c => <option key={text(c.id)} value={text(c.id)}>{text(c.code)} · {text(c.name)}</option>)}</select></label><label className="wide">Plano de Contas<select required name="chart_account_id" defaultValue={text(defaultAccount?.id)}><option value="">Selecione a conta analítica...</option>{postingAccounts.map(a=><option key={text(a.id)} value={text(a.id)}>{text(a.code)} · {text(a.name)}</option>)}</select></label><label className="wide">Centro de custo<select name="cost_center_id" defaultValue={text(defaultCenter?.id)}><option value="">Automático pela filial</option>{activeCenters.map(c => <option key={text(c.id)} value={text(c.id)}>{text(c.code)} · {text(c.name)}{text(c.branch) ? ` · ${text(c.branch)}` : ' · Corporativo'}</option>)}</select></label><label className="wide">Observação<textarea name="notes" rows={3} placeholder="Informações adicionais sobre a cobrança..." /></label></div><div className="recv2-cash-note"><b>Classificação financeira alinhada ao cadastro</b><span>A conta analítica é selecionável e a filial atual tem prioridade no Centro de Custo.</span></div><footer><button type="button" onClick={() => setCreateOpen(false)}>Cancelar</button><button className="recv2-primary" disabled={saving || !newCustomer || !defaultCategory || !defaultAccount}>{saving ? 'Salvando...' : 'Criar conta a receber'}</button></footer></form></section></div>}
 
-    {classifyTarget && <div className="recv2-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setClassifyTarget(null); }}><section className="recv2-modal create"><header><div><span>CLASSIFICAÇÃO GERENCIAL</span><h3>{text(classifyTarget.customer) || 'Conta a receber'}</h3><p>{text(classifyTarget.description)} · {money(classifyTarget.amount)}</p></div><button type="button" onClick={() => setClassifyTarget(null)}>×</button></header><form onSubmit={classifyReceivable}><div className="recv2-form-grid"><label className="wide">Categoria financeira<select required name="financial_category_id" defaultValue={text(classifyTarget.financial_category_id) || text(defaultCategory?.id)}><option value="">Selecione...</option>{receivableCategories.map(c => <option key={text(c.id)} value={text(c.id)}>{text(c.code)} · {text(c.name)} → {text(c.account_name)}</option>)}</select></label><label className="wide">Centro de custo<select name="cost_center_id" defaultValue={text(classifyTarget.cost_center_id) || text(defaultCenter?.id)}><option value="">Automático / manter atual</option>{activeCenters.map(c => <option key={text(c.id)} value={text(c.id)}>{text(c.code)} · {text(c.name)}{text(c.branch) ? ` · ${text(c.branch)}` : ''}</option>)}</select></label></div><div className="recv2-cash-note"><b>Conta gerencial derivada da categoria</b><span>Ao alterar a categoria, a conta vinculada a ela é aplicada automaticamente.</span></div><footer><button type="button" onClick={() => setClassifyTarget(null)}>Cancelar</button><button className="recv2-primary" disabled={saving}>{saving ? 'Salvando...' : 'Atualizar classificação'}</button></footer></form></section></div>}
+    {classifyTarget && <div className="recv2-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setClassifyTarget(null); }}><section className="recv2-modal create"><header><div><span>CLASSIFICAÇÃO GERENCIAL</span><h3>{text(classifyTarget.customer) || 'Conta a receber'}</h3><p>{text(classifyTarget.description)} · {money(classifyTarget.amount)}</p></div><button type="button" onClick={() => setClassifyTarget(null)}>×</button></header><form onSubmit={classifyReceivable}><div className="recv2-form-grid"><label className="wide">Categoria financeira<select required name="financial_category_id" defaultValue={text(classifyTarget.financial_category_id) || text(defaultCategory?.id)} onChange={e=>syncAccountFromCategory(e.currentTarget)}><option value="">Selecione...</option>{receivableCategories.map(c => <option key={text(c.id)} value={text(c.id)}>{text(c.code)} · {text(c.name)}</option>)}</select></label><label className="wide">Plano de Contas<select required name="chart_account_id" defaultValue={text(classifyTarget.chart_account_id) || text(defaultAccount?.id)}><option value="">Selecione...</option>{postingAccounts.map(a=><option key={text(a.id)} value={text(a.id)}>{text(a.code)} · {text(a.name)}</option>)}</select></label><label className="wide">Centro de custo<select name="cost_center_id" defaultValue={text(classifyTarget.cost_center_id) || text(defaultCenter?.id)}><option value="">Automático pela filial</option>{activeCenters.map(c => <option key={text(c.id)} value={text(c.id)}>{text(c.code)} · {text(c.name)}{text(c.branch) ? ` · ${text(c.branch)}` : ' · Corporativo'}</option>)}</select></label></div><div className="recv2-cash-note"><b>Conta analítica escolhida explicitamente</b><span>A categoria sugere uma conta padrão, mas a seleção final vem do Plano de Contas cadastrado.</span></div><footer><button type="button" onClick={() => setClassifyTarget(null)}>Cancelar</button><button className="recv2-primary" disabled={saving}>{saving ? 'Salvando...' : 'Atualizar classificação'}</button></footer></form></section></div>}
 
     {selected && <div className="recv2-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !settling) setSelected(null); }}><section className="recv2-modal settle"><header><div><span>RECEBIMENTO</span><h3>{String(selected.customer || 'Cliente')}</h3><p>{String(selected.description || '')} · saldo {money(selected.remaining)}</p></div><button type="button" onClick={() => setSelected(null)}>×</button></header><div className="recv2-form-grid"><label>Valor recebido<input type="number" min="0.01" max={Number(selected.remaining || 0)} step="0.01" value={settleAmount} onChange={e => setSettleAmount(Number(e.target.value))} /></label><label>Data<input type="date" value={settleDate} onChange={e => setSettleDate(e.target.value)} /></label><label>Forma<select value={method} onChange={e => setMethod(e.target.value)}>{methods.map(m => <option key={String(m.code)} value={String(m.code)}>{String(m.name || methodLabel(m.code))}</option>)}</select></label><div className="recv2-fixed-destination"><span>DESTINO</span><b>Caixa Interno</b><small>{String(internalCash?.name || 'Caixa Interno')} · fora do fechamento do PDV</small></div><label className="wide">Observação<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Comprovante, observação, referência..." /></label></div><footer><button type="button" onClick={() => setSelected(null)}>Cancelar</button><button className="recv2-primary" disabled={settling || settleAmount <= 0} onClick={() => void settle()}>{settling ? 'Registrando...' : settleAmount + 0.001 >= Number(selected.remaining || 0) ? 'Quitar título' : 'Registrar parcial'}</button></footer></section></div>}
 
