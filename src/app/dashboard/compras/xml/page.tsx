@@ -11,7 +11,7 @@ export default async function PurchaseXmlPage(){
   const [context,structure]=await Promise.all([purchaseXmlContext(),financialStructureGet()]);
   return <AdvancedShell
     title="Entrada de NF-e por XML"
-    subtitle="Leia a NF-e, confira fornecedor e produtos, converta unidades, defina preços e gere estoque + financeiro em uma única confirmação."
+    subtitle="Leia a NF-e, valide o destinatário da filial, confira produtos, conversões, preços e gere estoque + financeiro em uma única confirmação."
     activePath="/dashboard/compras/xml"
   >
     <PurchaseXmlWorkspace
@@ -23,7 +23,9 @@ export default async function PurchaseXmlPage(){
       chartAccounts={structure.accounts}
       costCenters={structure.cost_centers}
       currentBranchId={structure.current_branch_id||context.branch_id}
-      currentBranchName={structure.current_branch_name}
+      currentBranchName={structure.current_branch_name||context.branch_name}
+      currentBranchDocument={context.branch_document}
+      currentCompanyName={context.company_name}
     />
   </AdvancedShell>;
 }
