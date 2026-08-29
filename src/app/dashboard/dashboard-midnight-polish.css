@@ -1,0 +1,8 @@
+/* Midnight: keep card accents clean without the decorative circular halo. */
+.bi-stage.theme-midnight .bi-dot{
+  display:none;
+}
+
+.bi-stage.theme-midnight .bi-fresh>i{
+  box-shadow:none;
+}
