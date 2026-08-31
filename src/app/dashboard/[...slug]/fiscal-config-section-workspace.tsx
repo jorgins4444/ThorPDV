@@ -1,6 +1,7 @@
 'use client';
 
 import { FiscalConfigurationWorkspace } from './fiscal-configuration-workspace';
+import { CfopAutoRulesWorkspace } from './cfop-auto-rules-workspace';
 
 type Row=Record<string,unknown>;
 export type FiscalSection='emitente'|'nfce'|'series'|'caixas'|'danfe'|'cfops';
@@ -11,13 +12,15 @@ const labels:Record<FiscalSection,{eyebrow:string;title:string;desc:string}>={
   series:{eyebrow:'SÉRIES FISCAIS',title:'Séries e numeração',desc:'Controle as séries de NF-e e NFC-e e a sequência numérica reservada pelo servidor.'},
   caixas:{eyebrow:'CAIXAS × SÉRIE',title:'Vínculo fiscal dos caixas',desc:'Associe cada caixa ou PDV à sua série de NFC-e, preservando exclusividade e integridade da numeração.'},
   danfe:{eyebrow:'DANFE / IMPRESSÃO',title:'Layout do DANFE',desc:'Defina apresentação dos itens, casas decimais, ordenação e formação do nome do produto.'},
-  cfops:{eyebrow:'CFOPS',title:'Cadastro de CFOPs',desc:'Mantenha os CFOPs utilizados no cadastro tributário de produtos e operações fiscais.'},
+  cfops:{eyebrow:'CFOPS',title:'Cadastro de CFOPs e automação',desc:'Mantenha o catálogo geral de CFOPs e defina as regras que o ThorGestão utiliza para sugerir automaticamente o CFOP na emissão de NF-e.'},
 };
 
 export function FiscalConfigSectionWorkspace({settings,section}:{settings:Row;section:FiscalSection}){
   const info=labels[section];
+  const cfops=(Array.isArray(settings.cfops)?settings.cfops:[]) as Row[];
   return <div className={`fiscal-section-page fiscal-section-${section}`}>
     <section className="fiscal-section-intro"><div><span>{info.eyebrow}</span><h2>{info.title}</h2><p>{info.desc}</p></div></section>
     <FiscalConfigurationWorkspace initialSettings={settings}/>
+    {section==='cfops'&&<CfopAutoRulesWorkspace cfops={cfops}/>} 
   </div>;
 }
