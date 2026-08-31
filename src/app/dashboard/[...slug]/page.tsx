@@ -1,5 +1,8 @@
-import './erp.css';
-import './forms.css';
+import './module.css';
+import './advanced.css';
+import './price-table.css';
+import './sale.css';
+import './promotion.css';
 import './organization.css';
 import './fiscal.css';
 import './fiscal-configuration.css';
@@ -8,40 +11,30 @@ import './nfe-emission.css';
 import './fiscal-center.css';
 import './reconciliation.css';
 import './cash.css';
-import './products.css';
-import './stock.css';
-import './production.css';
-import './price-tables.css';
-import './audit.css';
 import './sales-cash.css';
-import './reports.css';
-import './purchase-xml.css';
-import { erpLoad } from './actions';
-import { AdvancedShell } from './advanced-shell';
+import './management-audit.css';
+import './operator-admin.css';
+import './pdv-profile.css';
+import './product-workspace.css';
+import './product-master.css';
+import './production.css';
+import './branch-config.css';
+import './branches-workspace.css';
+import './receivables-print-fix.css';
 import { ModuleClient } from './module-client';
-import { ProductMasterWorkspace } from './product-master-workspace';
-import { ProductionWorkspace } from './production-workspace';
-import { erpProductionOrders } from './production-actions';
-import { ManagementAuditWorkspace } from './management-audit-workspace';
-import { erpManagementAudit } from './audit-actions';
-import { SalesCashWorkspace } from './sales-cash-workspace';
-import { SaleWorkspace } from './sale-workspace-v070';
-import { PdvProfileWorkspace } from './pdv-profile-workspace';
-import { OperatorWorkspace } from './operator-workspace';
-import { listPdvOperators } from './operator-actions';
-import { PromotionWorkspace } from './promotion-workspace';
-import { PriceAdjustmentWorkspace } from './price-adjustment-workspace';
-import { StockWorkspace } from './stock-workspace';
-import { StockTransferClient } from './stock-transfer-client';
-import { InventoryClient } from './inventory-client';
+import { AdvancedShell } from './advanced-shell';
+import { InventoryClient, ReportsClient, StockTransferClient } from './advanced-clients';
 import { PriceTableWorkspace } from './price-table-workspace';
+import { PriceAdjustmentWorkspace } from './price-adjustment-workspace';
+import { PromotionWorkspace } from './promotion-workspace';
+import { SaleWorkspace } from './sale-workspace';
+import { StockWorkspace } from './stock-workspace';
 import { HeadquartersWorkspace } from './headquarters-workspace';
 import { headquartersGet } from './headquarters-actions';
-import { BranchesWorkspace } from './branches-workspace';
-import { erpLicenseGet } from './branch-license-actions';
 import { BranchConfigWorkspace } from './branch-config-workspace';
+import { BranchesWorkspace } from './branches-workspace';
+import { erpLicenseGet } from './license-actions';
 import { SmartPosPairingPanel } from './smartpos-pairing-panel';
-import { CashWorkspace } from './cash-workspace';
 import { FiscalCenterWorkspace } from './fiscal-center-workspace';
 import { FiscalConfigSectionWorkspace, type FiscalSection } from './fiscal-config-section-workspace';
 import { FiscalCertificateWorkspace } from './fiscal-certificate-workspace';
@@ -49,32 +42,40 @@ import { FiscalDocumentsWorkspace } from './fiscal-documents-workspace';
 import { NfeEmissionWorkspace } from './nfe-emission-workspace';
 import { erpFiscalDocuments } from './fiscal-transmit-actions';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
+import { CashWorkspace } from './cash-workspace';
+import { SalesCashWorkspace } from './sales-cash-workspace';
+import { ManagementAuditWorkspace } from './management-audit-workspace';
+import { OperatorWorkspace } from './operator-workspace';
+import { PdvProfileWorkspace } from './pdv-profile-workspace';
+import { ProductMasterWorkspace } from './product-master-workspace';
+import { ProductionWorkspace } from './production-workspace';
 import { reconciliationData } from './reconciliation-actions';
-import { ReportsClient } from './reports-client';
-import { erpFiscalSettingsGet } from './fiscal-settings-actions';
-import { erpProductList } from './product-actions';
-import { PurchaseXmlWorkspace } from './purchase-xml-workspace';
-import { purchaseXmlContext } from './purchase-xml-actions';
-import { financialStructureGet } from './financial-structure-actions';
+import { listPdvOperators } from './operator-actions';
+import { erpFiscalSettingsGet, erpLoad, erpManagementAudit, erpProductList, erpProductionOrders } from './actions';
 
-const resourceBySlug:Record<string,string>={
-  produtos:'products',clientes:'customers',fornecedores:'suppliers',grupos:'groups',classes:'classes',marcas:'brands','produtos/unidades':'units','produtos/atributos':'attributes',
-  'tabelas-precos':'price_tables','tabelas-precos/copiar':'price_tables',promocoes:'promotions',
-  estoque:'stock_movements','estoque/nova':'stock_movements','estoque/ajustes':'stock_movements','estoque/transferencias':'stock_movements','estoque/inventario':'stock_movements',
-  vendas:'sales','vendas/nova':'sales','pedidos-venda':'sales_orders',
-  compras:'purchases','compras/xml':'purchases','contas-receber':'receivables','contas-pagar':'payables',
-  'financeiro/contas':'financial_accounts','financeiro/conciliacao':'reconciliation','financeiro/plano-contas':'financial_chart_accounts','financeiro/categorias':'financial_categories','financeiro/centros-custo':'cost_centers',
-  'administrativo/filiais':'branches','administrativo/empresas':'companies','usuarios-pdv':'pdv_users','perfis-pdv':'profiles_pdv',
-  'documentos-fiscais':'fiscal_documents',configuracoes:'settings',
+const resourceBySlug: Record<string, string> = {
+  'clientes': 'customers', 'clientes/novo': 'customers', 'fornecedores': 'suppliers',
+  'perfis-pdv': 'profiles_pdv', 'usuarios-pdv': 'users_pdv', 'perfis-adm': 'profiles_adm', 'usuarios-adm': 'users_adm',
+  'produtos': 'products', 'produtos/novo': 'products', 'grupos': 'groups', 'classes': 'classes', 'modificadores': 'modifiers',
+  'tabelas-precos': 'price_tables', 'tabelas-precos/copiar': 'price_tables', 'tabelas-precos/ajustes': 'price_adjustments', 'promocoes': 'promotions',
+  'estoque': 'stock', 'estoque/nova': 'stock', 'estoque/inventario': 'inventory_counts', 'estoque/ajustes': 'stock', 'estoque/transferencias': 'stock', 'estoque/producao':'products',
+  'financeiro/receber': 'finance', 'financeiro/receber/novo': 'finance', 'financeiro/pagar': 'finance', 'financeiro/pagar/novo': 'finance',
+  'financeiro/fluxo-caixa': 'report_finance', 'financeiro/conciliacao': 'finance',
+  'administrativo/empresas': 'companies', 'administrativo/filiais': 'branches', 'administrativo/pdvs': 'pos_registers',
+  'fiscal': 'branches', 'fiscal/emitente':'branches', 'fiscal/nfce-config':'branches', 'fiscal/series':'branches', 'fiscal/caixas':'branches', 'fiscal/danfe':'branches', 'fiscal/cfops':'branches', 'fiscal/certificado':'branches',
+  'documentos-fiscais':'fiscal_documents', 'fiscal/nfe':'fiscal_documents', 'fiscal/nfce':'fiscal_documents', 'integracoes': 'integrations', 'configuracoes': 'branches',
+  'relatorios/financeiro': 'report_finance', 'relatorios/vendas': 'report_sales', 'relatorios/estoque': 'report_stock', 'relatorios/listagens': 'products',
+  'atendimento': 'tickets', 'atendimento/mensagens': 'tickets', 'atendimento/sla': 'tickets',
+  'vendas': 'sales', 'vendas/nova': 'sales', 'pdv/caixa': 'pos_registers', 'ajuda': 'companies',
 };
 
-const fiscalSectionBySlug:Record<string,{title:string;subtitle:string;section:FiscalSection}>={
-  'fiscal/emitente':{title:'Emitente Fiscal',subtitle:'Dados cadastrais e fiscais utilizados na emissão.',section:'issuer'},
-  'fiscal/nfce-config':{title:'NFC-e / CSC',subtitle:'Ambiente, CSC e parâmetros de segurança da NFC-e.',section:'nfce'},
-  'fiscal/series':{title:'Séries e Numeração',subtitle:'Séries ativas de NF-e e NFC-e e sequência fiscal.',section:'series'},
-  'fiscal/caixas':{title:'Caixas × Série',subtitle:'Vincule terminais/PDVs às séries NFC-e exclusivas.',section:'pos'},
-  'fiscal/danfe':{title:'DANFE / Impressão',subtitle:'Parâmetros de impressão e formação da descrição dos produtos.',section:'danfe'},
-  'fiscal/cfops':{title:'CFOPs',subtitle:'Tabela de CFOPs disponíveis no cadastro e nas operações fiscais.',section:'cfops'},
+const fiscalSectionBySlug:Record<string,{section:FiscalSection;title:string;subtitle:string}>={
+  'fiscal/emitente':{section:'emitente',title:'Emitente Fiscal',subtitle:'Dados cadastrais e fiscais da Matriz utilizados na emissão de NF-e e NFC-e.'},
+  'fiscal/nfce-config':{section:'nfce',title:'NFC-e / CSC',subtitle:'Ambiente de emissão, ID CSC e token de segurança fornecido pela SEFAZ.'},
+  'fiscal/series':{section:'series',title:'Séries e Numeração',subtitle:'Séries fiscais de NF-e e NFC-e, sequência numérica, status e série padrão.'},
+  'fiscal/caixas':{section:'caixas',title:'Caixas × Série Fiscal',subtitle:'Vincule cada terminal do PDV à série correta de NFC-e com exclusividade de numeração.'},
+  'fiscal/danfe':{section:'danfe',title:'DANFE / Impressão',subtitle:'Parâmetros de apresentação e impressão dos itens no documento auxiliar.'},
+  'fiscal/cfops':{section:'cfops',title:'CFOPs',subtitle:'Cadastro e manutenção dos CFOPs utilizados em produtos e operações fiscais.'},
 };
 
 export default async function ModulePage({ params }: { params: Promise<{ slug: string[] }> }) {
@@ -144,10 +145,6 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
     const [settings,sales,documents]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments()]);
     const initialType=slug.endsWith('/nfce')?'nfce':'all';
     return <AdvancedShell title="Documentos Fiscais" subtitle="Emissão e acompanhamento de NF-e e NFC-e, status SEFAZ, protocolos, XML, DANFE e cancelamentos." activePath="/dashboard/documentos-fiscais"><FiscalDocumentsWorkspace initialDocs={documents.data} sales={sales.data} settings={(settings.settings??{}) as Record<string,unknown>} initialType={initialType}/></AdvancedShell>;
-  }
-  if (slug === 'compras/xml') {
-    const [context,structure]=await Promise.all([purchaseXmlContext(),financialStructureGet()]);
-    return <AdvancedShell title="Entrada NF-e por XML" subtitle="Importe XML da NF-e, valide destinatário, converta unidades, defina preços e gere estoque e financeiro." activePath="/dashboard/compras/xml"><PurchaseXmlWorkspace context={context} categories={structure.categories} chartAccounts={structure.chart_accounts} costCenters={structure.cost_centers}/></AdvancedShell>;
   }
   if (slug === 'financeiro/conciliacao') {
     const reconciliation = await reconciliationData();
