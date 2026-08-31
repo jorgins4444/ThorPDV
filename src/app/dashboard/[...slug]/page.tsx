@@ -7,6 +7,7 @@ import './organization.css';
 import './fiscal.css';
 import './fiscal-configuration.css';
 import './fiscal-documents.css';
+import './nfe-emission.css';
 import './fiscal-center.css';
 import './reconciliation.css';
 import './cash.css';
@@ -38,6 +39,7 @@ import { FiscalCenterWorkspace } from './fiscal-center-workspace';
 import { FiscalConfigSectionWorkspace, type FiscalSection } from './fiscal-config-section-workspace';
 import { FiscalCertificateWorkspace } from './fiscal-certificate-workspace';
 import { FiscalDocumentsWorkspace } from './fiscal-documents-workspace';
+import { NfeEmissionWorkspace } from './nfe-emission-workspace';
 import { erpFiscalDocuments } from './fiscal-transmit-actions';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
 import { CashWorkspace } from './cash-workspace';
@@ -135,9 +137,13 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
     const settings=await erpFiscalSettingsGet();
     return <AdvancedShell title="Certificado Digital A1" subtitle="Certificado utilizado para assinatura fiscal e comunicação segura com a SEFAZ." activePath="/dashboard/fiscal/certificado" backHref="/dashboard/fiscal" backLabel="Fiscal"><FiscalCertificateWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
   }
-  if (slug === 'documentos-fiscais' || slug === 'fiscal/nfe' || slug === 'fiscal/nfce') {
+  if (slug === 'fiscal/nfe') {
     const [settings,sales,documents]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments()]);
-    const initialType=slug.endsWith('/nfce')?'nfce':slug.endsWith('/nfe')?'nfe':'all';
+    return <AdvancedShell title="Emissão de NF-e" subtitle="NF-e modelo 55 integrada às vendas, com validação fiscal, certificado A1, série, numeração e acompanhamento SEFAZ." activePath="/dashboard/fiscal/nfe" backHref="/dashboard/fiscal" backLabel="Fiscal"><NfeEmissionWorkspace documents={documents.data as Record<string,unknown>[]} sales={sales.data as Record<string,unknown>[]} settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
+  }
+  if (slug === 'documentos-fiscais' || slug === 'fiscal/nfce') {
+    const [settings,sales,documents]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments()]);
+    const initialType=slug.endsWith('/nfce')?'nfce':'all';
     return <AdvancedShell title="Documentos Fiscais" subtitle="Emissão e acompanhamento de NF-e e NFC-e, status SEFAZ, protocolos, XML, DANFE e cancelamentos." activePath="/dashboard/documentos-fiscais"><FiscalDocumentsWorkspace initialDocs={documents.data} sales={sales.data} settings={(settings.settings??{}) as Record<string,unknown>} initialType={initialType}/></AdvancedShell>;
   }
   if (slug === 'financeiro/conciliacao') {
