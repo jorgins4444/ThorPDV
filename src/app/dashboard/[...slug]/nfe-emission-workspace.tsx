@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FiscalDocumentsWorkspace } from './fiscal-documents-workspace';
-import { fiscalPrepareV2, nfeManualDraftCreate } from './fiscal-config-actions';
+import { fiscalCfopRulesGet, fiscalPrepareV2, nfeManualDraftCreate } from './fiscal-config-actions';
+import { cfopPrefixForScope, destinationScope, resolveCfopClient, scopeLabel } from './nfe-cfop-engine';
 import { erpFiscalDocuments } from './fiscal-transmit-actions';
 
 type Row = Record<string, unknown>;
@@ -22,6 +23,9 @@ type ManualItem = {
   ncm: string;
   cest: string;
   cfop: string;
+  cfop_default: string;
+  cfop_manual: boolean;
+  cfop_reason: string;
   origin: string;
   icms_code: string;
   pis_cst: string;
@@ -89,6 +93,9 @@ function productToItem(product: Row): ManualItem {
     ncm: digits(product.ncm || fiscal.ncm),
     cest: digits(product.cest || fiscal.cest),
     cfop: digits(product.cfop_default || fiscal.cfop || fiscal.cfop_default),
+    cfop_default: digits(product.cfop_default || fiscal.cfop || fiscal.cfop_default),
+    cfop_manual: false,
+    cfop_reason: 'Aguardando identificação do destino da operação.',
     origin: txt(product.origin ?? fiscal.origin ?? fiscal.origem ?? 0),
     icms_code: txt(icms.cst || icms.csosn || fiscal.icms_cst || fiscal.csosn),
     pis_cst: txt(pis.cst || fiscal.pis_cst),
@@ -99,7 +106,7 @@ function productToItem(product: Row): ManualItem {
 function blankItem(): ManualItem {
   return {
     key: newKey(), product_id: '', code: '', description: '', unit: 'UN', quantity: '1', unit_price: '0', discount: '0',
-    ncm: '', cest: '', cfop: '', origin: '0', icms_code: '', pis_cst: '', cofins_cst: '',
+    ncm: '', cest: '', cfop: '', cfop_default: '', cfop_manual: false, cfop_reason: 'Aguardando identificação do destino da operação.', origin: '0', icms_code: '', pis_cst: '', cofins_cst: '',
   };
 }
 
@@ -134,12 +141,18 @@ export function NfeEmissionWorkspace({ settings, documents, sales, customers, pr
   const [other, setOther] = useState('0');
   const [additionalInfo, setAdditionalInfo] = useState('');
   const [manualSuccess, setManualSuccess] = useState<Row | null>(null);
+  const [cfopRules, setCfopRules] = useState<Row[]>([]);
 
   const readiness = isObject(settings.fiscal_readiness) ? settings.fiscal_readiness : {};
   const issuer = isObject(settings.issuer) ? settings.issuer : {};
   const certificate = isObject(settings.certificate) ? settings.certificate : null;
   const series = Array.isArray(settings.series) ? settings.series.filter(isObject) : [];
   const nfeSeries = series.filter((row) => row.document_type === 'nfe' && row.active !== false);
+  const cfops = (Array.isArray(settings.cfops) ? settings.cfops : []) as Row[];
+  const emitterState = txt(issuer.state).toUpperCase();
+  const currentScope = destinationScope(emitterState, recipient.state);
+  const currentPrefix = cfopPrefixForScope(currentScope);
+  const cfopOptions = cfops.filter((row) => row.active !== false && ['5','6','7'].includes(txt(row.code).slice(0,1)) && (!currentPrefix || txt(row.code).startsWith(currentPrefix)));
   const missing = Array.isArray(readiness.missing_fields) ? readiness.missing_fields.map(txt).filter(Boolean) : [];
   const baseReady = readiness.ready === true;
   const nfeNumberingReady = nfeSeries.length > 0;
@@ -152,6 +165,24 @@ export function NfeEmissionWorkspace({ settings, documents, sales, customers, pr
   const productsTotal = useMemo(() => items.reduce((sum, item) => sum + Math.max(num(item.quantity) * num(item.unit_price) - num(item.discount), 0), 0), [items]);
   const grandTotal = productsTotal + num(freight) + num(insurance) + num(other);
   const documentKey = `${docs.length}-${txt(docs[0]?.id)}`;
+
+  useEffect(() => {
+    let mounted = true;
+    void fiscalCfopRulesGet().then((result) => {
+      if (mounted && result.ok && Array.isArray(result.data)) setCfopRules(result.data as Row[]);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    setItems((current) => current.map((item) => {
+      if (item.cfop_manual) return item;
+      const resolution = resolveCfopClient({
+        rules: cfopRules, cfops, productCfop: item.cfop_default, purpose, presence, emitterState, recipientState: recipient.state, consumerFinal, indicatorIe: recipient.indicator_ie,
+      });
+      return { ...item, cfop: resolution.code || item.cfop_default, cfop_reason: resolution.reason };
+    }));
+  }, [purpose, presence, consumerFinal, recipient.state, recipient.indicator_ie, emitterState, cfopRules, cfops, items.length]);
 
   function fillCustomer(id: string) {
     setCustomerId(id);
@@ -174,7 +205,15 @@ export function NfeEmissionWorkspace({ settings, documents, sales, customers, pr
   }
 
   function updateItem(key: string, field: keyof ManualItem, value: string) {
-    setItems((current) => current.map((item) => item.key === key ? { ...item, [field]: value } : item));
+    setItems((current) => current.map((item) => item.key === key ? { ...item, [field]: value, ...(field === 'cfop' ? { cfop_manual: true, cfop_reason: 'CFOP alterado manualmente a partir do catálogo geral.' } : {}) } : item));
+  }
+
+  function resetItemCfop(key: string) {
+    setItems((current) => current.map((item) => {
+      if (item.key !== key) return item;
+      const resolution = resolveCfopClient({ rules: cfopRules, cfops, productCfop: item.cfop_default, purpose, presence, emitterState, recipientState: recipient.state, consumerFinal, indicatorIe: recipient.indicator_ie });
+      return { ...item, cfop_manual: false, cfop: resolution.code || item.cfop_default, cfop_reason: resolution.reason };
+    }));
   }
 
   async function refreshDocuments() {
@@ -264,7 +303,7 @@ export function NfeEmissionWorkspace({ settings, documents, sales, customers, pr
             <label className="wide">Natureza da operação<input value={natureOperation} onChange={(e) => setNatureOperation(e.target.value)} placeholder="Ex.: Venda de mercadoria" /></label>
             <label>Série<select value={seriesId} onChange={(e) => setSeriesId(e.target.value)}><option value="">Série padrão</option>{nfeSeries.map((row) => <option key={txt(row.id)} value={txt(row.id)}>Série {txt(row.series)}{row.is_default ? ' · padrão' : ''}</option>)}</select></label>
             <label>Finalidade<select value={purpose} onChange={(e) => setPurpose(e.target.value)}><option value="1">1 · Normal</option><option value="2">2 · Complementar</option><option value="3">3 · Ajuste</option><option value="4">4 · Devolução/Retorno</option></select></label>
-            <label>Presença do comprador<select value={presence} onChange={(e) => setPresence(e.target.value)}><option value="0">Não se aplica</option><option value="1">Operação presencial</option><option value="2">Internet</option><option value="3">Teleatendimento</option><option value="9">Outros</option></select></label>
+            <label>Presença do comprador<select value={presence} onChange={(e) => setPresence(e.target.value)}><option value="0">Não se aplica</option><option value="1">Operação presencial</option><option value="2">Não presencial · Internet</option><option value="3">Não presencial · Teleatendimento</option><option value="5">Presencial · fora do estabelecimento</option><option value="9">Não presencial · outros</option></select></label>
             <label className="nfe-check"><input type="checkbox" checked={consumerFinal} onChange={(e) => setConsumerFinal(e.target.checked)} /><span>Consumidor final</span></label>
           </div><div className="nfe-step-footer"><span></span><button className="nfe-primary" onClick={() => setManualStep('recipient')}>Continuar →</button></div></div>}
 
@@ -275,9 +314,9 @@ export function NfeEmissionWorkspace({ settings, documents, sales, customers, pr
             <label>Código IBGE<input value={recipient.ibge_city_code} onChange={(e) => setRecipient({ ...recipient, ibge_city_code: e.target.value })} /></label><label>Indicador IE<select value={recipient.indicator_ie} onChange={(e) => setRecipient({ ...recipient, indicator_ie: e.target.value })}><option value="1">Contribuinte ICMS</option><option value="2">Contribuinte isento</option><option value="9">Não contribuinte</option></select></label><label className="span2">E-mail<input value={recipient.email} onChange={(e) => setRecipient({ ...recipient, email: e.target.value })} /></label>
           </div><div className="nfe-step-footer"><button className="nfe-secondary" onClick={() => setManualStep('data')}>← Voltar</button><button className="nfe-primary" onClick={() => setManualStep('items')}>Continuar →</button></div></div>}
 
-          {manualStep === 'items' && <div className="nfe-step-panel"><div className="nfe-section-head compact"><div><span>PRODUTOS</span><h3>Itens da NF-e</h3><p>Carregue produtos do cadastro ou inclua uma linha em branco.</p></div><strong className="nfe-total-chip">Produtos: {money(productsTotal)}</strong></div><div className="nfe-add-line"><select value={productId} onChange={(e) => setProductId(e.target.value)}><option value="">Linha em branco / selecione produto</option>{activeProducts.map((product) => <option key={txt(product.id)} value={txt(product.id)}>{txt(product.sku)} · {txt(product.name)} · {money(product.sale_price)}</option>)}</select><button className="nfe-secondary" onClick={addProduct}>+ Adicionar item</button></div><div className="nfe-items-list">{items.length === 0 ? <div className="nfe-empty-state">Nenhum produto incluído.</div> : items.map((item, index) => <article className="nfe-item-card" key={item.key}><header><b>Item {index + 1}</b><button onClick={() => setItems((current) => current.filter((row) => row.key !== item.key))}>Remover</button></header><div className="nfe-form-grid six"><label className="span2">Descrição<input value={item.description} onChange={(e) => updateItem(item.key, 'description', e.target.value)} /></label><label>Código<input value={item.code} onChange={(e) => updateItem(item.key, 'code', e.target.value)} /></label><label>Unidade<input value={item.unit} onChange={(e) => updateItem(item.key, 'unit', e.target.value)} /></label><label>Quantidade<input type="number" step="0.001" value={item.quantity} onChange={(e) => updateItem(item.key, 'quantity', e.target.value)} /></label><label>Valor unitário<input type="number" step="0.01" value={item.unit_price} onChange={(e) => updateItem(item.key, 'unit_price', e.target.value)} /></label><label>Desconto<input type="number" step="0.01" value={item.discount} onChange={(e) => updateItem(item.key, 'discount', e.target.value)} /></label><label>NCM<input value={item.ncm} onChange={(e) => updateItem(item.key, 'ncm', e.target.value)} /></label><label>CEST<input value={item.cest} onChange={(e) => updateItem(item.key, 'cest', e.target.value)} /></label><label>CFOP<input value={item.cfop} onChange={(e) => updateItem(item.key, 'cfop', e.target.value)} /></label><div className="nfe-line-total"><span>Total do item</span><strong>{money(Math.max(num(item.quantity) * num(item.unit_price) - num(item.discount), 0))}</strong></div></div></article>)}</div><div className="nfe-step-footer"><button className="nfe-secondary" onClick={() => setManualStep('recipient')}>← Voltar</button><button className="nfe-primary" onClick={() => setManualStep('taxes')}>Continuar →</button></div></div>}
+          {manualStep === 'items' && <div className="nfe-step-panel"><div className="nfe-section-head compact"><div><span>PRODUTOS</span><h3>Itens da NF-e</h3><p>Carregue produtos do cadastro ou inclua uma linha em branco.</p></div><strong className="nfe-total-chip">Produtos: {money(productsTotal)}</strong></div><div className="nfe-add-line"><select value={productId} onChange={(e) => setProductId(e.target.value)}><option value="">Linha em branco / selecione produto</option>{activeProducts.map((product) => <option key={txt(product.id)} value={txt(product.id)}>{txt(product.sku)} · {txt(product.name)} · {money(product.sale_price)}</option>)}</select><button className="nfe-secondary" onClick={addProduct}>+ Adicionar item</button></div><div className="nfe-items-list">{items.length === 0 ? <div className="nfe-empty-state">Nenhum produto incluído.</div> : items.map((item, index) => <article className="nfe-item-card" key={item.key}><header><b>Item {index + 1}</b><button onClick={() => setItems((current) => current.filter((row) => row.key !== item.key))}>Remover</button></header><div className="nfe-form-grid six"><label className="span2">Descrição<input value={item.description} onChange={(e) => updateItem(item.key, 'description', e.target.value)} /></label><label>Código<input value={item.code} onChange={(e) => updateItem(item.key, 'code', e.target.value)} /></label><label>Unidade<input value={item.unit} onChange={(e) => updateItem(item.key, 'unit', e.target.value)} /></label><label>Quantidade<input type="number" step="0.001" value={item.quantity} onChange={(e) => updateItem(item.key, 'quantity', e.target.value)} /></label><label>Valor unitário<input type="number" step="0.01" value={item.unit_price} onChange={(e) => updateItem(item.key, 'unit_price', e.target.value)} /></label><label>Desconto<input type="number" step="0.01" value={item.discount} onChange={(e) => updateItem(item.key, 'discount', e.target.value)} /></label><label>NCM<input value={item.ncm} onChange={(e) => updateItem(item.key, 'ncm', e.target.value)} /></label><label>CEST<input value={item.cest} onChange={(e) => updateItem(item.key, 'cest', e.target.value)} /></label><label>CFOP<select value={item.cfop} onChange={(e) => updateItem(item.key, 'cfop', e.target.value)}><option value="">Selecione...</option>{cfopOptions.map((row) => <option key={txt(row.id)} value={txt(row.code)}>{txt(row.code)} · {txt(row.name)}</option>)}</select><small>{item.cfop_reason || `Destino: ${scopeLabel(currentScope)}`}</small>{item.cfop_manual && <button type="button" className="nfe-cfop-auto-reset" onClick={() => resetItemCfop(item.key)}>Usar automático</button>}</label><div className="nfe-line-total"><span>Total do item</span><strong>{money(Math.max(num(item.quantity) * num(item.unit_price) - num(item.discount), 0))}</strong></div></div></article>)}</div><div className="nfe-step-footer"><button className="nfe-secondary" onClick={() => setManualStep('recipient')}>← Voltar</button><button className="nfe-primary" onClick={() => setManualStep('taxes')}>Continuar →</button></div></div>}
 
-          {manualStep === 'taxes' && <div className="nfe-step-panel"><div className="nfe-section-head compact"><div><span>TRIBUTAÇÃO</span><h3>Classificação fiscal por item</h3><p>Os valores carregados do produto continuam editáveis para a operação atual.</p></div></div><div className="nfe-items-list">{items.length === 0 ? <div className="nfe-empty-state">Inclua produtos antes de revisar a tributação.</div> : items.map((item, index) => <article className="nfe-item-card tax" key={item.key}><header><div><b>{index + 1}. {item.description || 'Item sem descrição'}</b><small>NCM {item.ncm || '—'} · CFOP {item.cfop || '—'}</small></div></header><div className="nfe-form-grid five"><label>Origem<select value={item.origin} onChange={(e) => updateItem(item.key, 'origin', e.target.value)}>{Array.from({ length: 9 }, (_, i) => <option value={String(i)} key={i}>{i}</option>)}</select></label><label>ICMS CST / CSOSN<input value={item.icms_code} onChange={(e) => updateItem(item.key, 'icms_code', e.target.value)} placeholder="Ex.: 00 ou 102" /></label><label>PIS CST<input value={item.pis_cst} onChange={(e) => updateItem(item.key, 'pis_cst', e.target.value)} placeholder="Ex.: 01" /></label><label>COFINS CST<input value={item.cofins_cst} onChange={(e) => updateItem(item.key, 'cofins_cst', e.target.value)} placeholder="Ex.: 01" /></label><label>CFOP<input value={item.cfop} onChange={(e) => updateItem(item.key, 'cfop', e.target.value)} /></label></div></article>)}</div><div className="nfe-note">As alíquotas e demais campos detalhados do perfil fiscal continuam preservados no cadastro do produto. Esta etapa deixa visíveis os classificadores principais da operação.</div><div className="nfe-step-footer"><button className="nfe-secondary" onClick={() => setManualStep('items')}>← Voltar</button><button className="nfe-primary" onClick={() => setManualStep('transport')}>Continuar →</button></div></div>}
+          {manualStep === 'taxes' && <div className="nfe-step-panel"><div className="nfe-section-head compact"><div><span>TRIBUTAÇÃO</span><h3>Classificação fiscal por item</h3><p>Os valores carregados do produto continuam editáveis para a operação atual.</p></div></div><div className="nfe-items-list">{items.length === 0 ? <div className="nfe-empty-state">Inclua produtos antes de revisar a tributação.</div> : items.map((item, index) => <article className="nfe-item-card tax" key={item.key}><header><div><b>{index + 1}. {item.description || 'Item sem descrição'}</b><small>NCM {item.ncm || '—'} · CFOP {item.cfop || '—'}</small></div></header><div className="nfe-form-grid five"><label>Origem<select value={item.origin} onChange={(e) => updateItem(item.key, 'origin', e.target.value)}>{Array.from({ length: 9 }, (_, i) => <option value={String(i)} key={i}>{i}</option>)}</select></label><label>ICMS CST / CSOSN<input value={item.icms_code} onChange={(e) => updateItem(item.key, 'icms_code', e.target.value)} placeholder="Ex.: 00 ou 102" /></label><label>PIS CST<input value={item.pis_cst} onChange={(e) => updateItem(item.key, 'pis_cst', e.target.value)} placeholder="Ex.: 01" /></label><label>COFINS CST<input value={item.cofins_cst} onChange={(e) => updateItem(item.key, 'cofins_cst', e.target.value)} placeholder="Ex.: 01" /></label><label>CFOP<select value={item.cfop} onChange={(e) => updateItem(item.key, 'cfop', e.target.value)}><option value="">Selecione...</option>{cfopOptions.map((row) => <option key={txt(row.id)} value={txt(row.code)}>{txt(row.code)} · {txt(row.name)}</option>)}</select><small>{item.cfop_reason || `Destino: ${scopeLabel(currentScope)}`}</small>{item.cfop_manual && <button type="button" className="nfe-cfop-auto-reset" onClick={() => resetItemCfop(item.key)}>Usar automático</button>}</label></div></article>)}</div><div className="nfe-note"><b>CFOP automático:</b> o Thor cruza finalidade, presença, consumidor final e UF do destinatário com as regras cadastradas em Fiscal → CFOPs. Se não houver regra, tenta manter o CFOP padrão do produto ou localizar o equivalente 5.xxx/6.xxx/7.xxx no catálogo geral. A troca manual continua disponível por item.</div><div className="nfe-step-footer"><button className="nfe-secondary" onClick={() => setManualStep('items')}>← Voltar</button><button className="nfe-primary" onClick={() => setManualStep('transport')}>Continuar →</button></div></div>}
 
           {manualStep === 'transport' && <div className="nfe-step-panel"><div className="nfe-section-head compact"><div><span>TRANSPORTE</span><h3>Frete e transportadora</h3></div></div><div className="nfe-form-grid four"><label>Modalidade do frete<select value={freightMode} onChange={(e) => setFreightMode(e.target.value)}><option value="0">0 · Emitente</option><option value="1">1 · Destinatário</option><option value="2">2 · Terceiros</option><option value="3">3 · Próprio por conta do emitente</option><option value="4">4 · Próprio por conta do destinatário</option><option value="9">9 · Sem transporte</option></select></label><label className="span2">Transportadora<input value={carrier.name} onChange={(e) => setCarrier({ ...carrier, name: e.target.value })} /></label><label>CNPJ/CPF<input value={carrier.document} onChange={(e) => setCarrier({ ...carrier, document: e.target.value })} /></label><label>IE<input value={carrier.state_registration} onChange={(e) => setCarrier({ ...carrier, state_registration: e.target.value })} /></label><label>Placa<input value={carrier.plate} onChange={(e) => setCarrier({ ...carrier, plate: e.target.value.toUpperCase() })} /></label><label>UF veículo<input maxLength={2} value={carrier.state} onChange={(e) => setCarrier({ ...carrier, state: e.target.value.toUpperCase() })} /></label></div><div className="nfe-step-footer"><button className="nfe-secondary" onClick={() => setManualStep('taxes')}>← Voltar</button><button className="nfe-primary" onClick={() => setManualStep('billing')}>Continuar →</button></div></div>}
 
