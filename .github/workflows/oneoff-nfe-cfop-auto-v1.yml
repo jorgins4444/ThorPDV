@@ -1,0 +1,32 @@
+name: One-off NF-e CFOP automation v1
+
+on:
+  push:
+    paths:
+      - '.github/scripts/patch-nfe-cfop-auto-v1.py'
+      - '.github/workflows/oneoff-nfe-cfop-auto-v1.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply CFOP automation to NF-e workspace
+        run: python3 .github/scripts/patch-nfe-cfop-auto-v1.py
+      - name: Validate project
+        run: |
+          npm install
+          npm run typecheck
+          npm run build
+          npm run lint
+      - name: Commit patch
+        run: |
+          git config user.name "ThorPDV Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/app/dashboard/'[...slug]'/nfe-emission-workspace.tsx src/app/dashboard/'[...slug]'/nfe-emission.css
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat(fiscal): automate CFOP selection in NF-e emission"
+          git push
