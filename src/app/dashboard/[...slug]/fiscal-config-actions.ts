@@ -21,3 +21,11 @@ export async function fiscalPrepareV2(saleId:string,documentType:'nfe'|'nfce',se
   }
   return result;
 }
+export async function nfeManualDraftCreate(payload:Record<string,unknown>){
+  const result=await rpc('erp_nfe_manual_draft_create',{p_token:await token(),p_payload:payload});
+  if(result.error==='fiscal_preflight_failed'||result.error==='fiscal_configuration_incomplete'){
+    const validation=Array.isArray(result.validation_errors)?result.validation_errors.map(v=>String(v)).filter(Boolean):[];
+    return {...result,error_code:String(result.error),error:validation.length?validation.join(' · '):'Revise os dados fiscais antes de criar o rascunho da NF-e.'};
+  }
+  return result;
+}
