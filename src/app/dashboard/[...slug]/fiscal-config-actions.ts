@@ -13,4 +13,11 @@ export async function fiscalSettingsSave(payload:Record<string,unknown>){return 
 export async function fiscalSeriesSave(payload:Record<string,unknown>){return rpc('erp_fiscal_series_save',{p_token:await token(),p_payload:payload});}
 export async function fiscalPosSeriesSave(payload:Record<string,unknown>){return rpc('erp_fiscal_pos_series_save',{p_token:await token(),p_payload:payload});}
 export async function fiscalCfopSave(payload:Record<string,unknown>){return rpc('erp_fiscal_cfop_save',{p_token:await token(),p_payload:payload});}
-export async function fiscalPrepareV2(saleId:string,documentType:'nfe'|'nfce',seriesId?:string){return rpc('erp_fiscal_prepare_v2',{p_token:await token(),p_sale_id:saleId,p_document_type:documentType,p_series_id:seriesId||null});}
+export async function fiscalPrepareV2(saleId:string,documentType:'nfe'|'nfce',seriesId?:string){
+  const result=await rpc('erp_fiscal_prepare_v2',{p_token:await token(),p_sale_id:saleId,p_document_type:documentType,p_series_id:seriesId||null});
+  if(result.error==='fiscal_preflight_failed'){
+    const validation=Array.isArray(result.validation_errors)?result.validation_errors.map(v=>String(v)).filter(Boolean):[];
+    return {...result,error_code:'fiscal_preflight_failed',error:validation.length?validation.join(' · '):'Revise os dados fiscais do destinatário antes de preparar a NF-e.'};
+  }
+  return result;
+}
