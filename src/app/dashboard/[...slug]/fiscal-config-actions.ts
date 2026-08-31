@@ -13,6 +13,11 @@ export async function fiscalSettingsSave(payload:Record<string,unknown>){return 
 export async function fiscalSeriesSave(payload:Record<string,unknown>){return rpc('erp_fiscal_series_save',{p_token:await token(),p_payload:payload});}
 export async function fiscalPosSeriesSave(payload:Record<string,unknown>){return rpc('erp_fiscal_pos_series_save',{p_token:await token(),p_payload:payload});}
 export async function fiscalCfopSave(payload:Record<string,unknown>){return rpc('erp_fiscal_cfop_save',{p_token:await token(),p_payload:payload});}
+export async function fiscalCfopRulesGet(){return rpc('erp_fiscal_cfop_rules_get',{p_token:await token()});}
+export async function fiscalCfopRuleSave(payload:Record<string,unknown>){return rpc('erp_fiscal_cfop_rule_save',{p_token:await token(),p_payload:payload});}
+export async function fiscalCfopResolve(payload:{product_cfop?:string;purpose:string;presence:string;recipient_state:string;consumer_final:boolean;indicator_ie:string}){
+  return rpc('erp_fiscal_cfop_resolve',{p_token:await token(),p_product_cfop:payload.product_cfop||'',p_purpose:payload.purpose,p_presence:payload.presence,p_recipient_state:payload.recipient_state,p_consumer_final:payload.consumer_final,p_indicator_ie:payload.indicator_ie});
+}
 export async function fiscalPrepareV2(saleId:string,documentType:'nfe'|'nfce',seriesId?:string){
   const result=await rpc('erp_fiscal_prepare_v2',{p_token:await token(),p_sale_id:saleId,p_document_type:documentType,p_series_id:seriesId||null});
   if(result.error==='fiscal_preflight_failed'){
