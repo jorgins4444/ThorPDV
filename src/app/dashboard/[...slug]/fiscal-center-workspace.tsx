@@ -22,13 +22,14 @@ export function FiscalCenterWorkspace({settings}:{settings:Row}){
     {icon:'▤',title:'DANFE / Impressão',desc:'Casas decimais, linhas, ordenação e formação do nome do produto.',href:'/dashboard/fiscal/danfe',status:'Configurar',tone:'neutral',meta:'Layout de impressão fiscal'},
     {icon:'↔',title:'CFOPs',desc:'Tabela de CFOPs disponível para produtos e operações fiscais.',href:'/dashboard/fiscal/cfops',status:`${cfops.filter(c=>c.active!==false).length} ativo(s)`,tone:'ok',meta:`${cfops.length} código(s) cadastrados`},
     {icon:'🔐',title:'Certificado Digital A1',desc:'Certificado PFX/P12 usado para assinatura e comunicação com a SEFAZ.',href:'/dashboard/fiscal/certificado',status:cert?(bool(cert.expired)?'Expirado':'Válido'):'Não configurado',tone:cert&&!bool(cert.expired)?'ok':'warn',meta:cert?txt(cert.subject_cn)||txt(cert.filename):'Anexe o certificado da empresa'},
-    {icon:'📄',title:'Documentos Fiscais',desc:'Emissão, acompanhamento, XML, DANFE, protocolos e cancelamentos.',href:'/dashboard/documentos-fiscais',status:'Abrir módulo',tone:'primary',meta:'NF-e e NFC-e em uma área separada'},
+    {icon:'🧾',title:'Emissão de NF-e',desc:'NF-e modelo 55 a partir das vendas, com validação fiscal, série, numeração e acompanhamento.',href:'/dashboard/fiscal/nfe',status:'Abrir emissão',tone:'primary',meta:'Fluxo dedicado para NF-e'},
+    {icon:'📄',title:'Documentos Fiscais',desc:'Histórico de NF-e e NFC-e, XML, DANFE, protocolos, rejeições e cancelamentos.',href:'/dashboard/documentos-fiscais',status:'Abrir histórico',tone:'primary',meta:'Consulta centralizada dos documentos'},
   ];
 
   const ready=cards.slice(0,7).filter(c=>c.tone==='ok').length;
   return <div className="fiscal-center">
     <section className="fiscal-center-hero">
-      <div><span>CENTRAL FISCAL</span><h2>Configurações fiscais organizadas por função</h2><p>Acesse somente o que precisa configurar. Emissão e histórico permanecem no módulo separado de Documentos Fiscais.</p></div>
+      <div><span>CENTRAL FISCAL</span><h2>Configurações fiscais organizadas por função</h2><p>Configure emitente e parâmetros em um só lugar, emita NF-e no fluxo dedicado e consulte NF-e/NFC-e no histórico centralizado.</p></div>
       <div className="fiscal-center-score"><strong>{ready}/7</strong><small>áreas em situação regular</small></div>
     </section>
     <section className="fiscal-center-grid">
