@@ -1,4 +1,5 @@
 export type CfopRow=Record<string,unknown>;
+export type NfeOperationType='sale'|'return'|'transfer'|'shipment'|'return_shipment'|'bonus'|'sample'|'other';
 export type CfopResolution={code:string;source:'rule'|'product_default'|'counterpart'|'none';reason:string;scope:'internal'|'interstate'|'foreign'|'';ruleName?:string};
 
 const text=(v:unknown)=>v==null?'':String(v);
@@ -17,14 +18,44 @@ export function scopeLabel(scope:CfopResolution['scope']){
   return scope==='internal'?'mesma UF do emitente':scope==='interstate'?'outra UF':scope==='foreign'?'exterior':'destino ainda não identificado';
 }
 
+export function operationScopeLabel(scope:CfopResolution['scope'],emitterState:unknown,recipientState:unknown){
+  const emitter=text(emitterState).trim().toUpperCase()||'—';
+  const recipient=text(recipientState).trim().toUpperCase()||'—';
+  if(scope==='internal')return `Operação interna ${emitter} → ${recipient}`;
+  if(scope==='interstate')return `Operação interestadual ${emitter} → ${recipient}`;
+  if(scope==='foreign')return `Operação com exterior ${emitter} → EX`;
+  return `Destino aguardando UF ${emitter} → —`;
+}
+
 export function cfopPrefixForScope(scope:CfopResolution['scope']){
   return scope==='internal'?'5':scope==='interstate'?'6':scope==='foreign'?'7':'';
+}
+
+export function operationLabel(operationType:unknown){
+  const labels:Record<string,string>={sale:'Venda',return:'Devolução',transfer:'Transferência',shipment:'Remessa',return_shipment:'Retorno',bonus:'Bonificação',sample:'Amostra grátis',other:'Outras operações'};
+  return labels[text(operationType)]||labels.sale;
+}
+
+export function deriveNatureOperation(operationType:unknown,purpose:unknown){
+  if(text(purpose)==='4'||text(operationType)==='return')return 'DEVOLUÇÃO DE MERCADORIA';
+  const labels:Record<string,string>={
+    sale:'VENDA DE MERCADORIA',
+    transfer:'TRANSFERÊNCIA DE MERCADORIA',
+    shipment:'REMESSA DE MERCADORIA',
+    return_shipment:'RETORNO DE MERCADORIA',
+    bonus:'BONIFICAÇÃO DE MERCADORIA',
+    sample:'REMESSA DE AMOSTRA GRÁTIS',
+    other:'OUTRAS OPERAÇÕES',
+  };
+  return labels[text(operationType)]||labels.sale;
 }
 
 export function resolveCfopClient(args:{
   rules:CfopRow[];
   cfops:CfopRow[];
   productCfop?:unknown;
+  productType?:unknown;
+  operationType?:unknown;
   purpose:unknown;
   presence:unknown;
   emitterState:unknown;
@@ -37,10 +68,14 @@ export function resolveCfopClient(args:{
   const purpose=text(args.purpose);
   const presence=text(args.presence);
   const indicatorIe=text(args.indicatorIe);
+  const operationType=text(args.operationType)||'sale';
+  const productType=text(args.productType);
   const activeCfops=args.cfops.filter(row=>row.active!==false);
   const byId=new Map(activeCfops.map(row=>[text(row.id),row]));
   const matches=args.rules
     .filter(row=>row.active!==false&&text(row.destination_scope)===scope)
+    .filter(row=>!text(row.operation_type)||text(row.operation_type)===operationType)
+    .filter(row=>!text(row.product_type)||text(row.product_type)===productType)
     .filter(row=>!text(row.purpose)||text(row.purpose)===purpose)
     .filter(row=>!text(row.presence)||text(row.presence)===presence)
     .filter(row=>row.consumer_final==null||Boolean(row.consumer_final)===args.consumerFinal)
@@ -49,8 +84,8 @@ export function resolveCfopClient(args:{
     .sort((a,b)=>{
       const pa=Number(a.priority||100),pb=Number(b.priority||100);
       if(pa!==pb)return pa-pb;
-      const sa=[a.purpose,a.presence,a.consumer_final,a.indicator_ie].filter(v=>v!==null&&v!==undefined&&v!=='').length;
-      const sb=[b.purpose,b.presence,b.consumer_final,b.indicator_ie].filter(v=>v!==null&&v!==undefined&&v!=='').length;
+      const sa=[a.operation_type,a.product_type,a.purpose,a.presence,a.consumer_final,a.indicator_ie].filter(v=>v!==null&&v!==undefined&&v!=='').length;
+      const sb=[b.operation_type,b.product_type,b.purpose,b.presence,b.consumer_final,b.indicator_ie].filter(v=>v!==null&&v!==undefined&&v!=='').length;
       return sb-sa;
     });
   if(matches.length){
@@ -58,9 +93,16 @@ export function resolveCfopClient(args:{
     const cfop=byId.get(text(row.cfop_id));
     if(cfop){
       const code=digits(cfop.code);
-      return {code,source:'rule',ruleName:text(row.name),reason:`Regra “${text(row.name)}” · ${scopeLabel(scope)}`,scope};
+      return {code,source:'rule',ruleName:text(row.name),reason:`Regra “${text(row.name)}” · ${operationLabel(operationType)} · ${scopeLabel(scope)}`,scope};
     }
   }
+
+  // A troca automática 5/6/7 só é segura no fluxo de venda. Em devolução,
+  // transferência, remessa etc. exigimos uma regra fiscal explícita ou escolha manual.
+  if(operationType!=='sale'){
+    return {code:'',source:'none',reason:`Cadastre uma regra de CFOP para ${operationLabel(operationType).toLowerCase()} (${scopeLabel(scope)}) ou selecione o CFOP manualmente.`,scope};
+  }
+
   const prefix=cfopPrefixForScope(scope);
   const product=digits(args.productCfop);
   if(product.length===4){
