@@ -69,6 +69,19 @@ const resourceBySlug: Record<string, string> = {
   'vendas': 'sales', 'vendas/nova': 'sales', 'pdv/caixa': 'pos_registers', 'ajuda': 'companies',
 };
 
+const lookupResourcesBySlug:Record<string,string[]>={
+  'usuarios-adm':['profiles_adm','branches'],
+  'classes':['groups'],
+  'financeiro/receber':['customers'],
+  'financeiro/receber/novo':['customers'],
+  'financeiro/pagar':['suppliers'],
+  'financeiro/pagar/novo':['suppliers'],
+  'administrativo/pdvs':['branches'],
+  'atendimento':['customers'],
+  'atendimento/mensagens':['customers'],
+  'atendimento/sla':['customers'],
+};
+
 const fiscalSectionBySlug:Record<string,{section:FiscalSection;title:string;subtitle:string}>={
   'fiscal/emitente':{section:'emitente',title:'Emitente Fiscal',subtitle:'Dados cadastrais e fiscais da Matriz utilizados na emissão de NF-e e NFC-e.'},
   'fiscal/nfce-config':{section:'nfce',title:'NFC-e / CSC',subtitle:'Ambiente de emissão, ID CSC e token de segurança fornecido pela SEFAZ.'},
@@ -82,14 +95,13 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   const resolved = await params;
   const slug = resolved.slug.join('/');
   const resource = resourceBySlug[slug] ?? 'products';
-  const initial = await erpLoad(resource);
-  const [products, customers, groups, classes, branches, profilesPdv, profilesAdm, priceTables, suppliers, modifiers] = await Promise.all([
-    erpLoad('products'), erpLoad('customers'), erpLoad('groups'), erpLoad('classes'), erpLoad('branches'),
-    erpLoad('profiles_pdv'), erpLoad('profiles_adm'), erpLoad('price_tables'), erpLoad('suppliers'), erpLoad('modifiers'),
-  ]);
 
+  // Cada rota busca apenas o que realmente renderiza. Antes, toda troca de aba
+  // disparava o recurso atual + dez listas auxiliares, mesmo quando não usadas.
   if (slug === 'produtos' || slug === 'produtos/novo') {
-    const productList = await erpProductList();
+    const [productList,groups,classes,suppliers,modifiers,branches]=await Promise.all([
+      erpProductList(),erpLoad('groups'),erpLoad('classes'),erpLoad('suppliers'),erpLoad('modifiers'),erpLoad('branches'),
+    ]);
     return <AdvancedShell title="Cadastro de Produtos" subtitle="Cadastro completo integrado a preços, tributação, estoque, ficha técnica, produção, balança e PDV." activePath="/dashboard/produtos"><ProductMasterWorkspace initialProducts={productList.data} groups={groups.data} classes={classes.data} suppliers={suppliers.data} modifiers={modifiers.data} branches={branches.data}/></AdvancedShell>;
   }
   if (slug === 'estoque/producao') {
@@ -101,29 +113,59 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
     return <AdvancedShell title="Auditoria Gerencial" subtitle="Rastreabilidade de descontos, cancelamentos, devoluções, estornos, autorizações, caixa e alterações de preço." activePath="/dashboard/administrativo/auditoria"><ManagementAuditWorkspace initialEvents={audit.data} initialSummary={audit.summary} initialPagination={audit.pagination} permissions={audit.permissions} branches={audit.branches} operators={audit.operators}/></AdvancedShell>;
   }
   if (slug === 'vendas') return <AdvancedShell title="Vendas" subtitle="Operações de caixa, vendas, fechamentos, histórico e correções por unidade, PDV e operador." activePath="/dashboard/vendas"><SalesCashWorkspace/></AdvancedShell>;
-  if (slug === 'vendas/nova') return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard/vendas/nova"><SaleWorkspace customers={customers.data} priceTables={priceTables.data}/></AdvancedShell>;
-  if (slug === 'perfis-pdv') return <AdvancedShell title="Perfis de Usuário PDV" subtitle="Alçadas e permissões sincronizadas com os operadores do ThorPDV Desktop." activePath="/dashboard/perfis-pdv"><PdvProfileWorkspace initialProfiles={profilesPdv.data}/></AdvancedShell>;
+  if (slug === 'vendas/nova') {
+    const [customers,priceTables]=await Promise.all([erpLoad('customers'),erpLoad('price_tables')]);
+    return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard/vendas/nova"><SaleWorkspace customers={customers.data} priceTables={priceTables.data}/></AdvancedShell>;
+  }
+  if (slug === 'perfis-pdv') {
+    const profilesPdv=await erpLoad('profiles_pdv');
+    return <AdvancedShell title="Perfis de Usuário PDV" subtitle="Alçadas e permissões sincronizadas com os operadores do ThorPDV Desktop." activePath="/dashboard/perfis-pdv"><PdvProfileWorkspace initialProfiles={profilesPdv.data}/></AdvancedShell>;
+  }
   if (slug === 'usuarios-pdv') {
-    const operators=await listPdvOperators();
+    const [operators,profilesPdv,branches]=await Promise.all([listPdvOperators(),erpLoad('profiles_pdv'),erpLoad('branches')]);
     return <AdvancedShell title="Usuários PDV / Operadores" subtitle="Cadastre operadores, associe perfis e unidades, defina PIN e comissão sobre vendas." activePath="/dashboard/usuarios-pdv"><OperatorWorkspace initialUsers={operators.data} profiles={profilesPdv.data} branches={branches.data}/></AdvancedShell>;
   }
-  if (slug === 'promocoes') return <AdvancedShell title="Promoções" subtitle="Regras comerciais aplicadas automaticamente pelo motor de preço da venda." activePath="/dashboard/promocoes"><PromotionWorkspace initial={initial.data} products={products.data} groups={groups.data}/></AdvancedShell>;
-  if (slug === 'tabelas-precos/ajustes') return <AdvancedShell title="Ajustes Programados" subtitle="Agende aumentos/reduções e execute imediatamente quando necessário." activePath="/dashboard/tabelas-precos/ajustes"><PriceAdjustmentWorkspace initial={initial.data} priceTables={priceTables.data}/></AdvancedShell>;
-  if (slug === 'estoque' || slug === 'estoque/nova') return <AdvancedShell title="Gestão de Estoque" subtitle="Entradas, saídas, perdas e ajustes com validação de saldo." activePath="/dashboard/estoque"><StockWorkspace products={products.data} history={initial.data}/></AdvancedShell>;
-  if (slug === 'estoque/ajustes') return <AdvancedShell title="Ajustes de Estoque" subtitle="Correções de saldo com histórico e rastreabilidade." activePath="/dashboard/estoque/ajustes"><StockWorkspace products={products.data} history={initial.data} mode="adjustment"/></AdvancedShell>;
-  if (slug === 'estoque/transferencias') return <AdvancedShell title="Transferências de Estoque" subtitle="Movimente produtos entre unidades com dupla escrituração de estoque." activePath="/dashboard/estoque/transferencias"><StockTransferClient products={products.data} branches={branches.data} history={initial.data}/></AdvancedShell>;
-  if (slug === 'estoque/inventario') return <AdvancedShell title="Inventários" subtitle="Contagem física, diferenças e ajuste automático de estoque." activePath="/dashboard/estoque/inventario"><InventoryClient inventories={initial.data}/></AdvancedShell>;
-  if (slug === 'tabelas-precos' || slug === 'tabelas-precos/copiar') return <AdvancedShell title={slug.endsWith('copiar')?'Copiar Tabela de Preços':'Gestão de Tabelas de Preços'} subtitle="Preços específicos por produto, vigência, edição e cópia integral de tabelas." activePath={`/dashboard/${slug}`}><PriceTableWorkspace initialTables={priceTables.data} products={products.data} copyMode={slug.endsWith('copiar')}/></AdvancedShell>;
+  if (slug === 'promocoes') {
+    const [initial,products,groups]=await Promise.all([erpLoad('promotions'),erpLoad('products'),erpLoad('groups')]);
+    return <AdvancedShell title="Promoções" subtitle="Regras comerciais aplicadas automaticamente pelo motor de preço da venda." activePath="/dashboard/promocoes"><PromotionWorkspace initial={initial.data} products={products.data} groups={groups.data}/></AdvancedShell>;
+  }
+  if (slug === 'tabelas-precos/ajustes') {
+    const [initial,priceTables]=await Promise.all([erpLoad('price_adjustments'),erpLoad('price_tables')]);
+    return <AdvancedShell title="Ajustes Programados" subtitle="Agende aumentos/reduções e execute imediatamente quando necessário." activePath="/dashboard/tabelas-precos/ajustes"><PriceAdjustmentWorkspace initial={initial.data} priceTables={priceTables.data}/></AdvancedShell>;
+  }
+  if (slug === 'estoque' || slug === 'estoque/nova' || slug === 'estoque/ajustes') {
+    const [initial,products]=await Promise.all([erpLoad('stock'),erpLoad('products')]);
+    if(slug==='estoque/ajustes') return <AdvancedShell title="Ajustes de Estoque" subtitle="Correções de saldo com histórico e rastreabilidade." activePath="/dashboard/estoque/ajustes"><StockWorkspace products={products.data} history={initial.data} mode="adjustment"/></AdvancedShell>;
+    return <AdvancedShell title="Gestão de Estoque" subtitle="Entradas, saídas, perdas e ajustes com validação de saldo." activePath="/dashboard/estoque"><StockWorkspace products={products.data} history={initial.data}/></AdvancedShell>;
+  }
+  if (slug === 'estoque/transferencias') {
+    const [initial,products,branches]=await Promise.all([erpLoad('stock'),erpLoad('products'),erpLoad('branches')]);
+    return <AdvancedShell title="Transferências de Estoque" subtitle="Movimente produtos entre unidades com dupla escrituração de estoque." activePath="/dashboard/estoque/transferencias"><StockTransferClient products={products.data} branches={branches.data} history={initial.data}/></AdvancedShell>;
+  }
+  if (slug === 'estoque/inventario') {
+    const initial=await erpLoad('inventory_counts');
+    return <AdvancedShell title="Inventários" subtitle="Contagem física, diferenças e ajuste automático de estoque." activePath="/dashboard/estoque/inventario"><InventoryClient inventories={initial.data}/></AdvancedShell>;
+  }
+  if (slug === 'tabelas-precos' || slug === 'tabelas-precos/copiar') {
+    const [priceTables,products]=await Promise.all([erpLoad('price_tables'),erpLoad('products')]);
+    return <AdvancedShell title={slug.endsWith('copiar')?'Copiar Tabela de Preços':'Gestão de Tabelas de Preços'} subtitle="Preços específicos por produto, vigência, edição e cópia integral de tabelas." activePath={`/dashboard/${slug}`}><PriceTableWorkspace initialTables={priceTables.data} products={products.data} copyMode={slug.endsWith('copiar')}/></AdvancedShell>;
+  }
   if (slug === 'administrativo/empresas') {
     const matrix=await headquartersGet();
     return <AdvancedShell title="Matriz" subtitle="Cadastro mestre da empresa, do estabelecimento principal e do emitente fiscal utilizado pelo ThorPDV e ThorFiscal." activePath="/dashboard/administrativo/empresas"><HeadquartersWorkspace initial={matrix as Record<string,unknown>}/></AdvancedShell>;
   }
   if (slug === 'administrativo/filiais') {
-    const license=await erpLicenseGet();
+    const [branches,license]=await Promise.all([erpLoad('branches'),erpLicenseGet()]);
     return <AdvancedShell title="Lojas / Filiais" subtitle="Gerencie unidades adicionais conforme o limite contratado no ThorControl. A Matriz permanece como estabelecimento principal." activePath="/dashboard/administrativo/filiais"><BranchesWorkspace initialBranches={branches.data} license={license as unknown as Record<string,unknown>}/></AdvancedShell>;
   }
-  if (slug === 'configuracoes') return <AdvancedShell title="Configurações da Operação" subtitle="Terminais, parâmetros do PDV, tributos operacionais, entrega, SmartPOS e integrações. Dados cadastrais do emitente ficam exclusivamente em Matriz." activePath="/dashboard/configuracoes"><div className="erp-org-grid">{branches.data.length?<><BranchConfigWorkspace branches={branches.data}/><SmartPosPairingPanel branches={branches.data}/></>:<section className="erp-module-card erp-advanced-panel"><h2>Nenhuma unidade cadastrada</h2><p>Configure a Matriz antes de habilitar a operação.</p></section>}</div></AdvancedShell>;
-  if (slug === 'pdv/caixa') return <AdvancedShell title="Caixa / PDV" subtitle="Abertura, vendas vinculadas e fechamento com valor esperado e diferença por terminal." activePath="/dashboard/administrativo/pdvs"><CashWorkspace posRegisters={initial.data}/></AdvancedShell>;
+  if (slug === 'configuracoes') {
+    const branches=await erpLoad('branches');
+    return <AdvancedShell title="Configurações da Operação" subtitle="Terminais, parâmetros do PDV, tributos operacionais, entrega, SmartPOS e integrações. Dados cadastrais do emitente ficam exclusivamente em Matriz." activePath="/dashboard/configuracoes"><div className="erp-org-grid">{branches.data.length?<><BranchConfigWorkspace branches={branches.data}/><SmartPosPairingPanel branches={branches.data}/></>:<section className="erp-module-card erp-advanced-panel"><h2>Nenhuma unidade cadastrada</h2><p>Configure a Matriz antes de habilitar a operação.</p></section>}</div></AdvancedShell>;
+  }
+  if (slug === 'pdv/caixa') {
+    const initial=await erpLoad('pos_registers');
+    return <AdvancedShell title="Caixa / PDV" subtitle="Abertura, vendas vinculadas e fechamento com valor esperado e diferença por terminal." activePath="/dashboard/administrativo/pdvs"><CashWorkspace posRegisters={initial.data}/></AdvancedShell>;
+  }
   if (slug === 'fiscal') {
     const settings=await erpFiscalSettingsGet();
     return <AdvancedShell title="Fiscal" subtitle="Central das configurações fiscais da empresa e das filiais." activePath="/dashboard/fiscal"><FiscalCenterWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
@@ -138,7 +180,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
     return <AdvancedShell title="Certificado Digital A1" subtitle="Certificado utilizado para assinatura fiscal e comunicação segura com a SEFAZ." activePath="/dashboard/fiscal/certificado" backHref="/dashboard/fiscal" backLabel="Fiscal"><FiscalCertificateWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
   }
   if (slug === 'fiscal/nfe') {
-    const [settings,sales,documents]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments()]);
+    const [settings,sales,documents,customers,products]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments(),erpLoad('customers'),erpLoad('products')]);
     return <AdvancedShell title="Emissão de NF-e" subtitle="NF-e modelo 55 por venda ou preenchimento manual, com validação fiscal, série, destinatário, itens e acompanhamento." activePath="/dashboard/fiscal/nfe" backHref="/dashboard/fiscal" backLabel="Fiscal"><NfeEmissionWorkspace documents={documents.data as Record<string,unknown>[]} sales={sales.data as Record<string,unknown>[]} customers={customers.data as Record<string,unknown>[]} products={products.data as Record<string,unknown>[]} settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
   }
   if (slug === 'documentos-fiscais' || slug === 'fiscal/nfce') {
@@ -150,12 +192,15 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
     const reconciliation = await reconciliationData();
     return <AdvancedShell title="Conciliação Financeira" subtitle="Movimentos bancários conciliados com contas a receber/pagar e baixa automática dos títulos." activePath="/dashboard/financeiro/conciliacao"><ReconciliationWorkspace initial={reconciliation}/></AdvancedShell>;
   }
-  if (slug === 'relatorios/vendas') return <AdvancedShell title="Relatório de Vendas PDV" subtitle="Faturamento e quantidade por produto, período e unidade." activePath="/dashboard/relatorios/vendas"><ReportsClient type="sales" branches={branches.data} initial={initial.data}/></AdvancedShell>;
-  if (slug === 'relatorios/financeiro' || slug === 'financeiro/fluxo-caixa') return <AdvancedShell title={slug.startsWith('relatorios')?'Relatório Financeiro':'Fluxo de Caixa'} subtitle="Entradas, saídas, realizado e previsto por período e unidade." activePath={slug.startsWith('relatorios')?'/dashboard/relatorios/financeiro':'/dashboard/financeiro/fluxo-caixa'}><ReportsClient type="finance" branches={branches.data} initial={initial.data}/></AdvancedShell>;
-  if (slug === 'relatorios/estoque') return <AdvancedShell title="Relatório de Estoque" subtitle="Saldo, estoque mínimo, custo e valor por unidade." activePath="/dashboard/relatorios/estoque"><ReportsClient type="stock" branches={branches.data} initial={initial.data}/></AdvancedShell>;
+  if (slug === 'relatorios/vendas' || slug === 'relatorios/financeiro' || slug === 'financeiro/fluxo-caixa' || slug === 'relatorios/estoque') {
+    const [initial,branches]=await Promise.all([erpLoad(resource),erpLoad('branches')]);
+    if(slug==='relatorios/vendas') return <AdvancedShell title="Relatório de Vendas PDV" subtitle="Faturamento e quantidade por produto, período e unidade." activePath="/dashboard/relatorios/vendas"><ReportsClient type="sales" branches={branches.data} initial={initial.data}/></AdvancedShell>;
+    if(slug==='relatorios/estoque') return <AdvancedShell title="Relatório de Estoque" subtitle="Saldo, estoque mínimo, custo e valor por unidade." activePath="/dashboard/relatorios/estoque"><ReportsClient type="stock" branches={branches.data} initial={initial.data}/></AdvancedShell>;
+    return <AdvancedShell title={slug.startsWith('relatorios')?'Relatório Financeiro':'Fluxo de Caixa'} subtitle="Entradas, saídas, realizado e previsto por período e unidade." activePath={slug.startsWith('relatorios')?'/dashboard/relatorios/financeiro':'/dashboard/financeiro/fluxo-caixa'}><ReportsClient type="finance" branches={branches.data} initial={initial.data}/></AdvancedShell>;
+  }
 
-  return <ModuleClient slug={slug} resource={resource} initialData={initial.data} lookups={{
-    products: products.data, customers: customers.data, groups: groups.data, classes: classes.data, branches: branches.data,
-    profiles_pdv: profilesPdv.data, profiles_adm: profilesAdm.data, price_tables: priceTables.data, suppliers: suppliers.data,
-  }} />;
+  const lookupResources=lookupResourcesBySlug[slug]??[];
+  const [initial,...lookupResults]=await Promise.all([erpLoad(resource),...lookupResources.map(name=>erpLoad(name))]);
+  const lookups=Object.fromEntries(lookupResources.map((name,index)=>[name,lookupResults[index].data]));
+  return <ModuleClient slug={slug} resource={resource} initialData={initial.data} lookups={lookups} />;
 }
