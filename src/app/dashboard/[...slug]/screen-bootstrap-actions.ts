@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 
 const SESSION_COOKIE='thorpdv_test_session';
 type Row=Record<string,unknown>;
-type Screen='products'|'sale'|'nfe'|'fiscal_documents';
+type Screen='products'|'product_studio'|'sale'|'nfe'|'fiscal_documents';
 
 type RawResult={ok?:boolean;error?:string;[key:string]:unknown};
 
@@ -34,6 +34,18 @@ export async function productScreenBootstrap(){
   return {
     ok:Boolean(r.ok),error:r.error,
     products:data(r.products),groups:data(r.groups),classes:data(r.classes),suppliers:data(r.suppliers),modifiers:data(r.modifiers),branches:data(r.branches),
+    categories:data(r.categories),brands:data(r.brands),
+  };
+}
+
+export async function productStudioScreenBootstrap(){
+  const r=await bootstrap('product_studio');
+  const products=obj(r.products);
+  const rows=Array.isArray(products.data)?products.data as Row[]:[];
+  return {
+    ok:Boolean(r.ok),error:r.error,
+    products:rows,total:Number(products.total??rows.length),
+    groups:data(r.groups),classes:data(r.classes),suppliers:data(r.suppliers),modifiers:data(r.modifiers),branches:data(r.branches),
     categories:data(r.categories),brands:data(r.brands),
   };
 }
