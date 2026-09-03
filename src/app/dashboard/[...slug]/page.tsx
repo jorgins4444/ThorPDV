@@ -41,7 +41,7 @@ import { PdvProfileWorkspace } from './pdv-profile-workspace';
 import { ProductionWorkspace } from './production-workspace';
 import { reconciliationData } from './reconciliation-actions';
 import { listPdvOperators } from './operator-actions';
-import { erpFiscalSettingsGet, erpLoad, erpManagementAudit, erpProductionOrders } from './actions';
+import { erpFiscalSettingsGet, erpLoad, erpLoadPage, erpManagementAudit, erpProductionOrders } from './actions';
 
 const resourceBySlug: Record<string, string> = {
   'clientes': 'customers', 'clientes/novo': 'customers', 'fornecedores': 'suppliers',
@@ -172,7 +172,11 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   }
 
   const lookupResources=lookupResourcesBySlug[slug]??[];
-  const [initial,...lookupResults]=await Promise.all([erpLoad(resource),...lookupResources.map(name=>erpLoad(name))]);
+  const localFilteredSlugs=new Set(['financeiro/receber','financeiro/receber/novo','financeiro/pagar','financeiro/pagar/novo']);
+  const serverPaged=!localFilteredSlugs.has(slug);
+  const primary=serverPaged?erpLoadPage(resource,undefined,10,0):erpLoad(resource);
+  const [initial,...lookupResults]=await Promise.all([primary,...lookupResources.map(name=>erpLoad(name))]);
   const lookups=Object.fromEntries(lookupResources.map((name,index)=>[name,lookupResults[index].data]));
-  return <ModuleClient slug={slug} resource={resource} initialData={initial.data} lookups={lookups} />;
+  const initialTotal='total' in initial?Number(initial.total):initial.data.length;
+  return <ModuleClient slug={slug} resource={resource} initialData={initial.data} initialTotal={initialTotal} serverPaged={serverPaged} lookups={lookups} />;
 }
