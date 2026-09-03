@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { erpSave } from './actions';
+import { ListPagination,useListPagination } from './list-pagination';
 
 type Row = Record<string, unknown>;
 type PermissionTree = Record<string, unknown>;
@@ -9,257 +10,35 @@ type PermissionItem = { path: string; label: string; description: string; risk?:
 type PermissionGroup = { title: string; subtitle: string; items: PermissionItem[] };
 
 const groups: PermissionGroup[] = [
-  {
-    title: 'Vendas',
-    subtitle: 'Operações permitidas durante o atendimento no frente de caixa.',
-    items: [
-      { path: 'sale.create', label: 'Realizar vendas', description: 'Permite incluir itens, receber pagamentos e finalizar a venda.' },
-      { path: 'sale.remove_item', label: 'Remover item da venda', description: 'Permite excluir um item lançado ou limpar os itens do cupom antes da finalização.', risk: 'sensitive' },
-      { path: 'sale.cancel', label: 'Cancelar venda', description: 'Permite cancelar uma venda e estornar estoque/financeiro.', risk: 'critical' },
-      { path: 'sale.return', label: 'Fazer devolução', description: 'Permite devolução parcial ou total de itens vendidos.', risk: 'sensitive' },
-      { path: 'customer.identify', label: 'Identificar consumidor', description: 'Permite informar cliente, CPF ou CNPJ na venda.' },
-    ],
-  },
-  {
-    title: 'Descontos',
-    subtitle: 'Controle de desconto e de operações acima da alçada do operador.',
-    items: [
-      { path: 'discount.apply', label: 'Aplicar desconto', description: 'Libera o campo de desconto na venda. O percentual máximo continua definido na alçada abaixo.', risk: 'sensitive' },
-      { path: 'discount.override_limit', label: 'Exceder limite sem supervisor', description: 'Permite aplicar desconto acima do percentual máximo do perfil sem solicitar senha de supervisor.', risk: 'critical' },
-    ],
-  },
-  {
-    title: 'Caixa',
-    subtitle: 'Controle de abertura, fechamento e movimentações de numerário.',
-    items: [
-      { path: 'cash.open', label: 'Abrir caixa', description: 'Permite iniciar turno e informar fundo de troco.' },
-      { path: 'cash.close', label: 'Fechar caixa', description: 'Permite encerrar o turno e informar valor contado.', risk: 'sensitive' },
-      { path: 'cash.movement', label: 'Sangria e suprimento', description: 'Permite registrar retiradas e entradas manuais de dinheiro.', risk: 'critical' },
-      { path: 'hardware.manual_drawer', label: 'Abrir gaveta manualmente', description: 'Permite acionar a gaveta sem finalizar uma venda.', risk: 'critical' },
-    ],
-  },
-  {
-    title: 'Fiscal',
-    subtitle: 'Acesso às operações fiscais e documentos vinculados às vendas.',
-    items: [
-      { path: 'fiscal.view', label: 'Acessar Menu Fiscal', description: 'Permite consultar vendas, situação fiscal e documentos.' },
-      { path: 'fiscal.request_nfce', label: 'Solicitar NFC-e', description: 'Permite solicitar a emissão de NFC-e para uma venda.' },
-      { path: 'fiscal.reprint', label: 'Reimprimir NFC-e', description: 'Permite reimprimir DANFE NFC-e já autorizado.' },
-      { path: 'fiscal.cancel_nfce', label: 'Solicitar cancelamento fiscal', description: 'Permite iniciar cancelamento de NFC-e autorizada.', risk: 'critical' },
-    ],
-  },
-  {
-    title: 'Pagamentos',
-    subtitle: 'Formas de recebimento disponíveis para o operador.',
-    items: [
-      { path: 'payment.cash', label: 'Dinheiro', description: 'Permite receber em dinheiro e calcular troco.' },
-      { path: 'payment.pix', label: 'PIX', description: 'Permite lançar/autorizar recebimento via PIX.' },
-      { path: 'payment.debit_card', label: 'Cartão de débito', description: 'Permite recebimento em débito.' },
-      { path: 'payment.credit_card', label: 'Cartão de crédito', description: 'Permite recebimento em crédito.' },
-      { path: 'payment.voucher', label: 'Voucher', description: 'Permite recebimento por voucher.' },
-      { path: 'payment.integrated', label: 'TEF / PIX integrado', description: 'Permite iniciar autorização em provedor integrado.', risk: 'sensitive' },
-    ],
-  },
-  {
-    title: 'Equipamentos e impressão',
-    subtitle: 'Recursos locais do computador do caixa.',
-    items: [
-      { path: 'hardware.scale', label: 'Usar balança', description: 'Permite ler peso da balança configurada no terminal.' },
-      { path: 'print.receipt', label: 'Imprimir comprovante / pré-venda', description: 'Permite impressão do comprovante não fiscal.' },
-      { path: 'print.nfce', label: 'Imprimir NFC-e', description: 'Permite imprimir DANFE NFC-e autorizado.' },
-      { path: 'print.reprint', label: 'Reimprimir documentos', description: 'Permite reimpressão pelo Menu Fiscal.' },
-    ],
-  },
-  {
-    title: 'Administração do terminal',
-    subtitle: 'Ações que afetam o funcionamento local do PDV Desktop.',
-    items: [
-      { path: 'sync.manual', label: 'Sincronizar manualmente', description: 'Permite acionar sincronização imediata com o Gestão.' },
-      { path: 'settings.edit', label: 'Alterar configurações do PDV', description: 'Permite alterar impressora, atalhos, balança e integração local.', risk: 'critical' },
-    ],
-  },
+  {title:'Vendas',subtitle:'Operações permitidas durante o atendimento no frente de caixa.',items:[{path:'sale.create',label:'Realizar vendas',description:'Permite incluir itens, receber pagamentos e finalizar a venda.'},{path:'sale.remove_item',label:'Remover item da venda',description:'Permite excluir um item lançado ou limpar os itens do cupom antes da finalização.',risk:'sensitive'},{path:'sale.cancel',label:'Cancelar venda',description:'Permite cancelar uma venda e estornar estoque/financeiro.',risk:'critical'},{path:'sale.return',label:'Fazer devolução',description:'Permite devolução parcial ou total de itens vendidos.',risk:'sensitive'},{path:'customer.identify',label:'Identificar consumidor',description:'Permite informar cliente, CPF ou CNPJ na venda.'}]},
+  {title:'Descontos',subtitle:'Controle de desconto e de operações acima da alçada do operador.',items:[{path:'discount.apply',label:'Aplicar desconto',description:'Libera o campo de desconto na venda. O percentual máximo continua definido na alçada abaixo.',risk:'sensitive'},{path:'discount.override_limit',label:'Exceder limite sem supervisor',description:'Permite aplicar desconto acima do percentual máximo do perfil sem solicitar senha de supervisor.',risk:'critical'}]},
+  {title:'Caixa',subtitle:'Controle de abertura, fechamento e movimentações de numerário.',items:[{path:'cash.open',label:'Abrir caixa',description:'Permite iniciar turno e informar fundo de troco.'},{path:'cash.close',label:'Fechar caixa',description:'Permite encerrar o turno e informar valor contado.',risk:'sensitive'},{path:'cash.movement',label:'Sangria e suprimento',description:'Permite registrar retiradas e entradas manuais de dinheiro.',risk:'critical'},{path:'hardware.manual_drawer',label:'Abrir gaveta manualmente',description:'Permite acionar a gaveta sem finalizar uma venda.',risk:'critical'}]},
+  {title:'Fiscal',subtitle:'Acesso às operações fiscais e documentos vinculados às vendas.',items:[{path:'fiscal.view',label:'Acessar Menu Fiscal',description:'Permite consultar vendas, situação fiscal e documentos.'},{path:'fiscal.request_nfce',label:'Solicitar NFC-e',description:'Permite solicitar a emissão de NFC-e para uma venda.'},{path:'fiscal.reprint',label:'Reimprimir NFC-e',description:'Permite reimprimir DANFE NFC-e já autorizado.'},{path:'fiscal.cancel_nfce',label:'Solicitar cancelamento fiscal',description:'Permite iniciar cancelamento de NFC-e autorizada.',risk:'critical'}]},
+  {title:'Pagamentos',subtitle:'Formas de recebimento disponíveis para o operador.',items:[{path:'payment.cash',label:'Dinheiro',description:'Permite receber em dinheiro e calcular troco.'},{path:'payment.pix',label:'PIX',description:'Permite lançar/autorizar recebimento via PIX.'},{path:'payment.debit_card',label:'Cartão de débito',description:'Permite recebimento em débito.'},{path:'payment.credit_card',label:'Cartão de crédito',description:'Permite recebimento em crédito.'},{path:'payment.voucher',label:'Voucher',description:'Permite recebimento por voucher.'},{path:'payment.integrated',label:'TEF / PIX integrado',description:'Permite iniciar autorização em provedor integrado.',risk:'sensitive'}]},
+  {title:'Equipamentos e impressão',subtitle:'Recursos locais do computador do caixa.',items:[{path:'hardware.scale',label:'Usar balança',description:'Permite ler peso da balança configurada no terminal.'},{path:'print.receipt',label:'Imprimir comprovante / pré-venda',description:'Permite impressão do comprovante não fiscal.'},{path:'print.nfce',label:'Imprimir NFC-e',description:'Permite imprimir DANFE NFC-e autorizado.'},{path:'print.reprint',label:'Reimprimir documentos',description:'Permite reimpressão pelo Menu Fiscal.'}]},
+  {title:'Administração do terminal',subtitle:'Ações que afetam o funcionamento local do PDV Desktop.',items:[{path:'sync.manual',label:'Sincronizar manualmente',description:'Permite acionar sincronização imediata com o Gestão.'},{path:'settings.edit',label:'Alterar configurações do PDV',description:'Permite alterar impressora, atalhos, balança e integração local.',risk:'critical'}]},
 ];
 
-const blankPermissions = (): PermissionTree => ({
-  sale: { create: true, remove_item: true, cancel: false, return: false },
-  customer: { identify: true },
-  cash: { open: true, close: true, movement: false },
-  hardware: { manual_drawer: false, scale: true },
-  fiscal: { view: true, request_nfce: true, reprint: true, cancel_nfce: false },
-  payment: { cash: true, pix: true, debit_card: true, credit_card: true, voucher: true, integrated: true },
-  print: { receipt: true, nfce: true, reprint: true },
-  sync: { manual: true },
-  settings: { edit: false },
-  discount: { apply: true, override_limit: false, max_percent: 5 },
-  surcharge: { max_percent: 5 },
-  supervisor: { authorize: false },
-});
+const blankPermissions = (): PermissionTree => ({sale:{create:true,remove_item:true,cancel:false,return:false},customer:{identify:true},cash:{open:true,close:true,movement:false},hardware:{manual_drawer:false,scale:true},fiscal:{view:true,request_nfce:true,reprint:true,cancel_nfce:false},payment:{cash:true,pix:true,debit_card:true,credit_card:true,voucher:true,integrated:true},print:{receipt:true,nfce:true,reprint:true},sync:{manual:true},settings:{edit:false},discount:{apply:true,override_limit:false,max_percent:5},surcharge:{max_percent:5},supervisor:{authorize:false}});
+const supervisorPermissions = (): PermissionTree => ({sale:{create:true,remove_item:true,cancel:true,return:true},customer:{identify:true},cash:{open:true,close:true,movement:true},hardware:{manual_drawer:true,scale:true},fiscal:{view:true,request_nfce:true,reprint:true,cancel_nfce:true},payment:{cash:true,pix:true,debit_card:true,credit_card:true,voucher:true,integrated:true},print:{receipt:true,nfce:true,reprint:true},sync:{manual:true},settings:{edit:true},discount:{apply:true,override_limit:true,max_percent:100},surcharge:{max_percent:100},supervisor:{authorize:true}});
+const saleOnlyPermissions = (): PermissionTree => ({sale:{create:true,remove_item:true,cancel:false,return:false},customer:{identify:true},cash:{open:false,close:false,movement:false},hardware:{manual_drawer:false,scale:true},fiscal:{view:false,request_nfce:false,reprint:false,cancel_nfce:false},payment:{cash:true,pix:true,debit_card:true,credit_card:true,voucher:false,integrated:true},print:{receipt:true,nfce:false,reprint:false},sync:{manual:false},settings:{edit:false},discount:{apply:false,override_limit:false,max_percent:0},surcharge:{max_percent:0},supervisor:{authorize:false}});
 
-const supervisorPermissions = (): PermissionTree => ({
-  sale: { create: true, remove_item: true, cancel: true, return: true },
-  customer: { identify: true },
-  cash: { open: true, close: true, movement: true },
-  hardware: { manual_drawer: true, scale: true },
-  fiscal: { view: true, request_nfce: true, reprint: true, cancel_nfce: true },
-  payment: { cash: true, pix: true, debit_card: true, credit_card: true, voucher: true, integrated: true },
-  print: { receipt: true, nfce: true, reprint: true },
-  sync: { manual: true },
-  settings: { edit: true },
-  discount: { apply: true, override_limit: true, max_percent: 100 },
-  surcharge: { max_percent: 100 },
-  supervisor: { authorize: true },
-});
+function clone<T>(value:T):T{return JSON.parse(JSON.stringify(value)) as T;}
+function getPath(tree:PermissionTree,path:string):unknown{return path.split('.').reduce<unknown>((value,key)=>{if(!value||typeof value!=='object')return undefined;return (value as Record<string,unknown>)[key];},tree);}
+function setPath(tree:PermissionTree,path:string,value:unknown):PermissionTree{const next=clone(tree);const keys=path.split('.');let cursor=next;keys.forEach((key,index)=>{if(index===keys.length-1)cursor[key]=value;else{if(!cursor[key]||typeof cursor[key]!=='object')cursor[key]={};cursor=cursor[key] as PermissionTree;}});return next;}
+function normalizePermissions(value:unknown):PermissionTree{let result=blankPermissions();if(!value||typeof value!=='object')return result;const walk=(node:Record<string,unknown>,prefix='')=>Object.entries(node).forEach(([key,child])=>{const path=prefix?`${prefix}.${key}`:key;if(child&&typeof child==='object'&&!Array.isArray(child))walk(child as Record<string,unknown>,path);else result=setPath(result,path,child);});walk(value as Record<string,unknown>);return result;}
+function enabledCount(permissions:PermissionTree){return groups.flatMap(group=>group.items).filter(item=>Boolean(getPath(permissions,item.path))).length;}
+function riskLabel(risk?:PermissionItem['risk']){if(risk==='critical')return 'Crítica';if(risk==='sensitive')return 'Sensível';return '';}
 
-const saleOnlyPermissions = (): PermissionTree => ({
-  sale: { create: true, remove_item: true, cancel: false, return: false },
-  customer: { identify: true },
-  cash: { open: false, close: false, movement: false },
-  hardware: { manual_drawer: false, scale: true },
-  fiscal: { view: false, request_nfce: false, reprint: false, cancel_nfce: false },
-  payment: { cash: true, pix: true, debit_card: true, credit_card: true, voucher: false, integrated: true },
-  print: { receipt: true, nfce: false, reprint: false },
-  sync: { manual: false },
-  settings: { edit: false },
-  discount: { apply: false, override_limit: false, max_percent: 0 },
-  surcharge: { max_percent: 0 },
-  supervisor: { authorize: false },
-});
+export function PdvProfileWorkspace({initialProfiles}:{initialProfiles:Row[]}){
+  const [profiles,setProfiles]=useState(initialProfiles);const [pending,startTransition]=useTransition();const [message,setMessage]=useState('');const [form,setForm]=useState({id:'',name:'',active:true,permissions:blankPermissions()});
+  const pager=useListPagination(profiles);const totalPermissions=useMemo(()=>groups.reduce((sum,group)=>sum+group.items.length,0),[]);const currentEnabled=enabledCount(form.permissions);
+  const reset=()=>{setForm({id:'',name:'',active:true,permissions:blankPermissions()});setMessage('');};
+  const applyPreset=(preset:'operator'|'supervisor'|'sale')=>{const permissions=preset==='supervisor'?supervisorPermissions():preset==='sale'?saleOnlyPermissions():blankPermissions();setForm(current=>({...current,permissions}));};
+  const edit=(row:Row)=>{setForm({id:String(row.id??''),name:String(row.name??''),active:row.active!==false,permissions:normalizePermissions(row.permissions)});setMessage('');window.scrollTo({top:0,behavior:'smooth'});};
+  const save=()=>startTransition(async()=>{setMessage('');if(!form.name.trim())return setMessage('Informe o nome do perfil.');const discount=Number(getPath(form.permissions,'discount.max_percent')??0);const surcharge=Number(getPath(form.permissions,'surcharge.max_percent')??0);if(discount<0||discount>100||surcharge<0||surcharge>100)return setMessage('As alçadas percentuais devem ficar entre 0% e 100%.');const response=await erpSave('profiles_pdv',{id:form.id||undefined,name:form.name.trim(),active:form.active,permissions:form.permissions});if(!response.ok)return setMessage(String(response.error??'Falha ao salvar perfil.'));const id=String(response.id??form.id);const next:Row={id,name:form.name.trim(),active:form.active,permissions:form.permissions};setProfiles(current=>form.id?current.map(row=>String(row.id)===form.id?{...row,...next}:row):[next,...current]);setMessage('Perfil salvo. Sincronize ou entre novamente no ThorPDV Desktop para aplicar as novas permissões.');setForm({id:'',name:'',active:true,permissions:blankPermissions()});});
 
-function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
-function getPath(tree: PermissionTree, path: string): unknown {
-  return path.split('.').reduce<unknown>((value, key) => {
-    if (!value || typeof value !== 'object') return undefined;
-    return (value as Record<string, unknown>)[key];
-  }, tree);
-}
-function setPath(tree: PermissionTree, path: string, value: unknown): PermissionTree {
-  const next = clone(tree);
-  const keys = path.split('.');
-  let cursor = next;
-  keys.forEach((key, index) => {
-    if (index === keys.length - 1) cursor[key] = value;
-    else {
-      if (!cursor[key] || typeof cursor[key] !== 'object') cursor[key] = {};
-      cursor = cursor[key] as PermissionTree;
-    }
-  });
-  return next;
-}
-function normalizePermissions(value: unknown): PermissionTree {
-  let result = blankPermissions();
-  if (!value || typeof value !== 'object') return result;
-  const walk = (node: Record<string, unknown>, prefix = '') => Object.entries(node).forEach(([key, child]) => {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (child && typeof child === 'object' && !Array.isArray(child)) walk(child as Record<string, unknown>, path);
-    else result = setPath(result, path, child);
-  });
-  walk(value as Record<string, unknown>);
-  return result;
-}
-function enabledCount(permissions: PermissionTree) {
-  return groups.flatMap((group) => group.items).filter((item) => Boolean(getPath(permissions, item.path))).length;
-}
-function riskLabel(risk?: PermissionItem['risk']) {
-  if (risk === 'critical') return 'Crítica';
-  if (risk === 'sensitive') return 'Sensível';
-  return '';
-}
-
-export function PdvProfileWorkspace({ initialProfiles }: { initialProfiles: Row[] }) {
-  const [profiles, setProfiles] = useState(initialProfiles);
-  const [pending, startTransition] = useTransition();
-  const [message, setMessage] = useState('');
-  const [form, setForm] = useState({ id: '', name: '', active: true, permissions: blankPermissions() });
-  const totalPermissions = useMemo(() => groups.reduce((sum, group) => sum + group.items.length, 0), []);
-  const currentEnabled = enabledCount(form.permissions);
-
-  const reset = () => { setForm({ id: '', name: '', active: true, permissions: blankPermissions() }); setMessage(''); };
-  const applyPreset = (preset: 'operator' | 'supervisor' | 'sale') => {
-    const permissions = preset === 'supervisor' ? supervisorPermissions() : preset === 'sale' ? saleOnlyPermissions() : blankPermissions();
-    setForm((current) => ({ ...current, permissions }));
-  };
-  const edit = (row: Row) => {
-    setForm({ id: String(row.id ?? ''), name: String(row.name ?? ''), active: row.active !== false, permissions: normalizePermissions(row.permissions) });
-    setMessage('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const save = () => startTransition(async () => {
-    setMessage('');
-    if (!form.name.trim()) return setMessage('Informe o nome do perfil.');
-    const discount = Number(getPath(form.permissions, 'discount.max_percent') ?? 0);
-    const surcharge = Number(getPath(form.permissions, 'surcharge.max_percent') ?? 0);
-    if (discount < 0 || discount > 100 || surcharge < 0 || surcharge > 100) return setMessage('As alçadas percentuais devem ficar entre 0% e 100%.');
-    const response = await erpSave('profiles_pdv', { id: form.id || undefined, name: form.name.trim(), active: form.active, permissions: form.permissions });
-    if (!response.ok) return setMessage(String(response.error ?? 'Falha ao salvar perfil.'));
-    const id = String(response.id ?? form.id);
-    const next: Row = { id, name: form.name.trim(), active: form.active, permissions: form.permissions };
-    setProfiles((current) => form.id ? current.map((row) => String(row.id) === form.id ? { ...row, ...next } : row) : [next, ...current]);
-    setMessage('Perfil salvo. Sincronize ou entre novamente no ThorPDV Desktop para aplicar as novas permissões.');
-    setForm({ id: '', name: '', active: true, permissions: blankPermissions() });
-  });
-
-  return <div className="pdv-permissions-layout">
-    <section className="pdv-permission-editor">
-      <div className="pdv-permission-header">
-        <div><span className="pdv-eyebrow">ALÇADAS DO FRENTE DE CAIXA</span><h2>{form.id ? 'Editar perfil PDV' : 'Novo perfil PDV'}</h2><p>As permissões são sincronizadas com o ThorPDV Desktop e determinam exatamente o que cada operador pode executar.</p></div>
-        {form.id ? <button className="pdv-secondary" onClick={reset}>Novo perfil</button> : null}
-      </div>
-
-      <div className="pdv-profile-main-fields">
-        <label><span>Nome do perfil</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Ex.: Operador Caixa, Supervisor, Gerente" /></label>
-        <label className="pdv-active-check"><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /><span>Perfil ativo</span></label>
-      </div>
-
-      <div className="pdv-presets"><span>Aplicar modelo:</span><button onClick={() => applyPreset('operator')}>Operador padrão</button><button onClick={() => applyPreset('supervisor')}>Supervisor</button><button onClick={() => applyPreset('sale')}>Somente venda</button></div>
-
-      <div className="pdv-limit-card">
-        <div><strong>Alçadas de valor</strong><span>Sem “Exceder limite sem supervisor”, um desconto acima da alçada exige a senha de um supervisor autorizado.</span></div>
-        <label><span>Desconto máximo</span><div className="pdv-percent-input"><input type="number" min="0" max="100" step="0.01" disabled={!Boolean(getPath(form.permissions, 'discount.apply'))} value={Number(getPath(form.permissions, 'discount.max_percent') ?? 0)} onChange={(event) => setForm({ ...form, permissions: setPath(form.permissions, 'discount.max_percent', Math.max(0, Math.min(100, Number(event.target.value || 0)))) })} /><b>%</b></div></label>
-        <label><span>Acréscimo máximo</span><div className="pdv-percent-input"><input type="number" min="0" max="100" step="0.01" value={Number(getPath(form.permissions, 'surcharge.max_percent') ?? 0)} onChange={(event) => setForm({ ...form, permissions: setPath(form.permissions, 'surcharge.max_percent', Math.max(0, Math.min(100, Number(event.target.value || 0)))) })} /><b>%</b></div></label>
-        <label className="pdv-supervisor-switch"><input type="checkbox" checked={Boolean(getPath(form.permissions, 'supervisor.authorize'))} onChange={(event) => setForm({ ...form, permissions: setPath(form.permissions, 'supervisor.authorize', event.target.checked) })} /><span><strong>Pode autorizar outros operadores</strong><small>Permite usar o PIN deste usuário para liberar desconto acima da alçada e outras operações supervisionadas.</small></span></label>
-      </div>
-
-      <div className="pdv-permission-groups">
-        {groups.map((group) => <article className="pdv-permission-group" key={group.title}>
-          <header><h3>{group.title}</h3><p>{group.subtitle}</p></header>
-          <div className="pdv-permission-list">{group.items.map((item) => {
-            const enabled = Boolean(getPath(form.permissions, item.path));
-            return <label className={`pdv-permission-row ${enabled ? 'enabled' : ''}`} key={item.path}>
-              <input type="checkbox" checked={enabled} onChange={(event) => {
-                let permissions = setPath(form.permissions, item.path, event.target.checked);
-                if (item.path === 'discount.apply' && !event.target.checked) {
-                  permissions = setPath(permissions, 'discount.override_limit', false);
-                  permissions = setPath(permissions, 'discount.max_percent', 0);
-                }
-                setForm({ ...form, permissions });
-              }} />
-              <span className="pdv-toggle" /><span className="pdv-permission-copy"><strong>{item.label}</strong><small>{item.description}</small></span>{item.risk ? <em className={`risk-${item.risk}`}>{riskLabel(item.risk)}</em> : null}
-            </label>;
-          })}</div>
-        </article>)}
-      </div>
-
-      <div className="pdv-permission-footer"><div><strong>{currentEnabled} de {totalPermissions}</strong><span>permissões operacionais habilitadas</span></div><button className="pdv-primary" disabled={pending} onClick={save}>{pending ? 'Salvando...' : 'Salvar perfil PDV'}</button></div>
-      {message ? <div className="pdv-profile-message">{message}</div> : null}
-    </section>
-
-    <aside className="pdv-profile-list-card">
-      <div className="pdv-profile-list-head"><div><span>PERFIS CADASTRADOS</span><h3>Perfis de usuário PDV</h3></div><b>{profiles.length}</b></div>
-      <div className="pdv-profile-list">{profiles.map((row) => {
-        const permissions = normalizePermissions(row.permissions);
-        const count = enabledCount(permissions);
-        const discount = Number(getPath(permissions, 'discount.max_percent') ?? 0);
-        const supervisor = Boolean(getPath(permissions, 'supervisor.authorize'));
-        const removeItem = Boolean(getPath(permissions, 'sale.remove_item'));
-        const discountApply = Boolean(getPath(permissions, 'discount.apply'));
-        const discountOverride = Boolean(getPath(permissions, 'discount.override_limit'));
-        return <button className="pdv-profile-item" onClick={() => edit(row)} key={String(row.id)}>
-          <div className="pdv-profile-item-top"><strong>{String(row.name ?? 'Perfil')}</strong><span className={row.active === false ? 'inactive' : 'active'}>{row.active === false ? 'Inativo' : 'Ativo'}</span></div>
-          <div className="pdv-profile-chips"><span>{count} permissões</span><span>{removeItem ? 'Remove item' : 'Sem remoção'}</span><span>{discountApply ? `Desc. ${discount}%` : 'Sem desconto'}</span>{discountOverride ? <span className="supervisor">Excede desconto</span> : null}{supervisor ? <span className="supervisor">Supervisor</span> : null}</div>
-        </button>;
-      })}{!profiles.length ? <div className="pdv-profile-empty">Nenhum perfil PDV cadastrado.</div> : null}</div>
-      <div className="pdv-profile-help"><strong>Como funciona?</strong><p>Vincule o perfil em <b>Pessoas → Usuários PDV</b>. Após sincronizar ou entrar novamente no terminal, o ThorPDV aplica essas regras inclusive quando estiver temporariamente offline.</p></div>
-    </aside>
+  return <div className="pdv-permissions-layout"><section className="pdv-permission-editor"><div className="pdv-permission-header"><div><span className="pdv-eyebrow">ALÇADAS DO FRENTE DE CAIXA</span><h2>{form.id?'Editar perfil PDV':'Novo perfil PDV'}</h2><p>As permissões são sincronizadas com o ThorPDV Desktop e determinam exatamente o que cada operador pode executar.</p></div>{form.id?<button className="pdv-secondary" onClick={reset}>Novo perfil</button>:null}</div><div className="pdv-profile-main-fields"><label><span>Nome do perfil</span><input value={form.name} onChange={event=>setForm({...form,name:event.target.value})} placeholder="Ex.: Operador Caixa, Supervisor, Gerente"/></label><label className="pdv-active-check"><input type="checkbox" checked={form.active} onChange={event=>setForm({...form,active:event.target.checked})}/><span>Perfil ativo</span></label></div><div className="pdv-presets"><span>Aplicar modelo:</span><button onClick={()=>applyPreset('operator')}>Operador padrão</button><button onClick={()=>applyPreset('supervisor')}>Supervisor</button><button onClick={()=>applyPreset('sale')}>Somente venda</button></div><div className="pdv-limit-card"><div><strong>Alçadas de valor</strong><span>Sem “Exceder limite sem supervisor”, um desconto acima da alçada exige a senha de um supervisor autorizado.</span></div><label><span>Desconto máximo</span><div className="pdv-percent-input"><input type="number" min="0" max="100" step="0.01" disabled={!Boolean(getPath(form.permissions,'discount.apply'))} value={Number(getPath(form.permissions,'discount.max_percent')??0)} onChange={event=>setForm({...form,permissions:setPath(form.permissions,'discount.max_percent',Math.max(0,Math.min(100,Number(event.target.value||0))))})}/><b>%</b></div></label><label><span>Acréscimo máximo</span><div className="pdv-percent-input"><input type="number" min="0" max="100" step="0.01" value={Number(getPath(form.permissions,'surcharge.max_percent')??0)} onChange={event=>setForm({...form,permissions:setPath(form.permissions,'surcharge.max_percent',Math.max(0,Math.min(100,Number(event.target.value||0))))})}/><b>%</b></div></label><label className="pdv-supervisor-switch"><input type="checkbox" checked={Boolean(getPath(form.permissions,'supervisor.authorize'))} onChange={event=>setForm({...form,permissions:setPath(form.permissions,'supervisor.authorize',event.target.checked)})}/><span><strong>Pode autorizar outros operadores</strong><small>Permite usar o PIN deste usuário para liberar desconto acima da alçada e outras operações supervisionadas.</small></span></label></div><div className="pdv-permission-groups">{groups.map(group=><article className="pdv-permission-group" key={group.title}><header><h3>{group.title}</h3><p>{group.subtitle}</p></header><div className="pdv-permission-list">{group.items.map(item=>{const enabled=Boolean(getPath(form.permissions,item.path));return <label className={`pdv-permission-row ${enabled?'enabled':''}`} key={item.path}><input type="checkbox" checked={enabled} onChange={event=>{let permissions=setPath(form.permissions,item.path,event.target.checked);if(item.path==='discount.apply'&&!event.target.checked){permissions=setPath(permissions,'discount.override_limit',false);permissions=setPath(permissions,'discount.max_percent',0);}setForm({...form,permissions});}}/><span className="pdv-toggle"/><span className="pdv-permission-copy"><strong>{item.label}</strong><small>{item.description}</small></span>{item.risk?<em className={`risk-${item.risk}`}>{riskLabel(item.risk)}</em>:null}</label>})}</div></article>)}</div><div className="pdv-permission-footer"><div><strong>{currentEnabled} de {totalPermissions}</strong><span>permissões operacionais habilitadas</span></div><button className="pdv-primary" disabled={pending} onClick={save}>{pending?'Salvando...':'Salvar perfil PDV'}</button></div>{message?<div className="pdv-profile-message">{message}</div>:null}</section>
+    <aside className="pdv-profile-list-card"><div className="pdv-profile-list-head"><div><span>PERFIS CADASTRADOS</span><h3>Perfis de usuário PDV</h3></div><b>{profiles.length}</b></div><div className="pdv-profile-list">{pager.pageRows.map(row=>{const permissions=normalizePermissions(row.permissions);const count=enabledCount(permissions);const discount=Number(getPath(permissions,'discount.max_percent')??0);const supervisor=Boolean(getPath(permissions,'supervisor.authorize'));const removeItem=Boolean(getPath(permissions,'sale.remove_item'));const discountApply=Boolean(getPath(permissions,'discount.apply'));const discountOverride=Boolean(getPath(permissions,'discount.override_limit'));return <button className="pdv-profile-item" onClick={()=>edit(row)} key={String(row.id)}><div className="pdv-profile-item-top"><strong>{String(row.name??'Perfil')}</strong><span className={row.active===false?'inactive':'active'}>{row.active===false?'Inativo':'Ativo'}</span></div><div className="pdv-profile-chips"><span>{count} permissões</span><span>{removeItem?'Remove item':'Sem remoção'}</span><span>{discountApply?`Desc. ${discount}%`:'Sem desconto'}</span>{discountOverride?<span className="supervisor">Excede desconto</span>:null}{supervisor?<span className="supervisor">Supervisor</span>:null}</div></button>})}{!profiles.length?<div className="pdv-profile-empty">Nenhum perfil PDV cadastrado.</div>:null}</div><ListPagination page={pager.page} pageCount={pager.pageCount} total={pager.total} from={pager.from} to={pager.to} onPage={pager.setPage} label="perfil(is)"/><div className="pdv-profile-help"><strong>Como funciona?</strong><p>Vincule o perfil em <b>Pessoas → Usuários PDV</b>. Após sincronizar ou entrar novamente no terminal, o ThorPDV aplica essas regras inclusive quando estiver temporariamente offline.</p></div></aside>
   </div>;
 }
