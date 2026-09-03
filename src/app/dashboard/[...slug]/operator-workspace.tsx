@@ -3,6 +3,7 @@
 import { useMemo,useState,useTransition } from 'react';
 import { erpSave } from './actions';
 import { setPdvOperatorCommission, setPdvOperatorPin } from './operator-actions';
+import { ListPagination,useListPagination } from './list-pagination';
 
 type Row=Record<string,unknown>;
 const text=(v:unknown)=>v==null?'':String(v);
@@ -27,7 +28,7 @@ const effectiveAccess=(profile?:Row)=>{
 };
 
 export function OperatorWorkspace({initialUsers,profiles,branches}:{initialUsers:Row[];profiles:Row[];branches:Row[]}){
-  const [users,setUsers]=useState(initialUsers);const [pending,startTransition]=useTransition();const [message,setMessage]=useState('');
+  const [users,setUsers]=useState(initialUsers);const [pending,startTransition]=useTransition();const [message,setMessage]=useState('');const pager=useListPagination(users);
   const emptyForm=()=>({id:'',name:'',email:'',profile_id:text(profiles[0]?.id),branch_id:text(branches[0]?.id),active:true,pin:'',commission_percent:'0'});
   const [form,setForm]=useState(emptyForm);
   const profileMap=useMemo(()=>new Map(profiles.map(p=>[text(p.id),p])),[profiles]);
@@ -69,7 +70,7 @@ export function OperatorWorkspace({initialUsers,profiles,branches}:{initialUsers
     </section>
     <section className="operator-admin-card">
       <div className="operator-admin-head"><div><span>OPERADORES</span><h2>Usuários do caixa</h2><p>{users.length} usuário(s) PDV cadastrado(s). Confira a coluna <b>Acesso efetivo</b> antes de testar.</p></div></div>
-      <div className="operator-table-wrap"><table className="operator-table"><thead><tr><th>Nome</th><th>Perfil</th><th>Acesso efetivo</th><th>Filial</th><th>Comissão</th><th>Status</th><th>Ações</th></tr></thead><tbody>{users.map(u=>{const profile=profileMap.get(text(u.profile_id));const access=effectiveAccess(profile);return <tr key={text(u.id)}><td><strong>{text(u.name)}</strong><small>{text(u.email)||'—'}</small></td><td><strong>{text(u.profile)||text(profile?.name)||'Sem perfil'}</strong>{profile?.active===false?<small className="operator-profile-warning">Perfil inativo</small>:null}</td><td><div className="operator-access-chips">{access.map(label=><span className={label==='Supervisor'?'supervisor':''} key={label}>{label}</span>)}</div></td><td>{text(u.branch)||'Todas'}</td><td>{Number(u.commission_percent||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2})}%</td><td><span className={u.active===false?'op-inactive':'op-active'}>{u.active===false?'Inativo':'Ativo'}</span></td><td><div className="op-row-actions"><button onClick={()=>edit(u)}>Editar</button><button onClick={()=>quickPin(u)}>Definir PIN</button></div></td></tr>})}</tbody></table></div>
+      <div className="operator-table-wrap"><table className="operator-table"><thead><tr><th>Nome</th><th>Perfil</th><th>Acesso efetivo</th><th>Filial</th><th>Comissão</th><th>Status</th><th>Ações</th></tr></thead><tbody>{pager.pageRows.map(u=>{const profile=profileMap.get(text(u.profile_id));const access=effectiveAccess(profile);return <tr key={text(u.id)}><td><strong>{text(u.name)}</strong><small>{text(u.email)||'—'}</small></td><td><strong>{text(u.profile)||text(profile?.name)||'Sem perfil'}</strong>{profile?.active===false?<small className="operator-profile-warning">Perfil inativo</small>:null}</td><td><div className="operator-access-chips">{access.map(label=><span className={label==='Supervisor'?'supervisor':''} key={label}>{label}</span>)}</div></td><td>{text(u.branch)||'Todas'}</td><td>{Number(u.commission_percent||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2})}%</td><td><span className={u.active===false?'op-inactive':'op-active'}>{u.active===false?'Inativo':'Ativo'}</span></td><td><div className="op-row-actions"><button onClick={()=>edit(u)}>Editar</button><button onClick={()=>quickPin(u)}>Definir PIN</button></div></td></tr>})}</tbody></table></div><ListPagination page={pager.page} pageCount={pager.pageCount} total={pager.total} from={pager.from} to={pager.to} onPage={pager.setPage} label="operador(es)"/>
     </section>
     <section className="operator-admin-card operator-permissions-card"><h3>Alçadas dos perfis</h3><div className="permission-cards">{profiles.map(p=>{const perms=p.permissions;return <article key={text(p.id)}><strong>{text(p.name)}</strong><span>Desconto até {Number(permission(perms,'discount','max_percent')??0)}%</span><span>Acréscimo até {Number(permission(perms,'surcharge','max_percent')??0)}%</span><span>Cancelar venda: {permission(perms,'sale','cancel')===true?'Sim':'Não'}</span><span>Devolver: {permission(perms,'sale','return')===true?'Sim':'Não'}</span><span>Configurar PDV: {permission(perms,'settings','edit')===true?'Sim':'Não'}</span><span>Supervisor: {permission(perms,'supervisor','authorize')===true?'Sim':'Não'}</span></article>})}</div></section>
   </div>;
