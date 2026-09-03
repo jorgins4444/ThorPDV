@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import './sale-checkout-enhancements.css';
-import { erpCreateSale, erpSaleCatalog } from './actions';
+import { erpCreateSale } from './actions';
+import { erpSaleCatalogSearch } from './sale-catalog-actions';
 import { SaleUserCashControl } from './sale-user-cash-control';
 import { SalePrintControl } from './sale-print-control';
 
@@ -14,7 +15,6 @@ type DiscountTarget={scope:'item'|'sale';index?:number}|null;
 const money=(v:unknown)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v??0));
 const num=(v:unknown)=>{const n=Number(v??0);return Number.isFinite(n)?n:0};
 const str=(v:unknown)=>String(v??'');
-const normalize=(v:unknown)=>str(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const productImage=(p:Row)=>str(p.image_url||p.menu_image_url||p.self_service_image_url||'');
 
 function PaymentIcon({code}:{code:string}){
@@ -35,6 +35,8 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
 
   const [tableId,setTableId]=useState('');
   const [catalog,setCatalog]=useState<Row[]>([]);
+  const [catalogLoading,setCatalogLoading]=useState(false);
+  const catalogRequest=useRef(0);
   const [resolvedTable,setResolvedTable]=useState('');
   const [customer,setCustomer]=useState('');
   const [search,setSearch]=useState('');
@@ -58,12 +60,37 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
   const [message,setMessage]=useState('');
   const [saving,setSaving]=useState(false);
 
-  async function loadCatalog(id=tableId){
-    const r=await erpSaleCatalog(id||undefined);
-    if(r.ok){setCatalog(r.data);setResolvedTable(String(r.price_table_id??''));}
-    else setMessage(String(r.error??'Falha ao carregar catálogo'));
-  }
-  useEffect(()=>{void loadCatalog(tableId);},[tableId]);
+  useEffect(()=>{
+    const q=search.trim();
+    const request=++catalogRequest.current;
+    if(!q){
+      setCatalog([]);
+      setCatalogLoading(false);
+      return;
+    }
+    setCatalog([]);
+    setCatalogLoading(true);
+    const timer=window.setTimeout(()=>{
+      void erpSaleCatalogSearch(tableId||undefined,q,40).then(r=>{
+        if(request!==catalogRequest.current)return;
+        setCatalogLoading(false);
+        if(r.ok){
+          setCatalog(r.data);
+          setResolvedTable(String(r.price_table_id??''));
+        }else{
+          setCatalog([]);
+          setMessage(String(r.error??'Falha ao pesquisar catálogo'));
+        }
+      }).catch(error=>{
+        if(request!==catalogRequest.current)return;
+        setCatalogLoading(false);
+        setCatalog([]);
+        setMessage(error instanceof Error?error.message:'Falha ao pesquisar catálogo');
+      });
+    },180);
+    return()=>window.clearTimeout(timer);
+  },[search,tableId]);
+
   useEffect(()=>{
     if(!method&&defaultMethod)setMethod(str(defaultMethod.code));
     if(!entryMethod&&defaultMethod)setEntryMethod(str(defaultMethod.code));
@@ -81,11 +108,21 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
   const isEntryCard=entryMethod==='credit_card'||entryMethod==='debit_card';
   const hasSearch=search.trim().length>0;
 
-  const filteredCatalog=useMemo(()=>{
-    const q=normalize(search.trim());
-    if(!q)return [];
-    return catalog.filter(p=>num(p.stock)>0&&[p.product_code,p.name,p.sku,p.barcode].some(v=>normalize(v).includes(q))).slice(0,40);
-  },[catalog,search]);
+  const filteredCatalog=useMemo(()=>catalog.filter(p=>num(p.stock)>0).slice(0,40),[catalog]);
+
+  async function searchCatalogNow(){
+    const q=search.trim();
+    if(!q)return [] as Row[];
+    const request=++catalogRequest.current;
+    setCatalogLoading(true);
+    const r=await erpSaleCatalogSearch(tableId||undefined,q,40);
+    if(request!==catalogRequest.current)return [] as Row[];
+    setCatalogLoading(false);
+    if(!r.ok){setCatalog([]);setMessage(String(r.error??'Falha ao pesquisar catálogo'));return [] as Row[];}
+    setCatalog(r.data);
+    setResolvedTable(String(r.price_table_id??''));
+    return r.data.filter(p=>num(p.stock)>0).slice(0,40);
+  }
 
   function addProduct(p:Row|null|undefined){
     if(!p)return;
@@ -104,10 +141,13 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
       next[index]={...next[index],quantity:merged};
       return next;
     });
-    if(added){setQty(1);setSearch('');setMessage('');}
+    if(added){setQty(1);setSearch('');setCatalog([]);setMessage('');}
   }
-  function searchKeyDown(e:React.KeyboardEvent<HTMLInputElement>){
-    if(e.key==='Enter'&&hasSearch&&filteredCatalog.length===1){e.preventDefault();addProduct(filteredCatalog[0]);}
+  async function searchKeyDown(e:React.KeyboardEvent<HTMLInputElement>){
+    if(e.key!=='Enter'||!hasSearch)return;
+    e.preventDefault();
+    const matches=filteredCatalog.length?filteredCatalog:await searchCatalogNow();
+    if(matches.length===1)addProduct(matches[0]);
   }
 
   function openDiscount(target:DiscountTarget){
@@ -164,7 +204,7 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
       const customerName=customer?str(customers.find(c=>str(c.id)===customer)?.name):'Consumidor não identificado';
       window.dispatchEvent(new CustomEvent('thorgestao:sale-completed',{detail:{sale_id:str(r.sale_id??''),number:r.number,subtotal,discount:saleDiscount,total:num(r.total??total),items:cart.map(i=>({name:i.name,sku:i.sku,quantity:i.quantity,price:i.price,discount:i.discount})),payment:condition==='immediate'?str(method):'Venda a prazo',customer:customerName,date:new Date().toLocaleString('pt-BR')}}));
       setMessage(condition==='term'?`Venda nº ${String(r.number)} concluída. ${String(termInfo?.installments??installments)} parcela(s) de ${str(selectedTerm?.method)==='boleto'?'Boleto':'Crediário'} foram enviadas para Contas a Receber.`:`Venda nº ${String(r.number)} concluída e quitada por ${money(r.total)}.`);
-      setCart([]);setSaleDiscount(0);setEntryAmount(0);setSearch('');await loadCatalog();
+      setCart([]);setSaleDiscount(0);setEntryAmount(0);setSearch('');setCatalog([]);
     }else setMessage(`Não foi possível finalizar: ${String(r.error??'erro')}`);
   }
 
@@ -200,9 +240,9 @@ export function SaleWorkspaceV070({customers,priceTables,salesOptions}:{customer
 
       <div className="erp-sale-main-grid">
         <section className="erp-sale-catalog-panel">
-          <header className="erp-sale-panel-head"><div><small>PRODUTOS</small><h3>Pesquisa de produtos</h3></div><span>{hasSearch?`${filteredCatalog.length} encontrado(s)`:'Aguardando pesquisa'}</span></header>
+          <header className="erp-sale-panel-head"><div><small>PRODUTOS</small><h3>Pesquisa de produtos</h3></div><span>{catalogLoading?'Buscando...':hasSearch?`${filteredCatalog.length} encontrado(s)`:'Aguardando pesquisa'}</span></header>
           <div className="erp-sale-product-list">
-            {!hasSearch?<div className="erp-sale-empty-state search"><span className="erp-sale-search-empty-icon">⌕</span><b>Pesquise para localizar um produto</b><span>Digite nome, código interno, SKU ou código de barras. Um clique no resultado já adiciona à venda.</span></div>:filteredCatalog.length===0?<div className="erp-sale-empty-state"><b>Nenhum produto encontrado</b><span>Confira o código/nome informado ou o estoque disponível.</span></div>:filteredCatalog.map(p=>{
+            {!hasSearch?<div className="erp-sale-empty-state search"><span className="erp-sale-search-empty-icon">⌕</span><b>Pesquise para localizar um produto</b><span>Digite nome, código interno, SKU ou código de barras. A busca agora acontece direto no servidor e transfere somente os resultados.</span></div>:catalogLoading?<div className="erp-sale-empty-state search"><span className="erp-sale-search-empty-icon">⌕</span><b>Buscando produtos...</b><span>Consultando somente os itens compatíveis com a sua pesquisa.</span></div>:filteredCatalog.length===0?<div className="erp-sale-empty-state"><b>Nenhum produto encontrado</b><span>Confira o código/nome informado ou o estoque disponível.</span></div>:filteredCatalog.map(p=>{
               const image=productImage(p);
               return <button type="button" key={str(p.id)} className="erp-sale-product-row" onClick={()=>addProduct(p)} title="Clique para adicionar à venda">
                 <span className="erp-sale-product-thumb"><span>▦</span>{image&&<img src={image} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display='none'}}/>}</span>
