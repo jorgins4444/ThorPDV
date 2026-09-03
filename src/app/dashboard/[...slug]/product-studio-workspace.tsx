@@ -115,7 +115,7 @@ type BulkState={ncmEnabled:boolean;ncm:string;group_id:string;brand_id:string;ta
 const emptyBulk=():BulkState=>({ncmEnabled:false,ncm:'',group_id:'__keep__',brand_id:'__keep__',tax_situation:'__keep__',is_weighable:'__keep__'});
 
 export function ProductStudioWorkspace({initialProducts,initialTotal=initialProducts.length,groups,classes,suppliers,modifiers,branches,brands=[],categories=[]}:{initialProducts:Row[];initialTotal?:number;groups:Row[];classes:Row[];suppliers:Row[];modifiers:Row[];branches:Row[];brands?:Row[];categories?:Row[]}){
-  const pageSize=100;
+  const pageSize=10;
   const [products,setProducts]=useState(initialProducts);
   const [total,setTotal]=useState(initialTotal);
   const [search,setSearch]=useState('');
