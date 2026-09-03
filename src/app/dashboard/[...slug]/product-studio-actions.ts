@@ -46,7 +46,11 @@ function enrichProductHistory(data:Record<string,unknown>){
 
 export async function productStudioList(search?:string,filters:ProductListFilters={},limit=100,offset=0){
   const p=await token();
-  const r=await rpc('erp_product_list_v4',{p_token:p,p_search:search?.trim()||null,p_filters:filters,p_limit:limit,p_offset:offset});
+  const cleanSearch=search?.trim()||null;
+  const compactCatalog=limit>=500&&offset===0&&!cleanSearch&&Object.keys(filters).length===0;
+  const r=compactCatalog
+    ? await rpc('erp_product_compact_catalog_v1',{p_token:p,p_limit:limit})
+    : await rpc('erp_product_list_v4',{p_token:p,p_search:cleanSearch,p_filters:filters,p_limit:limit,p_offset:offset});
   return {ok:Boolean(r.ok),error:r.error,data:Array.isArray(r.data)?r.data:[],branch_id:r.branch_id,total:Number(r.total||0),limit:Number(r.limit||limit),offset:Number(r.offset||offset)};
 }
 export async function productStudioFilteredIds(search?:string,filters:ProductListFilters={}){
