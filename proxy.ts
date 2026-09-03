@@ -30,35 +30,50 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
   const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const moduleKey=pathname.startsWith('/dashboard')?licensedModule(pathname):null;
   let tempStatus: { ok?: boolean; must_change_password?: boolean } | null = null;
+  let license: {ok?:boolean;status?:string;modules?:Record<string,boolean>} | null = null;
+  let hasSupabaseUser=false;
 
-  if (!user && token) { const { data } = await supabase.rpc('temp_session_status', { p_token: token }); tempStatus = data as { ok?: boolean; must_change_password?: boolean } | null; }
-  const hasTempSession = Boolean(tempStatus?.ok);
-  const mustChangePassword = Boolean(tempStatus?.must_change_password);
+  if(token){
+    const [statusResult,licenseResult]=await Promise.all([
+      supabase.rpc('temp_session_status',{p_token:token}),
+      moduleKey?supabase.rpc('erp_license_get',{p_token:token}):Promise.resolve({data:null}),
+    ]);
+    tempStatus=statusResult.data as {ok?:boolean;must_change_password?:boolean}|null;
+    license=licenseResult.data as {ok?:boolean;status?:string;modules?:Record<string,boolean>}|null;
+  }
+
+  const hasTempSession=Boolean(tempStatus?.ok);
+  const mustChangePassword=Boolean(tempStatus?.must_change_password);
+
+  // A sessão temporária é o caminho principal do Thor Gestão. Evitamos uma
+  // consulta Auth adicional em toda troca de módulo; só consultamos Auth se
+  // não houver uma sessão temporária válida.
+  if(!hasTempSession){
+    const {data:{user}}=await supabase.auth.getUser();
+    hasSupabaseUser=Boolean(user);
+  }
 
   if (pathname.startsWith('/dashboard')) {
-    if (!user && !hasTempSession) { const url = request.nextUrl.clone(); url.pathname = '/login'; return NextResponse.redirect(url); }
-    if (!user && hasTempSession && mustChangePassword) { const url = request.nextUrl.clone(); url.pathname = '/change-password'; return NextResponse.redirect(url); }
-    const moduleKey=licensedModule(pathname);
-    if(moduleKey && token && hasTempSession){
-      const {data}=await supabase.rpc('erp_license_get',{p_token:token});
-      const license=data as {ok?:boolean;status?:string;modules?:Record<string,boolean>}|null;
+    if (!hasSupabaseUser && !hasTempSession) { const url = request.nextUrl.clone(); url.pathname = '/login'; return NextResponse.redirect(url); }
+    if (!hasSupabaseUser && hasTempSession && mustChangePassword) { const url = request.nextUrl.clone(); url.pathname = '/change-password'; return NextResponse.redirect(url); }
+    if(moduleKey&&token&&hasTempSession){
       const active=license?.ok&&(license.status==='active'||license.status==='trial');
       if(!active||license?.modules?.[moduleKey]!==true){const url=request.nextUrl.clone();url.pathname='/dashboard';url.searchParams.set('license_blocked',moduleKey);return NextResponse.redirect(url);}
     }
   }
 
   if (pathname === '/change-password') {
-    if (user) { const url = request.nextUrl.clone(); url.pathname = '/dashboard'; return NextResponse.redirect(url); }
+    if (hasSupabaseUser) { const url = request.nextUrl.clone(); url.pathname = '/dashboard'; return NextResponse.redirect(url); }
     if (!hasTempSession) { const url = request.nextUrl.clone(); url.pathname = '/login'; return NextResponse.redirect(url); }
     if (!mustChangePassword) { const url = request.nextUrl.clone(); url.pathname = '/dashboard'; return NextResponse.redirect(url); }
   }
 
   if (pathname === '/login') {
-    if (user || (hasTempSession && !mustChangePassword)) { const url = request.nextUrl.clone(); url.pathname = '/dashboard'; return NextResponse.redirect(url); }
+    if (hasSupabaseUser || (hasTempSession && !mustChangePassword)) { const url = request.nextUrl.clone(); url.pathname = '/dashboard'; return NextResponse.redirect(url); }
     if (hasTempSession && mustChangePassword) { const url = request.nextUrl.clone(); url.pathname = '/change-password'; return NextResponse.redirect(url); }
   }
 
