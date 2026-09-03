@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import './form-contrast.css';
-import './dashboard/[...slug]/product-studio-feedback.css';
 import './thor-design-system.css';
 import './thor-design-final.css';
 import './thor-universal-polish.css';
@@ -20,7 +19,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="pt-BR">
       <body>{children}<ThorFeedbackCenter/></body>
-      <script src="/product-image-upload-v091.js" defer />
       <script src="/fiscal-compact-v1.js" defer />
       <script src="/admin-permission-hints-v1.js" defer />
     </html>

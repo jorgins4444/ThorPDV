@@ -1,13 +1,10 @@
 import './module.css';
 import './advanced.css';
 import './price-table.css';
-import './sale.css';
 import './promotion.css';
 import './organization.css';
 import './fiscal.css';
 import './fiscal-configuration.css';
-import './fiscal-documents.css';
-import './nfe-emission.css';
 import './fiscal-center.css';
 import './reconciliation.css';
 import './cash.css';
@@ -15,8 +12,6 @@ import './sales-cash.css';
 import './management-audit.css';
 import './operator-admin.css';
 import './pdv-profile.css';
-import './product-workspace.css';
-import './product-master.css';
 import './production.css';
 import './branch-config.css';
 import './branches-workspace.css';
@@ -27,7 +22,6 @@ import { InventoryClient, ReportsClient, StockTransferClient } from './advanced-
 import { PriceTableWorkspace } from './price-table-workspace';
 import { PriceAdjustmentWorkspace } from './price-adjustment-workspace';
 import { PromotionWorkspace } from './promotion-workspace';
-import { SaleWorkspace } from './sale-workspace';
 import { StockWorkspace } from './stock-workspace';
 import { HeadquartersWorkspace } from './headquarters-workspace';
 import { headquartersGet } from './headquarters-actions';
@@ -38,20 +32,16 @@ import { SmartPosPairingPanel } from './smartpos-pairing-panel';
 import { FiscalCenterWorkspace } from './fiscal-center-workspace';
 import { FiscalConfigSectionWorkspace, type FiscalSection } from './fiscal-config-section-workspace';
 import { FiscalCertificateWorkspace } from './fiscal-certificate-workspace';
-import { FiscalDocumentsWorkspace } from './fiscal-documents-workspace';
-import { NfeEmissionWorkspace } from './nfe-emission-workspace';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
 import { CashWorkspace } from './cash-workspace';
 import { SalesCashWorkspace } from './sales-cash-workspace';
 import { ManagementAuditWorkspace } from './management-audit-workspace';
 import { OperatorWorkspace } from './operator-workspace';
 import { PdvProfileWorkspace } from './pdv-profile-workspace';
-import { ProductMasterWorkspace } from './product-master-workspace';
 import { ProductionWorkspace } from './production-workspace';
 import { reconciliationData } from './reconciliation-actions';
 import { listPdvOperators } from './operator-actions';
 import { erpFiscalSettingsGet, erpLoad, erpManagementAudit, erpProductionOrders } from './actions';
-import { fiscalDocumentsScreenBootstrap, nfeScreenBootstrap, productScreenBootstrap, saleScreenBootstrap } from './screen-bootstrap-actions';
 
 const resourceBySlug: Record<string, string> = {
   'clientes': 'customers', 'clientes/novo': 'customers', 'fornecedores': 'suppliers',
@@ -96,12 +86,9 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   const slug = resolved.slug.join('/');
   const resource = resourceBySlug[slug] ?? 'products';
 
-  // Segunda rodada: telas pesadas usam um único bootstrap no Supabase para
-  // evitar várias conexões HTTP independentes antes do primeiro render.
-  if (slug === 'produtos' || slug === 'produtos/novo') {
-    const boot=await productScreenBootstrap();
-    return <AdvancedShell title="Cadastro de Produtos" subtitle="Cadastro completo integrado a preços, tributação, estoque, ficha técnica, produção, balança e PDV." activePath="/dashboard/produtos"><ProductMasterWorkspace initialProducts={boot.products} groups={boot.groups} classes={boot.classes} suppliers={boot.suppliers} modifiers={boot.modifiers} branches={boot.branches}/></AdvancedShell>;
-  }
+  // Terceira rodada: Produtos, Nova Venda, NF-e e Documentos Fiscais possuem
+  // rotas físicas próprias. Assim o catch-all não registra seus componentes e
+  // folhas de estilo pesados no bundle compartilhado dos demais módulos.
   if (slug === 'estoque/producao') {
     const orders=await erpProductionOrders();
     return <AdvancedShell title="Produção / Cozinha" subtitle="Comandas geradas automaticamente pelas vendas de produtos configurados como produção sob demanda." activePath="/dashboard/estoque/producao"><ProductionWorkspace initial={orders.data}/></AdvancedShell>;
@@ -111,10 +98,6 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
     return <AdvancedShell title="Auditoria Gerencial" subtitle="Rastreabilidade de descontos, cancelamentos, devoluções, estornos, autorizações, caixa e alterações de preço." activePath="/dashboard/administrativo/auditoria"><ManagementAuditWorkspace initialEvents={audit.data} initialSummary={audit.summary} initialPagination={audit.pagination} permissions={audit.permissions} branches={audit.branches} operators={audit.operators}/></AdvancedShell>;
   }
   if (slug === 'vendas') return <AdvancedShell title="Vendas" subtitle="Operações de caixa, vendas, fechamentos, histórico e correções por unidade, PDV e operador." activePath="/dashboard/vendas"><SalesCashWorkspace/></AdvancedShell>;
-  if (slug === 'vendas/nova') {
-    const boot=await saleScreenBootstrap();
-    return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard/vendas/nova"><SaleWorkspace customers={boot.customers} priceTables={boot.priceTables} initialSalesOptions={boot.salesOptions}/></AdvancedShell>;
-  }
   if (slug === 'perfis-pdv') {
     const profilesPdv=await erpLoad('profiles_pdv');
     return <AdvancedShell title="Perfis de Usuário PDV" subtitle="Alçadas e permissões sincronizadas com os operadores do ThorPDV Desktop." activePath="/dashboard/perfis-pdv"><PdvProfileWorkspace initialProfiles={profilesPdv.data}/></AdvancedShell>;
@@ -176,15 +159,6 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   if (slug === 'fiscal/certificado') {
     const settings=await erpFiscalSettingsGet();
     return <AdvancedShell title="Certificado Digital A1" subtitle="Certificado utilizado para assinatura fiscal e comunicação segura com a SEFAZ." activePath="/dashboard/fiscal/certificado" backHref="/dashboard/fiscal" backLabel="Fiscal"><FiscalCertificateWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
-  }
-  if (slug === 'fiscal/nfe') {
-    const boot=await nfeScreenBootstrap();
-    return <AdvancedShell title="Emissão de NF-e" subtitle="NF-e modelo 55 por venda ou preenchimento manual, com validação fiscal, série, destinatário, itens e acompanhamento." activePath="/dashboard/fiscal/nfe" backHref="/dashboard/fiscal" backLabel="Fiscal"><NfeEmissionWorkspace documents={boot.documents} sales={boot.sales} customers={boot.customers} products={boot.products} settings={boot.settings}/></AdvancedShell>;
-  }
-  if (slug === 'documentos-fiscais' || slug === 'fiscal/nfce') {
-    const boot=await fiscalDocumentsScreenBootstrap();
-    const initialType=slug.endsWith('/nfce')?'nfce':'all';
-    return <AdvancedShell title="Documentos Fiscais" subtitle="Emissão e acompanhamento de NF-e e NFC-e, status SEFAZ, protocolos, XML, DANFE e cancelamentos." activePath="/dashboard/documentos-fiscais"><FiscalDocumentsWorkspace initialDocs={boot.documents} sales={boot.sales} settings={boot.settings} initialType={initialType}/></AdvancedShell>;
   }
   if (slug === 'financeiro/conciliacao') {
     const reconciliation = await reconciliationData();
