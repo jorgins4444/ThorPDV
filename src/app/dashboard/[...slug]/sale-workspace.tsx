@@ -23,12 +23,13 @@ const FULLSCREEN_CSS=`
 @media(max-width:900px){.erp-sale-fullscreen-header{padding:12px 14px}.erp-sale-fullscreen-header>div:nth-child(2) strong{font-size:22px!important}.erp-sale-header-actions{width:100%;overflow-x:auto}.erp-sale-product-row{grid-template-columns:48px 60px minmax(0,1fr)!important}.erp-sale-product-row>strong{grid-column:3;justify-self:start}.erp-sale-fullscreen-shell>.erp-sale-workspace{padding:8px 8px 92px}}
 `;
 
-export function SaleWorkspace({customers,priceTables}:{customers:Row[];priceTables:Row[]}){
-  const [salesOptions,setSalesOptions]=useState<SalesOptions>(EMPTY);
-  const [loading,setLoading]=useState(true);
+export function SaleWorkspace({customers,priceTables,initialSalesOptions}:{customers:Row[];priceTables:Row[];initialSalesOptions?:SalesOptions}){
+  const [salesOptions,setSalesOptions]=useState<SalesOptions>(initialSalesOptions??EMPTY);
+  const [loading,setLoading]=useState(!initialSalesOptions);
   const [error,setError]=useState('');
 
   useEffect(()=>{
+    if(initialSalesOptions)return;
     let active=true;
     void salesOptionsGet().then(r=>{
       if(!active)return;
@@ -48,7 +49,7 @@ export function SaleWorkspace({customers,priceTables}:{customers:Row[];priceTabl
       setLoading(false);
     });
     return()=>{active=false};
-  },[]);
+  },[initialSalesOptions]);
 
   if(loading)return <><style>{FULLSCREEN_CSS}</style><div className="erp-sale-fullscreen-loading"><strong>ThorGestão PDV</strong><span>Carregando opções da venda...</span></div></>;
   if(error)return <><style>{FULLSCREEN_CSS}</style><div className="erp-sale-fullscreen-loading error"><strong>Não foi possível abrir a Nova Venda</strong><span>{error}</span><a href="/dashboard/vendas">← Voltar para o ThorGestão</a></div></>;

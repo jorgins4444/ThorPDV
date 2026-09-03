@@ -40,7 +40,6 @@ import { FiscalConfigSectionWorkspace, type FiscalSection } from './fiscal-confi
 import { FiscalCertificateWorkspace } from './fiscal-certificate-workspace';
 import { FiscalDocumentsWorkspace } from './fiscal-documents-workspace';
 import { NfeEmissionWorkspace } from './nfe-emission-workspace';
-import { erpFiscalDocuments } from './fiscal-transmit-actions';
 import { ReconciliationWorkspace } from './reconciliation-workspace';
 import { CashWorkspace } from './cash-workspace';
 import { SalesCashWorkspace } from './sales-cash-workspace';
@@ -51,7 +50,8 @@ import { ProductMasterWorkspace } from './product-master-workspace';
 import { ProductionWorkspace } from './production-workspace';
 import { reconciliationData } from './reconciliation-actions';
 import { listPdvOperators } from './operator-actions';
-import { erpFiscalSettingsGet, erpLoad, erpManagementAudit, erpProductList, erpProductionOrders } from './actions';
+import { erpFiscalSettingsGet, erpLoad, erpManagementAudit, erpProductionOrders } from './actions';
+import { fiscalDocumentsScreenBootstrap, nfeScreenBootstrap, productScreenBootstrap, saleScreenBootstrap } from './screen-bootstrap-actions';
 
 const resourceBySlug: Record<string, string> = {
   'clientes': 'customers', 'clientes/novo': 'customers', 'fornecedores': 'suppliers',
@@ -96,13 +96,11 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   const slug = resolved.slug.join('/');
   const resource = resourceBySlug[slug] ?? 'products';
 
-  // Cada rota busca apenas o que realmente renderiza. Antes, toda troca de aba
-  // disparava o recurso atual + dez listas auxiliares, mesmo quando não usadas.
+  // Segunda rodada: telas pesadas usam um único bootstrap no Supabase para
+  // evitar várias conexões HTTP independentes antes do primeiro render.
   if (slug === 'produtos' || slug === 'produtos/novo') {
-    const [productList,groups,classes,suppliers,modifiers,branches]=await Promise.all([
-      erpProductList(),erpLoad('groups'),erpLoad('classes'),erpLoad('suppliers'),erpLoad('modifiers'),erpLoad('branches'),
-    ]);
-    return <AdvancedShell title="Cadastro de Produtos" subtitle="Cadastro completo integrado a preços, tributação, estoque, ficha técnica, produção, balança e PDV." activePath="/dashboard/produtos"><ProductMasterWorkspace initialProducts={productList.data} groups={groups.data} classes={classes.data} suppliers={suppliers.data} modifiers={modifiers.data} branches={branches.data}/></AdvancedShell>;
+    const boot=await productScreenBootstrap();
+    return <AdvancedShell title="Cadastro de Produtos" subtitle="Cadastro completo integrado a preços, tributação, estoque, ficha técnica, produção, balança e PDV." activePath="/dashboard/produtos"><ProductMasterWorkspace initialProducts={boot.products} groups={boot.groups} classes={boot.classes} suppliers={boot.suppliers} modifiers={boot.modifiers} branches={boot.branches}/></AdvancedShell>;
   }
   if (slug === 'estoque/producao') {
     const orders=await erpProductionOrders();
@@ -114,8 +112,8 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   }
   if (slug === 'vendas') return <AdvancedShell title="Vendas" subtitle="Operações de caixa, vendas, fechamentos, histórico e correções por unidade, PDV e operador." activePath="/dashboard/vendas"><SalesCashWorkspace/></AdvancedShell>;
   if (slug === 'vendas/nova') {
-    const [customers,priceTables]=await Promise.all([erpLoad('customers'),erpLoad('price_tables')]);
-    return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard/vendas/nova"><SaleWorkspace customers={customers.data} priceTables={priceTables.data}/></AdvancedShell>;
+    const boot=await saleScreenBootstrap();
+    return <AdvancedShell title="Nova Venda PDV" subtitle="Preço resolvido no servidor, baixa de estoque, pagamento, caixa e financeiro em uma única operação." activePath="/dashboard/vendas/nova"><SaleWorkspace customers={boot.customers} priceTables={boot.priceTables} initialSalesOptions={boot.salesOptions}/></AdvancedShell>;
   }
   if (slug === 'perfis-pdv') {
     const profilesPdv=await erpLoad('profiles_pdv');
@@ -180,13 +178,13 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
     return <AdvancedShell title="Certificado Digital A1" subtitle="Certificado utilizado para assinatura fiscal e comunicação segura com a SEFAZ." activePath="/dashboard/fiscal/certificado" backHref="/dashboard/fiscal" backLabel="Fiscal"><FiscalCertificateWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
   }
   if (slug === 'fiscal/nfe') {
-    const [settings,sales,documents,customers,products]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments(),erpLoad('customers'),erpLoad('products')]);
-    return <AdvancedShell title="Emissão de NF-e" subtitle="NF-e modelo 55 por venda ou preenchimento manual, com validação fiscal, série, destinatário, itens e acompanhamento." activePath="/dashboard/fiscal/nfe" backHref="/dashboard/fiscal" backLabel="Fiscal"><NfeEmissionWorkspace documents={documents.data as Record<string,unknown>[]} sales={sales.data as Record<string,unknown>[]} customers={customers.data as Record<string,unknown>[]} products={products.data as Record<string,unknown>[]} settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
+    const boot=await nfeScreenBootstrap();
+    return <AdvancedShell title="Emissão de NF-e" subtitle="NF-e modelo 55 por venda ou preenchimento manual, com validação fiscal, série, destinatário, itens e acompanhamento." activePath="/dashboard/fiscal/nfe" backHref="/dashboard/fiscal" backLabel="Fiscal"><NfeEmissionWorkspace documents={boot.documents} sales={boot.sales} customers={boot.customers} products={boot.products} settings={boot.settings}/></AdvancedShell>;
   }
   if (slug === 'documentos-fiscais' || slug === 'fiscal/nfce') {
-    const [settings,sales,documents]=await Promise.all([erpFiscalSettingsGet(),erpLoad('sales'),erpFiscalDocuments()]);
+    const boot=await fiscalDocumentsScreenBootstrap();
     const initialType=slug.endsWith('/nfce')?'nfce':'all';
-    return <AdvancedShell title="Documentos Fiscais" subtitle="Emissão e acompanhamento de NF-e e NFC-e, status SEFAZ, protocolos, XML, DANFE e cancelamentos." activePath="/dashboard/documentos-fiscais"><FiscalDocumentsWorkspace initialDocs={documents.data} sales={sales.data} settings={(settings.settings??{}) as Record<string,unknown>} initialType={initialType}/></AdvancedShell>;
+    return <AdvancedShell title="Documentos Fiscais" subtitle="Emissão e acompanhamento de NF-e e NFC-e, status SEFAZ, protocolos, XML, DANFE e cancelamentos." activePath="/dashboard/documentos-fiscais"><FiscalDocumentsWorkspace initialDocs={boot.documents} sales={boot.sales} settings={boot.settings} initialType={initialType}/></AdvancedShell>;
   }
   if (slug === 'financeiro/conciliacao') {
     const reconciliation = await reconciliationData();
