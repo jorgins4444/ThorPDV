@@ -16,16 +16,19 @@ function validateReturnFile(layout:CnabLayout,content:string):Record<string,unkn
   const first=lines[0]||'';
   if(!first)return {ok:false,error:'return_file_empty',detail:'O arquivo selecionado está vazio.'};
 
+  // Nesta etapa, a leitura/baixa automática continua liberada somente para o Itaú.
+  // Os demais bancos ficam pré-configurados e são habilitados banco a banco somente
+  // depois do parser específico e do arquivo de teste passarem pela homologação.
   if(layout==='cnab400'){
     const operation=first.slice(1,2);
     const literal=first.slice(2,9).trim().toUpperCase();
     const serviceCode=first.slice(9,11);
     const bankCode=first.slice(76,79);
     if(operation==='1'||literal==='REMESSA'){
-      return {ok:false,error:'cnab400_file_is_not_return',detail:'O arquivo selecionado é uma REMESSA CNAB 400 (01REMESSA), não um arquivo de RETORNO do banco. Selecione o arquivo devolvido pelo Itaú, cujo cabeçalho deve iniciar com 02RETORNO01COBRANCA.'};
+      return {ok:false,error:'cnab400_file_is_not_return',detail:'O arquivo selecionado é uma REMESSA CNAB 400, não um arquivo de RETORNO do banco.'};
     }
     if(operation!=='2'||literal!=='RETORNO'||serviceCode!=='01'||bankCode!=='341'){
-      return {ok:false,error:'return_not_itau_cnab400',detail:'O arquivo não possui o cabeçalho esperado de retorno Itaú CNAB 400 (02RETORNO01COBRANCA e banco 341).'};
+      return {ok:false,error:'return_parser_not_enabled_for_bank',bank_code:bankCode,detail:'A leitura automática deste retorno ainda não foi habilitada para este banco. O parser Itaú 341 continua ativo enquanto os demais modelos passam por homologação.'};
     }
   }
 
@@ -33,13 +36,14 @@ function validateReturnFile(layout:CnabLayout,content:string):Record<string,unkn
     const bankCode=first.slice(0,3);
     const fileCode=first.slice(142,143);
     if(bankCode!=='341'||fileCode!=='2'){
-      return {ok:false,error:'return_not_itau_cnab240',detail:'O arquivo não possui o cabeçalho esperado de retorno Itaú CNAB 240.'};
+      return {ok:false,error:'return_parser_not_enabled_for_bank',bank_code:bankCode,detail:'A leitura automática deste retorno CNAB 240 ainda não foi habilitada para este banco.'};
     }
   }
   return {ok:true};
 }
 
 export async function cnabData(){return rpc('erp_cnab_data',{p_token:await token()})}
+export async function bankCatalog(){return rpc('erp_bank_catalog',{p_token:await token()})}
 export async function bankHomologationData(){return rpc('erp_bank_homologation_data',{p_token:await token()})}
 export async function bankLayoutProfile(configId:string){return rpc('erp_bank_layout_profile_get',{p_token:await token(),p_config:configId})}
 export async function saveBankLayoutProfile(configId:string,direction:BankFileDirection,model:unknown[]){return rpc('erp_bank_layout_profile_save',{p_token:await token(),p_config:configId,p_direction:direction,p_model:model})}
@@ -56,8 +60,8 @@ export async function markHomologationRemittanceSent(configId:string){return rpc
 export async function restartBankHomologation(configId:string){return rpc('erp_bank_homologation_restart',{p_token:await token(),p_config:configId})}
 
 export async function saveCnabConfig(layout:CnabLayout,bankAccountId:string,payload:Record<string,unknown>){
-  return rpc(layout==='cnab240'?'erp_cnab240_config_save':'erp_cnab400_config_save',{
-    p_token:await token(),p_bank_account:bankAccountId,p_payload:payload,
+  return rpc('erp_cnab_config_save_v2',{
+    p_token:await token(),p_bank_account:bankAccountId,p_layout:layout,p_payload:payload,
   });
 }
 
