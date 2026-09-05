@@ -56,9 +56,14 @@ export async function markHomologationRemittanceSent(configId:string){return rpc
 export async function restartBankHomologation(configId:string){return rpc('erp_bank_homologation_restart',{p_token:await token(),p_config:configId})}
 
 export async function saveCnabConfig(layout:CnabLayout,bankAccountId:string,payload:Record<string,unknown>){
-  return rpc(layout==='cnab240'?'erp_cnab240_config_save':'erp_cnab400_config_save',{
-    p_token:await token(),p_bank_account:bankAccountId,p_payload:payload,
+  const result=await rpc('erp_cnab_config_save_v2',{
+    p_token:await token(),p_bank_account:bankAccountId,p_layout:layout,p_payload:payload,
   });
+  if(result.error==='bank_cnab_not_enabled_yet'){
+    const code=String(result.bank_code||'');
+    return {...result,detail:`O banco ${code||'selecionado'} já está vinculado à conta, mas o adaptador CNAB ainda está em implantação. O Thor não criará uma homologação com layout de outro banco.`};
+  }
+  return result;
 }
 
 export async function generateCnabRemittance(layout:CnabLayout,configId:string,entryIds:string[]){
