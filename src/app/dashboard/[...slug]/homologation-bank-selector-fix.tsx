@@ -32,14 +32,19 @@ export function HomologationBankSelectorFix({accounts,layoutModels}:{accounts:Ro
       const form=modal?.querySelector<HTMLFormElement>('form');
       if(!modal||!form)return;
 
+      const intro=modal.querySelector<HTMLElement>('header p');
+      if(intro)intro.textContent='O wizard usa o modelo oficial disponível para cada banco. Itaú, Bradesco e CAIXA já possuem estruturas CNAB cadastradas; a geração operacional depende do adaptador homologado de cada banco.';
+
       const accountSelect=form.querySelector<HTMLSelectElement>('select[name="bank_account_id"]');
       const layoutSelect=form.querySelector<HTMLSelectElement>('select[name="layout"]');
       if(!accountSelect||!layoutSelect)return;
 
-      const bankLabel=Array.from(form.querySelectorAll<HTMLLabelElement>('label')).find(label=>{
+      const labels=Array.from(form.querySelectorAll<HTMLLabelElement>('label'));
+      const ownLabel=(name:string)=>labels.find(label=>{
         const ownText=Array.from(label.childNodes).filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent||'').join(' ').trim();
-        return ownText==='Banco';
+        return ownText===name;
       });
+      const bankLabel=ownLabel('Banco');
       if(!bankLabel)return;
       const bankSelect=bankLabel.querySelector<HTMLSelectElement>('select');
       if(!bankSelect)return;
@@ -93,6 +98,15 @@ export function HomologationBankSelectorFix({accounts,layoutModels}:{accounts:Ro
         layoutSelect.dataset.modelSignature=`${effectiveBank}|${modelSignature}`;
       }
 
+      const walletLabel=ownLabel('Carteira');
+      const walletInput=walletLabel?.querySelector<HTMLInputElement>('input');
+      if(walletInput){
+        if(effectiveBank==='104')walletInput.value=layoutSelect.value==='cnab400'?'01 — Cobrança Registrada':'1 — Cobrança Simples';
+        else if(effectiveBank==='341')walletInput.value=text(selectedAccount?.wallet)||'109';
+        else walletInput.value=text(selectedAccount?.wallet)||'Conforme contrato bancário';
+      }
+
+      const caixaBeneficiaryOk=effectiveBank!=='104'||Boolean(text(selectedAccount?.beneficiary_code).replace(/\D/g,''));
       let hint=bankLabel.querySelector<HTMLElement>('[data-bank-hint="1"]');
       if(!hint){
         hint=document.createElement('small');
@@ -103,16 +117,21 @@ export function HomologationBankSelectorFix({accounts,layoutModels}:{accounts:Ro
         bankLabel.appendChild(hint);
       }
       hint.textContent=effectiveBank
-        ? models.length
-          ? `Banco ${effectiveBank} sincronizado com a conta selecionada.`
-          : `Banco ${effectiveBank} selecionado. O modelo CNAB oficial deste banco ainda está em implantação.`
+        ? !models.length
+          ? `Banco ${effectiveBank} selecionado. O modelo CNAB oficial deste banco ainda está em implantação.`
+          : effectiveBank==='104'&&!caixaBeneficiaryOk
+            ? 'CAIXA 104: modelo oficial CNAB disponível. Antes de iniciar, edite a conta bancária e informe o Código do Beneficiário fornecido pela CAIXA.'
+            : effectiveBank==='104'
+              ? `CAIXA 104 sincronizada. ${layoutSelect.value==='cnab400'?'CNAB 400 maio/2024 v029':'CNAB 240 arquivo 107 / lote 067 / retorno 047'} selecionado.`
+              : `Banco ${effectiveBank} sincronizado com a conta selecionada.`
         : 'Selecione uma conta ou um banco.';
 
       const submit=form.querySelector<HTMLButtonElement>('button.primary[type="submit"], button.primary:not([type])');
       if(submit){
-        const canSubmit=Boolean(accountSelect.value&&effectiveBank&&models.length);
+        const canSubmit=Boolean(accountSelect.value&&effectiveBank&&models.length&&caixaBeneficiaryOk);
         submit.disabled=!canSubmit||submit.textContent?.includes('Salvando')===true;
         if(!models.length&&effectiveBank)submit.title=`CNAB do banco ${effectiveBank} ainda não está liberado para homologação.`;
+        else if(effectiveBank==='104'&&!caixaBeneficiaryOk)submit.title='Informe o Código do Beneficiário no cadastro da conta CAIXA.';
         else submit.removeAttribute('title');
       }
     };
@@ -123,8 +142,8 @@ export function HomologationBankSelectorFix({accounts,layoutModels}:{accounts:Ro
       const form=target.closest<HTMLFormElement>('.hom-modal form');
       if(!form)return;
 
-      if(target.name==='bank_account_id'){
-        form.dataset.boundBankAccount='';
+      if(target.name==='bank_account_id'||target.name==='layout'){
+        if(target.name==='bank_account_id')form.dataset.boundBankAccount='';
         schedule();
         return;
       }
