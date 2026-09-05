@@ -1,6 +1,7 @@
 import '../../[...slug]/module.css';
 import '../../[...slug]/advanced.css';
 import '../../[...slug]/financial-accounts.css';
+import '../../[...slug]/financial-accounts-crud.css';
 import '../../[...slug]/bank-cnab-account-link.css';
 import '../../[...slug]/ui-visibility-fixes.css';
 import { AdvancedShell } from '../../[...slug]/advanced-shell';
