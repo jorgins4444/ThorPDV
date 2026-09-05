@@ -40,7 +40,8 @@ export function HomologationBankSelectorFix({accounts,layoutModels}:{accounts:Ro
         const ownText=Array.from(label.childNodes).filter(node=>node.nodeType===Node.TEXT_NODE).map(node=>node.textContent||'').join(' ').trim();
         return ownText==='Banco';
       });
-      const bankSelect=bankLabel?.querySelector<HTMLSelectElement>('select');
+      if(!bankLabel)return;
+      const bankSelect=bankLabel.querySelector<HTMLSelectElement>('select');
       if(!bankSelect)return;
 
       bankSelect.dataset.homBankSelector='1';
