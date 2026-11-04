@@ -387,7 +387,14 @@ function registerIpc() {
   handle('thor:check-update', () => updater.check());
   handle('thor:install-update', () => updater.install());
   handle('thor:operation-history', (filters) => agent.operationHistory(filters || {}));
-  handle('thor:reprint-operation', (payload) => agent.reprintOperation(payload || {}));
+  handle('thor:reprint-operation', async (payload) => {
+    const result = await agent.reprintOperation(payload || {});
+    if (!result?.pdfDocument) return result;
+    const saved = await saveAsPdf(result.pdfDocument);
+    if (!saved.ok) return saved;
+    agent.event('document_reprinted', result.audit);
+    return { ok: true, label: '2ª via', target: 'pdf', filePath: saved.filePath, document: result.document };
+  });
   handle('thor:pending-operations', () => agent.pendingOperations());
   handle('thor:retry-operation', (eventId) => agent.retryOperation(eventId));
   handle('thor:retry-pending-operations', () => agent.retryPendingOperations());
