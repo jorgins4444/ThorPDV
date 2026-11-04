@@ -32,7 +32,9 @@ function installOperationsServerV125(ThorAgent){
     const map=new Map();
     for(const row of [...remote,...local]){
       const key=`${row.type}|${row.source_event_id||row.reference||row.id}`;
-      if(!map.has(key)||row.origin==='server')map.set(key,row);
+      // Prefer the local document ID when both sources describe the same sale.
+      // The printer's original handler resolves IDs in local operation_documents.
+      if(!map.has(key)||row.origin==='local')map.set(key,row);
     }
     return [...map.values()].sort((a,b)=>Date.parse(b.created_at||0)-Date.parse(a.created_at||0)).slice(0,Math.min(Math.max(Number(filters.limit)||250,1),500));
   };
