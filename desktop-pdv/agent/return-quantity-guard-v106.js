@@ -21,6 +21,19 @@ function resolveReturnLine(items, requested = {}) {
   return null;
 }
 
+// A venda só é fiscal quando existe uma NFC-e autorizada e identificável.
+function classifyReturnOrigin(sale) {
+  const fiscal = sale?.fiscal || {};
+  const status = String(fiscal.status || '').toLowerCase();
+  const accessKey = String(fiscal.access_key || '').replace(/\D/g, '');
+  if (status === 'cancelled' || status === 'cancel_pending') throw new Error('sale_cancelled');
+  if (status === 'authorized' && accessKey.length === 44) return {kind:'fiscal',accessKey,model:'65'};
+  if (status === 'authorized' || accessKey.length === 44 || ['pending','processing','rejected','contingency'].includes(status)) {
+    throw new Error('return_fiscal_status_requires_review');
+  }
+  return {kind:'non_fiscal',accessKey:null,model:null};
+}
+
 function installReturnQuantityGuardV106(ThorAgent) {
   if (ThorAgent.prototype.__returnQuantityGuardV106) return;
   ThorAgent.prototype.__returnQuantityGuardV106 = true;
@@ -40,7 +53,7 @@ function installReturnQuantityGuardV106(ThorAgent) {
 
   const enrichSale = (agent, sale) => {
     if (!sale || typeof sale !== 'object') return sale;
-    return { ...sale, items: (sale.items || []).map((item) => enrichItem(agent, item)) };
+    return { ...sale, return_origin:classifyReturnOrigin(sale), items: (sale.items || []).map((item) => enrichItem(agent, item)) };
   };
 
   const originalFiscalSales = ThorAgent.prototype.fiscalSales;
@@ -58,6 +71,9 @@ function installReturnQuantityGuardV106(ThorAgent) {
   ThorAgent.prototype.returnSale = async function (payload = {}) {
     const sale = this.fiscalSale(payload.saleKey);
     if (!sale) throw new Error('sale_not_found');
+    // Bloqueio seguro: o fluxo atual já credita e movimenta estoque antes de emitir NF-e.
+    // NFC-e autorizada exige NF-e de devolução referenciada antes desses efeitos.
+    if (sale.return_origin.kind === 'fiscal') throw new Error('return_fiscal_nfe_required');
 
     for (const requested of Array.isArray(payload.items) ? payload.items : []) {
       const original = resolveReturnLine(sale.items || [], requested);
