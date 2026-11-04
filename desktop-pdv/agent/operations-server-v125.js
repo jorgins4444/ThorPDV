@@ -28,7 +28,9 @@ function installOperationsServerV125(ThorAgent){
       if(response.ok&&data?.ok&&Array.isArray(data.data))remote=data.data.map(r=>normalize(r,'server'));
     }catch{}
     // Keep server records available for printing even when they do not exist in the local SQLite database.
-    this._serverOperationDocuments = new Map(remote.map(row=>[row.id,row]));
+    if(!this._serverOperationDocuments)this._serverOperationDocuments=new Map();
+    for(const row of remote)this._serverOperationDocuments.set(row.id,row);
+    while(this._serverOperationDocuments.size>1500)this._serverOperationDocuments.delete(this._serverOperationDocuments.keys().next().value);
     const map=new Map();
     for(const row of [...remote,...local]){
       const key=`${row.type}|${row.source_event_id||row.reference||row.id}`;
