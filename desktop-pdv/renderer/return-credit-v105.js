@@ -53,6 +53,8 @@
   }
 
   returnSaleModal = function (sale) {
+    if(sale?.return_origin?.kind==='fiscal'){infoModal('Devolução fiscal','Esta venda possui NFC-e autorizada. A devolução exige NF-e referenciada e autorização fiscal antes de liberar crédito ou estoque. O fluxo fiscal ainda não está habilitado.');return;}
+    if(!sale?.return_origin){infoModal('Devolução','Não foi possível identificar com segurança a origem fiscal da venda. Atualize a venda e tente novamente.');return;}
     const items = Array.isArray(sale.items) ? sale.items : [];
     const automaticCustomer = sale.customer_id ? { id:sale.customer_id, name:sale.customer_name || sale.customer || 'Cliente da venda', document:sale.customer_document || '', store_credit_balance:sale.customer_store_credit_balance } : null;
     let selectedCustomer = automaticCustomer;
