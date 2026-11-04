@@ -125,7 +125,8 @@ function installOperationsCenterV120(ThorAgent){
     if(doc.type==='sale'&&doc.source_event_id){try{receipt=this.documentData('local:'+doc.source_event_id,'pre_sale').text;receipt=receipt.replace('CUPOM DE PRE-VENDA','CUPOM DE PRE-VENDA - 2a VIA')+'\\n'+center('REIMPRESSAO AUDITADA - 2a VIA')+'\\n\\n';}catch{}}
     if(doc.type==='sale_return'&&(doc.payload?.voucher||doc.payload?.returnReceipt)){try{receipt=this.storeCreditVoucherDocument(doc.payload.voucher||doc.payload.returnReceipt).text;receipt=receipt.replace('DEVOLUCAO DE VENDA','DEVOLUCAO DE VENDA - 2a VIA')+'\\n'+center('REIMPRESSAO AUDITADA - 2a VIA')+'\\n\\n';}catch{}}
     if(!receipt)receipt=genericReceipt(this,doc,true);
-    const target=this.store.settings().printerName;if(target==='__PDF__')throw new Error('pdf_requires_ui');
+    const target=this.store.settings().printerName;
+    if(target==='__PDF__')return {ok:false,pdfDocument:{kind:'text',text:receipt,filename:`ThorPDV-2a-via-${text(doc.reference||doc.id).replace(/[^a-zA-Z0-9_-]/g,'-')}.pdf`},audit:{document_id:doc.id,document_type:doc.type,reference:doc.reference,reason:text(reason),operator_user_id:operator.id,supervisor_authorization:supervisorAuthorization||null,copy_label:'2a via'},document:{id:doc.id,type:doc.type,reference:doc.reference}};
     await hardware.printText(target,receipt);
     this.event('document_reprinted',{document_id:doc.id,document_type:doc.type,reference:doc.reference,reason:text(reason),operator_user_id:operator.id,supervisor_authorization:supervisorAuthorization||null,copy_label:'2a via'});
     return {ok:true,label:'2ª via',document:{id:doc.id,type:doc.type,reference:doc.reference}};
