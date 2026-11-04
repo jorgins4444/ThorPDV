@@ -21,3 +21,9 @@ export async function controlReleaseSave(payload:Record<string,unknown>){const t
 export async function controlUpdatePolicySet(payload:Record<string,unknown>){const t=await token();return rpc('platform_update_policy_set',{p_token:t,p_payload:payload});}
 export async function controlUpdatePolicyClear(payload:Record<string,unknown>){const t=await token();return rpc('platform_update_policy_clear',{p_token:t,p_payload:payload});}
 export async function controlLogout(){const c=await cookies();const t=c.get(CONTROL_COOKIE)?.value;if(t)await rpc('platform_logout',{p_token:t});c.delete(CONTROL_COOKIE);redirect('/control/login');}
+
+export async function controlResetCustomerPassword(tenantId:string,email:string){
+ const t=await token();
+ if(!tenantId||!email)return {ok:false,error:'Informe empresa e e-mail.'};
+ return rpc('platform_customer_password_reset',{p_token:t,p_tenant:tenantId,p_email:email.trim().toLowerCase()});
+}
