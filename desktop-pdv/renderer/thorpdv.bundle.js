@@ -1088,6 +1088,32 @@ async function cashClosingMovement(type,previewModal){
   }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,friendlyError(e.message));}
 }
 
+// Fechamento e impressao sao operacoes separadas: falha na impressora nao
+// pode tentar fechar novamente um caixa que ja foi encerrado.
+async function cashClosingPrintAfterClose(summary=null){
+  const print=async()=>{
+    const result=await window.thor.printCashClose(summary);
+    if(result?.cancelled||result?.ok!==true)throw new Error('Impressao cancelada ou nao confirmada pela fila de impressao.');
+    return result;
+  };
+  try{return {printed:true,result:await print()};}
+  catch(error){
+    const message=friendlyError(error?.message||'print_failed');
+    const dialog=modal(`<h3>Caixa fechado — impressao pendente</h3>
+      <p class="muted">O fechamento foi registrado. A impressao falhou: ${esc(message)}</p>
+      <p>Confira se a impressora esta ligada e selecionada nas configuracoes do PDV. A nova tentativa nao fechara o caixa novamente.</p>
+      <div class="actions"><button class="secondary" id="cashPrintDismiss">Fechar</button><button class="primary" id="cashPrintRetry">Tentar imprimir novamente</button></div>`);
+    dialog.querySelector('#cashPrintDismiss').onclick=()=>dialog.remove();
+    dialog.querySelector('#cashPrintRetry').onclick=async()=>{
+      const button=dialog.querySelector('#cashPrintRetry');button.disabled=true;
+      try{const result=await print();dialog.remove();showToast('Comprovante enviado a impressora ('+(result.method||result.target||'Windows')+').');}
+      catch(retryError){infoModal('Impressao nao concluida',friendlyError(retryError?.message||'print_failed'));}
+      finally{button.disabled=false;}
+    };
+    return {printed:false,error:message};
+  }
+}
+
 function renderBlindCashClosingModal(preview,{historical=false,onDone=null}={}){
   const labels=cashClosingLabels;
   // Exibir todas as modalidades conhecidas, mesmo sem vendas no período.
@@ -1113,10 +1139,10 @@ function renderBlindCashClosingModal(preview,{historical=false,onDone=null}={}){
       if(historical&&v3State()?.operator?.permissions?.cash?.close_previous!==true)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',0);
       const payload={cashOpenEventId:preview.client_event_id,closingAmount,countedPayments,notes:m.querySelector('#blindCloseNotes').value,supervisorAuthorization};
       if(historical)await window.thor.closeHistoricalCash(payload);else await window.thor.closeCash(payload);
-      m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
-      let printWarning='';
-      try{await window.thor.printCashClose(null);}catch(e){printWarning=friendlyError(e?.message||'print_failed');}
-      infoModal('Caixa fechado',printWarning?`O fechamento às cegas foi registrado, mas a impressão dos valores conferidos falhou: ${printWarning}. Configure a impressora e use a função de reimpressão do último fechamento.`:'Fechamento às cegas registrado e comprovante dos valores conferidos enviado à impressora. Os valores esperados e as diferenças permanecem reservados à gestão.');
+      m.remove();
+      const printResult=await cashClosingPrintAfterClose(null);
+      await refreshStatus().catch(()=>{});await window.thor.sync().catch(()=>{});
+      if(printResult.printed)infoModal('Caixa fechado','Fechamento às cegas registrado. Comprovante com os valores conferidos enviado à impressora, sem valores esperados ou diferenças.');
       if(typeof onDone==='function')await onDone();
     }catch(error){btn.disabled=false;infoModal('Fechamento',friendlyError(error.message));}
   };
@@ -1151,9 +1177,10 @@ function renderCashClosingModal(preview){
     const btn=m.querySelector('#cashConfirmClose');btn.disabled=true;btn.textContent='Fechando...';
     try{
       const result=await window.thor.closeCash({closingAmount,notes:m.querySelector('#cashCloseNotes').value,reconciliation});
-      m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
-      let printed=false;try{const p=await window.thor.printCashClose(result.summary);printed=!p?.cancelled;}catch(e){infoModal('Caixa fechado',`O caixa foi fechado, mas o comprovante não foi impresso: ${friendlyError(e.message)}. Você poderá reimprimir o último fechamento nas configurações futuras.`);return;}
-      showToast(`Caixa fechado${printed?' e comprovante impresso':''}. Diferença: ${money(result.summary?.difference||0)}.`);
+      m.remove();
+      const printed=await cashClosingPrintAfterClose(result.summary);
+      await refreshStatus().catch(()=>{});await window.thor.sync().catch(()=>{});
+      if(printed.printed)showToast(`Caixa fechado; comprovante enviado à impressora. Diferença: ${money(result.summary?.difference||0)}.`);
     }catch(e){btn.disabled=false;btn.textContent='Conferir e fechar caixa';infoModal('Fechamento de caixa',friendlyError(e.message));}
   };
 }
@@ -5241,10 +5268,13 @@ function cashDailyCloseModal(preview,{historical=false,readonly=false,onDone=nul
       if(historical&&v3State()?.operator?.permissions?.cash?.close_previous!==true)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',closingAmount);
       const payload={cashOpenEventId:preview.client_event_id,closingAmount,notes:m.querySelector('#cashDailyNotes').value,reconciliation,supervisorAuthorization};
       const result=historical?await window.thor.closeHistoricalCash(payload):await window.thor.closeCash(payload);
-      m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
-      let printed=false;try{const p=await window.thor.printCashClose(result.summary);printed=!p?.cancelled;}catch(e){infoModal('Caixa fechado',`O caixa foi fechado, mas o comprovante não foi impresso: ${friendlyError(e.message)}.`);return;}
-      showToast(`Caixa de ${business} fechado${printed?' e comprovante impresso':''}. Diferença: ${money(result.summary?.difference||0)}.`);
-      if(typeof onDone==='function')await onDone();else openCashModal();
+      m.remove();
+      const printing=await cashClosingPrintAfterClose(result.summary);
+      await refreshStatus().catch(()=>{});await window.thor.sync().catch(()=>{});
+      if(printing.printed){
+        showToast(`Caixa de ${business} fechado; comprovante enviado à impressora. Diferença: ${money(result.summary?.difference||0)}.`);
+        if(typeof onDone==='function')await onDone();else openCashModal();
+      }
     }catch(e){btn.disabled=false;btn.textContent=`Conferir e fechar ${historical?'caixa pendente':'caixa'}`;infoModal('Fechamento de caixa',friendlyError(e.message));}
   };
   return m;
