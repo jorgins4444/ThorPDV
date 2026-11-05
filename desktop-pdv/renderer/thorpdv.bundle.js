@@ -287,7 +287,7 @@ function renderFiscalTable(){
   const chips=document.getElementById('fiscalFilterChips');if(chips)chips.innerHTML=`<button class="fiscal-chip ${state.fiscalFilter.status==='completed'?'active':''}" data-fiscal-chip="completed"><b>${summary.completed}</b> Concluídas</button><button class="fiscal-chip ${state.fiscalFilter.status==='cancelled'?'active':''}" data-fiscal-chip="cancelled"><b>${summary.cancelled}</b> Canceladas</button><button class="fiscal-chip pending ${state.fiscalFilter.status==='pending'?'active':''}" data-fiscal-chip="pending"><b>${summary.pending}</b> Pendências fiscais</button>`;
   if(chips)chips.querySelectorAll('[data-fiscal-chip]').forEach(button=>button.onclick=()=>{const selected=button.dataset.fiscalChip;state.fiscalFilter.status=state.fiscalFilter.status===selected?'all':selected;const select=document.getElementById('fiscalStatusFilter');if(select)select.value=state.fiscalFilter.status;renderFiscalTable();});
   if(!rows.length){box.innerHTML='<div class="empty">Nenhuma operação encontrada para os filtros selecionados.</div>';return;}
-  box.innerHTML=`<table class="fiscal-table"><thead><tr><th>Venda</th><th>Data</th><th>Cliente</th><th>Total</th><th>Devolvido</th><th>Venda</th><th>NFC-e</th><th>Ações</th></tr></thead><tbody>${rows.map((s,i)=>`<tr class="fiscal-row-${fiscalOperationBucket(s)}"><td><strong>${s.number?`#${esc(s.number)}`:'Pendente'}</strong><small>${esc(String(s.client_event_id||'').slice(0,8))}</small></td><td>${dt(s.completed_at||s.created_at)}</td><td>${esc(s.customer_name||'Consumidor')}</td><td><strong>${money(s.total)}</strong></td><td>${money(s.returned_total||0)}</td><td><span class="sale-status status-${esc(s.status||'pending')}">${saleStatusLabel(s.status)}</span></td><td>${fiscalBadge(s.fiscal)}</td><td><button class="table-action" data-view-sale="${i}">Visualizar</button></td></tr>`).join('')}</tbody></table>`;
+  box.innerHTML=`<table class="fiscal-table"><thead><tr><th>Venda</th><th>Data</th><th>Cliente</th><th>Total</th><th>Devolvido</th><th>Venda</th><th>NFC-e</th><th>Ações</th></tr></thead><tbody>${rows.map((s,i)=>`<tr class="fiscal-row-${fiscalOperationBucket(s)}"><td><strong>${s.number?`#${esc(s.number)}`:'Pendente'}</strong><small>${esc(String(s.client_event_id||'').slice(0,8))}</small></td><td>${dt(s.completed_at||s.created_at)}</td><td>${esc(s.customer_name||'Consumidor')}</td><td><strong>${money(s.total)}</strong></td><td>${money(s.returned_total||0)}</td><td><span class="sale-status status-${esc(s.status||'pending')}">${saleReturnStatusLabel(s)}</span></td><td>${fiscalBadge(s.fiscal)}</td><td><button class="table-action" data-view-sale="${i}">Visualizar</button></td></tr>`).join('')}</tbody></table>`;
   box.querySelectorAll('[data-view-sale]').forEach(b=>b.onclick=async()=>{const index=Number(b.dataset.viewSale);const target=rows[index];if(!target){infoModal('Visualizar venda','Não foi possível localizar esta venda na lista atual. Atualize o Fiscal e tente novamente.');return;}try{await openSaleDetail(target);}catch(e){console.error('sale_detail_open_failed',e);infoModal('Visualizar venda',`Não foi possível carregar os detalhes desta venda. ${friendlyError(String(e?.message||e||''))}`);}});
 }
 
@@ -544,6 +544,17 @@ function fiscalBadge(fiscal){
   const suffix=(status==='rejected'&&code)?` ${esc(code)}`:'';
   return `<span class="fiscal-status fiscal-${esc(status)}">${live}${esc(labels[status]||status)}${suffix}</span>`;
 }
+function saleReturnStatusLabel(sale){
+  const status=String(sale?.status||'');
+  if(['cancelled','cancel_pending'].includes(status))return saleStatusLabel(status);
+  const items=Array.isArray(sale?.items)?sale.items:[];
+  const returned=Number(sale?.returned_total||0);
+  const returnedItems=items.filter(i=>Number(i.returned_quantity||0)>0);
+  if(returned<=0&&!returnedItems.length)return saleStatusLabel(status);
+  const allReturned=items.length>0&&items.every(i=>Number(i.returned_quantity||0)>=Number(i.quantity||0)-0.0001);
+  const fullyByAmount=Number(sale?.total||0)>0&&returned>=Number(sale.total)-0.01;
+  return allReturned||fullyByAmount?'Devolvida':'Concluída/Devolvida parcial';
+}
 function saleStatusLabel(status){return ({completed:'Concluída',cancelled:'Cancelada',pending_sync:'Pendente sync',cancel_pending:'Cancelando',return_pending:'Devolução pendente'}[status]||String(status||'Pendente'));}
 function friendlyError(code){return ({printer_not_configured:'Nenhuma impressora foi configurada.',nfce_not_authorized:'A NFC-e ainda não foi autorizada.',nfce_pdf_unavailable:'A NFC-e está autorizada, mas o PDF/DANFE ainda não está disponível.',nfce_pdf_url_unavailable:'O caminho do PDF da NFC-e ainda não pode ser aberto pelo terminal.',authorized_fiscal_document_requires_fiscal_cancellation:'Esta venda possui documento fiscal autorizado. É necessário cancelar primeiro a NFC-e junto à SEFAZ/provedor fiscal.',nfce_cancellation_window_expired:'O prazo normal de 30 minutos para cancelar esta NFC-e já encerrou.',nfce_cancellation_deadline_unavailable:'Não foi possível determinar o prazo de cancelamento da NFC-e.',nfce_cancellation_reason_invalid:'Para cancelar uma NFC-e, informe uma justificativa entre 15 e 255 caracteres.',nfce_cancellation_rejected:'A SEFAZ rejeitou o evento de cancelamento da NFC-e. A venda não foi cancelada.',nfce_cancellation_transmission_error:'Não foi possível transmitir o cancelamento para a SEFAZ. A venda permanece ativa.',nfce_cancellation_failed:'O cancelamento fiscal não foi concluído. A venda permanece ativa.',sale_has_returns:'A venda possui devolução registrada e não pode ser cancelada integralmente.',sale_already_cancelled:'A venda já está cancelada.',sale_cancelled:'A venda está cancelada.',cash_required_for_cash_refund:'Para devolver em dinheiro é necessário haver um caixa aberto.',return_quantity_exceeds_remaining:'A quantidade informada supera o saldo disponível para devolução.',sale_not_found:'Venda não encontrada.',sale_item_not_found:'Item da venda não encontrado.',pre_sale_unavailable_cancelled_nfce:'A pré-venda fica indisponível depois que a NFC-e é cancelada.',whatsapp_phone_invalid:'Informe um telefone válido com DDD. Ex.: 86999999999.',whatsapp_document_invalid:'Documento inválido para envio pelo WhatsApp.'}[code]||code||'Erro inesperado');}
 
@@ -574,6 +585,8 @@ function updateTop(){
 }
 
 boot().catch(e=>{app.innerHTML=`<main class="setup"><section class="setup-card"><h1>Falha ao iniciar</h1><div class="error">${esc(e.message)}</div></section></main>`;});
+
+;
 
 /* ---- checkout-v3.js ---- */
 const v3PaymentLabels={cash:'Dinheiro',pix:'PIX',debit_card:'Débito',credit_card:'Crédito',voucher:'Voucher'};
@@ -7523,6 +7536,8 @@ friendlyError=function(code){
   }
 
   returnSaleModal = function (sale) {
+    if(sale?.return_origin?.kind==='fiscal'){infoModal('Devolução fiscal','Esta venda possui NFC-e autorizada. A devolução exige NF-e referenciada e autorização fiscal antes de liberar crédito ou estoque. O fluxo fiscal ainda não está habilitado.');return;}
+    if(!sale?.return_origin){infoModal('Devolução','Não foi possível identificar com segurança a origem fiscal da venda. Atualize a venda e tente novamente.');return;}
     const items = Array.isArray(sale.items) ? sale.items : [];
     const automaticCustomer = sale.customer_id ? { id:sale.customer_id, name:sale.customer_name || sale.customer || 'Cliente da venda', document:sale.customer_document || '', store_credit_balance:sale.customer_store_credit_balance } : null;
     let selectedCustomer = automaticCustomer;
@@ -7674,8 +7689,18 @@ friendlyError=function(code){
         m.remove();
         const returnReceipt = result.voucher || result.returnReceipt || null;
         if (returnReceipt) {
-          try { await window.thor.printStoreCreditVoucher(returnReceipt); }
-          catch (printError) { infoModal('Comprovante de devolução', `A devolução foi concluída, mas não foi possível imprimir o comprovante em 44 colunas: ${friendlyError(printError.message)}.`); }
+          const voucherCode=String(returnReceipt.voucher_number||'');
+          try {
+            const printResult=await window.thor.printStoreCreditVoucher(returnReceipt);
+            if (printResult?.printed===false) {
+              const reason=printResult.reason==='pdf_selected'?'A opção Salvar como PDF não aceita impressão térmica RAW.':printResult.reason==='printer_not_configured'?'Nenhuma impressora térmica está configurada.':`A impressora não concluiu a impressão: ${friendlyError(printResult.reason)}.`;
+              const details=modal(`<h3>Devolução registrada — impressão pendente</h3><p class="muted">${esc(reason)} O crédito foi gerado e permanece disponível.</p><p><b>Comprovante:</b> ${esc(voucherCode||'Crédito de cliente')}</p><textarea id="returnReceiptText" readonly rows="12" style="width:100%;font-family:monospace">${esc(printResult.text||'')}</textarea><div class="actions"><button class="secondary" id="selectReturnReceipt">Selecionar comprovante</button><button class="primary" id="closeReturnReceipt">Fechar</button></div>`,'wide');
+              details.querySelector('#selectReturnReceipt').onclick=()=>{const field=details.querySelector('#returnReceiptText');field.focus();field.select();};
+              details.querySelector('#closeReturnReceipt').onclick=()=>details.remove();
+            }
+          } catch (printError) {
+            infoModal('Devolução registrada — impressão pendente', `Crédito ${voucherCode||'de cliente'} gerado. Falha ao imprimir: ${friendlyError(printError.message)}. Não repita a devolução.`);
+          }
         }
         try { await window.thor.sync(); } catch {}
         await refreshProducts(); await refreshFiscalSales();
