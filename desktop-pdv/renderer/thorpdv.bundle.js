@@ -1088,13 +1088,13 @@ async function cashClosingMovement(type,previewModal){
   }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,friendlyError(e.message));}
 }
 
-function renderBlindCashClosingModal(preview){
+function renderBlindCashClosingModal(preview,{historical=false,onDone=null}={}){
   const labels=cashClosingLabels;
   // Exibir todas as modalidades conhecidas, mesmo sem vendas no período.
   // O preview cego contém somente identificadores de formas de pagamento (sem valores).
   const available=Array.isArray(preview?.payment_methods)?preview.payment_methods:[];
   const methods=[...new Set([...blindCashClosingOrder,...available.map(String)])].filter(Boolean);
-  const m=modal(`<h3>Fechamento às cegas</h3><p class="muted">Informe os valores contados sem visualizar os valores registrados no sistema. O relatório detalhado ficará disponível somente à gestão autorizada.</p>
+  const m=modal(`<h3>${historical?'Fechamento às cegas de caixa pendente':'Fechamento às cegas'}</h3><p class="muted">Informe os valores contados sem visualizar os valores registrados no sistema. O relatório detalhado ficará disponível somente à gestão autorizada.</p>
     <div class="cash-payment-table">${methods.map(method=>`<label class="field"><span>${esc(labels[method]||method)} — valor conferido</span><input data-blind-count="${esc(method)}" type="number" min="0" step="0.01" placeholder="Informe o valor" autocomplete="off"></label>`).join('')}</div>
     <label class="field">Total de dinheiro físico na gaveta (incluindo fundo de troco e movimentações)<input id="blindDrawerCount" type="number" min="0" step="0.01" placeholder="Informe o valor contado" autocomplete="off"></label>
     <label class="field">Observações<textarea id="blindCloseNotes" rows="2"></textarea></label>
@@ -1109,11 +1109,16 @@ function renderBlindCashClosingModal(preview){
     if(!confirm('Confirmar fechamento às cegas? Os valores esperados e diferenças não serão exibidos ao operador.'))return;
     const btn=m.querySelector('#blindCloseConfirm');btn.disabled=true;
     try{
-      await window.thor.closeCash({closingAmount,countedPayments,notes:m.querySelector('#blindCloseNotes').value});
+      let supervisorAuthorization=null;
+      if(historical)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',0);
+      const payload={cashOpenEventId:preview.client_event_id,closingAmount,countedPayments,notes:m.querySelector('#blindCloseNotes').value,supervisorAuthorization};
+      if(historical)await window.thor.closeHistoricalCash(payload);else await window.thor.closeCash(payload);
       m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
       infoModal('Caixa fechado','Fechamento às cegas registrado. O relatório detalhado e eventuais diferenças ficam disponíveis somente para a gestão autorizada.');
+      if(typeof onDone==='function')await onDone();
     }catch(error){btn.disabled=false;infoModal('Fechamento',friendlyError(error.message));}
   };
+  return m;
 }
 
 function renderCashClosingModal(preview){
@@ -5185,7 +5190,10 @@ const cashDailyStatusLabel=(row)=>cashDailyStatus(row)==='open'?'Aberto hoje':ca
 const cashDailyStatusClass=(row)=>cashDailyStatus(row)==='open'?'current':cashDailyStatus(row)==='pending_close'?'overdue':cashDailyStatus(row)==='closed'?'closed':'neutral';
 
 function cashDailyPaymentRows(preview){
-  return (preview.payments||[]).map((row,index)=>({
+  const rows=Array.isArray(preview.payments)?preview.payments:[];
+  const known=new Set(rows.map(row=>String(row.method||'')));
+  const defaults=blindCashClosingOrder.filter(method=>!known.has(method)).map(method=>({method,name:cashClosingLabels[method]||method,amount:0,count:0,sort_order:200+blindCashClosingOrder.indexOf(method)}));
+  return [...rows,...defaults].map((row,index)=>({
     method:String(row.method||''),name:String(row.name||row.method||'Forma'),category:String(row.category||'other'),
     sort_order:Number(row.sort_order||100+index),expected:Number(row.amount||0),count:Number(row.count||0),
   })).sort((a,b)=>a.sort_order-b.sort_order||a.name.localeCompare(b.name,'pt-BR'));
@@ -5196,6 +5204,12 @@ function cashDailyCloseModal(preview,{historical=false,readonly=false,onDone=nul
   const pending=Number(preview.pending_events||0),rejected=Number(preview.rejected_events||0);
   const closed=readonly||String(preview.status)==='closed';
   const business=cashDailyDate(preview.business_date);
+  // O fluxo diário substitui o modal anterior; desviar ANTES de renderizar valores.
+  const blind=preview?.blind_close===true||v3State()?.operator?.permissions?.cash?.blind_close===true;
+  if(blind){
+    if(closed){const restricted=modal(`<h3>Fechamento restrito</h3><p class="muted">O relatório detalhado deste caixa está disponível somente para a gestão autorizada.</p><div class="actions"><button class="secondary" id="blindHistoryBack">Fechar</button></div>`,'cash-close-modal');restricted.querySelector('#blindHistoryBack').onclick=()=>restricted.remove();return restricted;}
+    return renderBlindCashClosingModal(preview,{historical,onDone});
+  }
   const m=modal(`<div class="cash-close-head"><div><small>CAIXA • ${esc(business)}</small><h3>${closed?'Conferência do caixa fechado':historical?'Fechar caixa pendente':'Fechamento do caixa de hoje'}</h3><p>Origem: <b>${esc(cashClosingSourceLabel(preview.source))}</b> • Abertura: ${dt(preview.opened_at)}</p></div><div class="cash-close-total"><span>Dinheiro esperado</span><strong>${money(preview.expected_cash)}</strong></div></div>
     ${historical&&!closed?`<div class="cash-overdue-warning"><b>Caixa de ${esc(business)} pendente.</b><span>Novas vendas não podem ser registradas nele. Este fechamento afetará somente a sessão selecionada.</span></div>`:''}
     ${(pending||rejected)?`<div class="cash-sync-warning">⚠ Existem ${pending} evento(s) pendente(s) e ${rejected} com erro. O fechamento inclui o que está disponível localmente.</div>`:''}
@@ -5245,7 +5259,8 @@ async function cashDailyLoadSessions(m){
   try{
     const result=await window.thor.cashSessions({from:m.querySelector('#cashDailyFrom')?.value||'',to:m.querySelector('#cashDailyTo')?.value||'',status:m.querySelector('#cashDailyStatus')?.value||'open'});
     const rows=result.sessions||[];
-    host.innerHTML=rows.length?`<div class="cash-session-list">${rows.map((row,index)=>`<div class="cash-session-row ${cashDailyStatusClass(row)}"><div><b>${esc(cashDailyDate(row.business_date))}</b><small>${dt(row.opened_at)}${row.operator_name?` • ${esc(row.operator_name)}`:''}</small></div><span class="cash-session-status ${cashDailyStatusClass(row)}">${esc(cashDailyStatusLabel(row))}</span><div><small>Vendas</small><b>${money(row.sales_total)}</b></div><div><small>Dinheiro esperado</small><b>${money(row.expected_cash)}</b></div><button class="secondary" data-cash-session-view="${index}">${String(row.status)==='pending_close'?'Fechar pendente':'Visualizar'}</button></div>`).join('')}</div>`:'<div class="cash-session-empty">Nenhum caixa encontrado para os filtros selecionados.</div>';
+    const blind=v3State()?.operator?.permissions?.cash?.blind_close===true;
+    host.innerHTML=rows.length?`<div class="cash-session-list">${rows.map((row,index)=>`<div class="cash-session-row ${cashDailyStatusClass(row)}"><div><b>${esc(cashDailyDate(row.business_date))}</b><small>${dt(row.opened_at)}${row.operator_name?` • ${esc(row.operator_name)}`:''}</small></div><span class="cash-session-status ${cashDailyStatusClass(row)}">${esc(cashDailyStatusLabel(row))}</span>${blind?'':`<div><small>Vendas</small><b>${money(row.sales_total)}</b></div><div><small>Dinheiro esperado</small><b>${money(row.expected_cash)}</b></div>`}<button class="secondary" data-cash-session-view="${index}">${String(row.status)==='pending_close'?'Fechar pendente':'Visualizar'}</button></div>`).join('')}</div>`:'<div class="cash-session-empty">Nenhum caixa encontrado para os filtros selecionados.</div>';
     host.querySelectorAll('[data-cash-session-view]').forEach(btn=>btn.onclick=()=>{const row=rows[Number(btn.dataset.cashSessionView)];m.remove();cashDailyOpenSession(row);});
   }catch(e){host.innerHTML=`<div class="cash-session-empty error">${esc(friendlyError(e.message))}</div>`;}
 }
