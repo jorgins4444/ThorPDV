@@ -49,11 +49,13 @@ function renderBlindCashClosingModal(preview,{historical=false,onDone=null}={}){
     const btn=m.querySelector('#blindCloseConfirm');btn.disabled=true;
     try{
       let supervisorAuthorization=null;
-      if(historical)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',0);
+      if(historical&&v3State()?.operator?.permissions?.cash?.close_previous!==true)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',0);
       const payload={cashOpenEventId:preview.client_event_id,closingAmount,countedPayments,notes:m.querySelector('#blindCloseNotes').value,supervisorAuthorization};
       if(historical)await window.thor.closeHistoricalCash(payload);else await window.thor.closeCash(payload);
       m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
-      infoModal('Caixa fechado','Fechamento às cegas registrado. O relatório detalhado e eventuais diferenças ficam disponíveis somente para a gestão autorizada.');
+      let printWarning='';
+      try{await window.thor.printCashClose(null);}catch(e){printWarning=friendlyError(e?.message||'print_failed');}
+      infoModal('Caixa fechado',printWarning?`O fechamento às cegas foi registrado, mas a impressão dos valores conferidos falhou: ${printWarning}. Configure a impressora e use a função de reimpressão do último fechamento.`:'Fechamento às cegas registrado e comprovante dos valores conferidos enviado à impressora. Os valores esperados e as diferenças permanecem reservados à gestão.');
       if(typeof onDone==='function')await onDone();
     }catch(error){btn.disabled=false;infoModal('Fechamento',friendlyError(error.message));}
   };
