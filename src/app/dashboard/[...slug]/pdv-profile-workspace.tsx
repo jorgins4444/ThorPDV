@@ -34,6 +34,7 @@ const groups: PermissionGroup[] = [
     items: [
       { path: 'cash.open', label: 'Abrir caixa', description: 'Permite iniciar turno e informar fundo de troco.' },
       { path: 'cash.close', label: 'Fechar caixa', description: 'Permite encerrar o turno e informar valor contado.', risk: 'sensitive' },
+      { path: 'cash.blind_close', label: 'Fechamento às cegas', description: 'Oculta os valores esperados e as diferenças durante o fechamento; requer permissão de fechar caixa.', risk: 'sensitive' },
       { path: 'cash.movement', label: 'Sangria e suprimento', description: 'Permite registrar retiradas e entradas manuais de dinheiro.', risk: 'critical' },
       { path: 'hardware.manual_drawer', label: 'Abrir gaveta manualmente', description: 'Permite acionar a gaveta sem finalizar uma venda.', risk: 'critical' },
     ],
@@ -83,7 +84,7 @@ const groups: PermissionGroup[] = [
 const blankPermissions = (): PermissionTree => ({
   sale: { create: true, remove_item: true, cancel: false, return: false },
   customer: { identify: true },
-  cash: { open: true, close: true, movement: false },
+  cash: { open: true, close: true, blind_close: false, movement: false },
   hardware: { manual_drawer: false, scale: true },
   fiscal: { view: true, request_nfce: true, reprint: true, cancel_nfce: false },
   payment: { cash: true, pix: true, debit_card: true, credit_card: true, voucher: true, integrated: true },
@@ -98,7 +99,7 @@ const blankPermissions = (): PermissionTree => ({
 const supervisorPermissions = (): PermissionTree => ({
   sale: { create: true, remove_item: true, cancel: true, return: true },
   customer: { identify: true },
-  cash: { open: true, close: true, movement: true },
+  cash: { open: true, close: true, blind_close: false, movement: true },
   hardware: { manual_drawer: true, scale: true },
   fiscal: { view: true, request_nfce: true, reprint: true, cancel_nfce: true },
   payment: { cash: true, pix: true, debit_card: true, credit_card: true, voucher: true, integrated: true },
@@ -113,7 +114,7 @@ const supervisorPermissions = (): PermissionTree => ({
 const saleOnlyPermissions = (): PermissionTree => ({
   sale: { create: true, remove_item: true, cancel: false, return: false },
   customer: { identify: true },
-  cash: { open: false, close: false, movement: false },
+  cash: { open: false, close: false, blind_close: false, movement: false },
   hardware: { manual_drawer: false, scale: true },
   fiscal: { view: false, request_nfce: false, reprint: false, cancel_nfce: false },
   payment: { cash: true, pix: true, debit_card: true, credit_card: true, voucher: false, integrated: true },
@@ -189,6 +190,7 @@ export function PdvProfileWorkspace({ initialProfiles }: { initialProfiles: Row[
     if (!form.name.trim()) return setMessage('Informe o nome do perfil.');
     const discount = Number(getPath(form.permissions, 'discount.max_percent') ?? 0);
     const surcharge = Number(getPath(form.permissions, 'surcharge.max_percent') ?? 0);
+    if(getPath(form.permissions,'cash.blind_close')===true && getPath(form.permissions,'cash.close')!==true)return setMessage('Fechamento às cegas exige a permissão Fechar caixa.');
     if (discount < 0 || discount > 100 || surcharge < 0 || surcharge > 100) return setMessage('As alçadas percentuais devem ficar entre 0% e 100%.');
     const response = await erpSave('profiles_pdv', { id: form.id || undefined, name: form.name.trim(), active: form.active, permissions: form.permissions });
     if (!response.ok) return setMessage(String(response.error ?? 'Falha ao salvar perfil.'));
@@ -228,6 +230,8 @@ export function PdvProfileWorkspace({ initialProfiles }: { initialProfiles: Row[
             return <label className={`pdv-permission-row ${enabled ? 'enabled' : ''}`} key={item.path}>
               <input type="checkbox" checked={enabled} onChange={(event) => {
                 let permissions = setPath(form.permissions, item.path, event.target.checked);
+                if (item.path === 'cash.close' && !event.target.checked) permissions = setPath(permissions, 'cash.blind_close', false);
+                if (item.path === 'cash.blind_close' && event.target.checked) permissions = setPath(permissions, 'cash.close', true);
                 if (item.path === 'discount.apply' && !event.target.checked) {
                   permissions = setPath(permissions, 'discount.override_limit', false);
                   permissions = setPath(permissions, 'discount.max_percent', 0);
