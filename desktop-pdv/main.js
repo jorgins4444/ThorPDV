@@ -249,7 +249,10 @@ async function printSale(saleKey, type = 'pre_sale', reprint = false) {
 }
 
 async function printCashClose(summary) {
-  const doc = agent.cashCloseDocument(summary || null);
+  const isBlind=agent.currentOperator?.()?.permissions?.cash?.blind_close===true;
+  // A impressão cega usa apenas a contagem guardada no agente após o fechamento.
+  // Ignorar o payload do renderer impede impressão acidental de valores esperados.
+  const doc=isBlind?agent.blindCashCountDocument():agent.cashCloseDocument(summary || null);
   const target = agent.settings().printerName;
   if (!target) throw new Error('printer_not_configured');
   if (target === '__PDF__') return saveAsPdf(doc);
