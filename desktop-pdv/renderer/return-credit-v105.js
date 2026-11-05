@@ -206,8 +206,18 @@
         m.remove();
         const returnReceipt = result.voucher || result.returnReceipt || null;
         if (returnReceipt) {
-          try { await window.thor.printStoreCreditVoucher(returnReceipt); }
-          catch (printError) { infoModal('Comprovante de devolução', `A devolução foi concluída, mas não foi possível imprimir o comprovante em 44 colunas: ${friendlyError(printError.message)}.`); }
+          const voucherCode=String(returnReceipt.voucher_number||'');
+          try {
+            const printResult=await window.thor.printStoreCreditVoucher(returnReceipt);
+            if (printResult?.printed===false) {
+              const reason=printResult.reason==='pdf_selected'?'A opção Salvar como PDF não aceita impressão térmica RAW.':printResult.reason==='printer_not_configured'?'Nenhuma impressora térmica está configurada.':`A impressora não concluiu a impressão: ${friendlyError(printResult.reason)}.`;
+              const details=modal(`<h3>Devolução registrada — impressão pendente</h3><p class="muted">${esc(reason)} O crédito foi gerado e permanece disponível.</p><p><b>Comprovante:</b> ${esc(voucherCode||'Crédito de cliente')}</p><textarea id="returnReceiptText" readonly rows="12" style="width:100%;font-family:monospace">${esc(printResult.text||'')}</textarea><div class="actions"><button class="secondary" id="selectReturnReceipt">Selecionar comprovante</button><button class="primary" id="closeReturnReceipt">Fechar</button></div>`,'wide');
+              details.querySelector('#selectReturnReceipt').onclick=()=>{const field=details.querySelector('#returnReceiptText');field.focus();field.select();};
+              details.querySelector('#closeReturnReceipt').onclick=()=>details.remove();
+            }
+          } catch (printError) {
+            infoModal('Devolução registrada — impressão pendente', `Crédito ${voucherCode||'de cliente'} gerado. Falha ao imprimir: ${friendlyError(printError.message)}. Não repita a devolução.`);
+          }
         }
         try { await window.thor.sync(); } catch {}
         await refreshProducts(); await refreshFiscalSales();
