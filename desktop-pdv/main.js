@@ -250,24 +250,30 @@ async function printSale(saleKey, type = 'pre_sale', reprint = false) {
 
 async function printCashClose(summary) {
   const isBlind=agent.currentOperator?.()?.permissions?.cash?.blind_close===true;
-  // A impressão cega usa apenas a contagem guardada no agente após o fechamento.
-  // Ignorar o payload do renderer impede impressão acidental de valores esperados.
+  // O relatorio detalhado nao pode ser produzido por operador em modo cego.
+  // Nesse caso, o documento contem apenas valores contados e e gerado no agente.
   const doc=isBlind?agent.blindCashCountDocument():agent.cashCloseDocument(summary || null);
-  const target = agent.settings().printerName;
-  if (!target) throw new Error('printer_not_configured');
-  if (target === '__PDF__') return saveAsPdf(doc);
+  const target=String(agent.settings().printerName||'').trim();
+  if(!target)throw new Error('printer_not_configured');
+  if(target==='__PDF__')return saveAsPdf(doc);
+  if(!doc?.text)throw new Error('cash_close_receipt_empty');
+  // Impressora termica: enviar diretamente para a fila RAW/ESC-POS. A impressao
+  // silenciosa do Chromium pode marcar o trabalho como enviado sem imprimir.
+  // Se o driver rejeitar RAW, tentar a impressao HTML como segunda alternativa.
   try {
-    return await printHtmlDocument(doc, target);
-  } catch (error) {
+    const sent=await printThermalText(target,doc.text);
+    if(sent!==true&&sent?.ok!==true)throw new Error('raw_print_not_acknowledged');
+    return {ok:true,target,method:'escpos_raw'};
+  } catch(rawError) {
     try {
-      await printThermalText(target, doc.text);
-      return { ok:true, target, fallback:'escpos_raw' };
-    } catch (fallbackError) {
-      throw new Error('cash_close_print_failed: '+String(error?.message||error)+'; raw: '+String(fallbackError?.message||fallbackError));
+      const html=await printHtmlDocument(doc,target);
+      if(html?.ok!==true)throw new Error('html_print_not_acknowledged');
+      return {...html,method:'electron_html',raw_warning:String(rawError?.message||rawError)};
+    } catch(htmlError) {
+      throw new Error('cash_close_print_failed: ESC/POS: '+String(rawError?.message||rawError)+'; Windows/HTML: '+String(htmlError?.message||htmlError));
     }
   }
 }
-
 async function printCashMovement(receipt) {
   const current = agent.currentOperator?.() || {};
   const currentId = current.id || agent.store.get('current_operator_id') || '';
