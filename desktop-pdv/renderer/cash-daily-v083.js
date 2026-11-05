@@ -51,7 +51,7 @@ function cashDailyCloseModal(preview,{historical=false,readonly=false,onDone=nul
     const btn=m.querySelector('#cashDailyConfirm');btn.disabled=true;btn.textContent='Fechando...';
     try{
       let supervisorAuthorization=null;
-      if(historical)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',closingAmount);
+      if(historical&&v3State()?.operator?.permissions?.cash?.close_previous!==true)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',closingAmount);
       const payload={cashOpenEventId:preview.client_event_id,closingAmount,notes:m.querySelector('#cashDailyNotes').value,reconciliation,supervisorAuthorization};
       const result=historical?await window.thor.closeHistoricalCash(payload):await window.thor.closeCash(payload);
       m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
