@@ -1059,7 +1059,8 @@ document.addEventListener('keydown', e => {
 ;
 
 /* ---- cash-closing.js ---- */
-const cashClosingLabels={cash:'Dinheiro',pix:'PIX',debit_card:'Débito',credit_card:'Crédito',voucher:'Voucher',store_credit:'Crédito em loja',other:'Outros'};
+const cashClosingLabels={cash:'Dinheiro',pix:'PIX',debit_card:'Cartão de débito',credit_card:'Cartão de crédito',voucher:'Voucher',store_credit:'Crédito em loja',store_credit_voucher:'Vale-crédito',term_sale:'Venda a prazo',other:'Outras formas'};
+const blindCashClosingOrder=['cash','pix','debit_card','credit_card','voucher','store_credit','store_credit_voucher','term_sale','other'];
 const previousOpenCashModal=openCashModal;
 
 function cashClosingMethods(preview){
@@ -1089,17 +1090,20 @@ async function cashClosingMovement(type,previewModal){
 
 function renderBlindCashClosingModal(preview){
   const labels=cashClosingLabels;
-  const methods=(preview.payment_methods||['cash','pix','debit_card','credit_card']).filter((x,i,a)=>a.indexOf(x)===i);
+  // Exibir todas as modalidades conhecidas, mesmo sem vendas no período.
+  // O preview cego contém somente identificadores de formas de pagamento (sem valores).
+  const available=Array.isArray(preview?.payment_methods)?preview.payment_methods:[];
+  const methods=[...new Set([...blindCashClosingOrder,...available.map(String)])].filter(Boolean);
   const m=modal(`<h3>Fechamento às cegas</h3><p class="muted">Informe os valores contados sem visualizar os valores registrados no sistema. O relatório detalhado ficará disponível somente à gestão autorizada.</p>
     <div class="cash-payment-table">${methods.map(method=>`<label class="field"><span>${esc(labels[method]||method)} — valor conferido</span><input data-blind-count="${esc(method)}" type="number" min="0" step="0.01" placeholder="Informe o valor" autocomplete="off"></label>`).join('')}</div>
-    <label class="field">Dinheiro físico contado<input id="blindDrawerCount" type="number" min="0" step="0.01" placeholder="Informe o valor" autocomplete="off"></label>
+    <label class="field">Total de dinheiro físico na gaveta (incluindo fundo de troco e movimentações)<input id="blindDrawerCount" type="number" min="0" step="0.01" placeholder="Informe o valor contado" autocomplete="off"></label>
     <label class="field">Observações<textarea id="blindCloseNotes" rows="2"></textarea></label>
     <div class="actions"><button class="secondary" id="blindCloseCancel">Voltar</button><button class="primary danger" id="blindCloseConfirm">Registrar e fechar caixa</button></div>`,'wide cash-close-modal');
   m.querySelector('#blindCloseCancel').onclick=()=>m.remove();
   m.querySelector('#blindCloseConfirm').onclick=async()=>{
     const fields=[...m.querySelectorAll('[data-blind-count]')];
     const valid=(field)=>field.value.trim()!==''&&Number.isFinite(Number(field.value))&&Number(field.value)>=0;
-    if(!fields.every(valid)||!valid(m.querySelector('#blindDrawerCount')))return infoModal('Conferência','Preencha todos os valores contados, inclusive zero quando aplicável.');
+    if(!fields.every(valid)||!valid(m.querySelector('#blindDrawerCount')))return infoModal('Conferência','Preencha todos os valores contados, inclusive zero quando aplicável. Nenhum valor do sistema será mostrado.');
     const countedPayments=fields.map(field=>({method:field.dataset.blindCount,counted:Number(field.value)}));
     const closingAmount=Number(m.querySelector('#blindDrawerCount').value);
     if(!confirm('Confirmar fechamento às cegas? Os valores esperados e diferenças não serão exibidos ao operador.'))return;
