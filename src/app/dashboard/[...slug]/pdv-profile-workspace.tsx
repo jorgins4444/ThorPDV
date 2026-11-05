@@ -230,6 +230,8 @@ export function PdvProfileWorkspace({ initialProfiles }: { initialProfiles: Row[
             return <label className={`pdv-permission-row ${enabled ? 'enabled' : ''}`} key={item.path}>
               <input type="checkbox" checked={enabled} onChange={(event) => {
                 let permissions = setPath(form.permissions, item.path, event.target.checked);
+                if (item.path === 'cash.close' && !event.target.checked) permissions = setPath(permissions, 'cash.blind_close', false);
+                if (item.path === 'cash.blind_close' && event.target.checked) permissions = setPath(permissions, 'cash.close', true);
                 if (item.path === 'discount.apply' && !event.target.checked) {
                   permissions = setPath(permissions, 'discount.override_limit', false);
                   permissions = setPath(permissions, 'discount.max_percent', 0);
