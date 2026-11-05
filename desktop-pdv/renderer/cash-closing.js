@@ -1,5 +1,5 @@
-const cashClosingLabels={cash:'Dinheiro',pix:'PIX',debit_card:'Cartão de débito',credit_card:'Cartão de crédito',voucher:'Voucher',store_credit:'Crédito em loja',store_credit_voucher:'Vale-crédito',term_sale:'Venda a prazo',other:'Outras formas'};
-const blindCashClosingOrder=['cash','pix','debit_card','credit_card','voucher','store_credit','store_credit_voucher','term_sale','other'];
+const cashClosingLabels={cash:'Dinheiro',pix:'PIX',debit_card:'Cartão de débito',credit_card:'Cartão de crédito',voucher:'Voucher',store_credit:'Crédito em loja',store_credit_voucher:'Vale-crédito',term_sale:'Venda a prazo',boleto:'Boleto',other:'Outras formas'};
+const blindCashClosingOrder=['cash','pix','debit_card','credit_card','voucher','store_credit','store_credit_voucher','term_sale','boleto','other'];
 const previousOpenCashModal=openCashModal;
 
 function cashClosingMethods(preview){
