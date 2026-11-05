@@ -24,3 +24,5 @@ require('./agent/operations-center-v120').installOperationsCenterV120(ThorAgent)
 require('./agent/operations-server-v125').installOperationsServerV125(ThorAgent);
 require('./agent/sqlite-optimization-v124').installSqliteOptimizationV124(Store);
 require('./agent/product-catalog-meta-v081').installProductCatalogMetaV081(Store);
+
+require('./agent/blind-cash-close-v122').installBlindCashCloseV122(ThorAgent);
