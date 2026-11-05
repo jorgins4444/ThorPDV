@@ -111,9 +111,10 @@ function total(){return state.cart.reduce((s,i)=>s+i.quantity*i.unitPrice,0);}
 
 function render(){
   if(!state.status?.enrolled)return renderSetup();
-  app.innerHTML=`<div class="shell"><header class="topbar"><div class="top-left"><div class="logo">ϟ THOR<b>PDV</b></div><span id="context"></span></div><div class="top-right"><button class="nav-button ${state.view==='sale'?'active':''}" id="navSale">Venda</button><button class="nav-button ${state.view==='fiscal'?'active':''}" id="navFiscal">Fiscal <kbd>F3</kbd></button><span id="queue" class="queue"></span><span id="status" class="status"><i></i><b></b></span><span class="pdv-version-chip" title="Versão atual do ThorPDV">v${esc(state.status?.appVersion||'—')}</span><button class="secondary" id="sync">Sincronizar <kbd>F6</kbd></button><button class="secondary" id="settings">Configurações <kbd>F12</kbd></button></div></header><div id="workspace" class="workspace"></div><footer class="bottom"><span id="hotkeyHelp"></span><span id="footerSync"></span></footer></div>`;
+  app.innerHTML=`<div class="shell"><header class="topbar"><div class="top-left"><div class="logo">ϟ THOR<b>PDV</b></div><span id="context"></span></div><div class="top-right"><button class="nav-button ${state.view==='sale'?'active':''}" id="navSale">Venda</button><button class="nav-button ${state.view==='fiscal'?'active':''}" id="navFiscal">Fiscal <kbd>F3</kbd></button><button class="nav-button" id="navReturn" title="Localizar venda para devolução">Devolução</button><span id="queue" class="queue"></span><span id="status" class="status"><i></i><b></b></span><span class="pdv-version-chip" title="Versão atual do ThorPDV">v${esc(state.status?.appVersion||'—')}</span><button class="secondary" id="sync">Sincronizar <kbd>F6</kbd></button><button class="secondary" id="settings">Configurações <kbd>F12</kbd></button></div></header><div id="workspace" class="workspace"></div><footer class="bottom"><span id="hotkeyHelp"></span><span id="footerSync"></span></footer></div>`;
   document.getElementById('navSale').onclick=()=>setView('sale');
   document.getElementById('navFiscal').onclick=()=>setView('fiscal');
+  document.getElementById('navReturn').onclick=openReturnShortcut;
   document.getElementById('sync').onclick=async()=>{await window.thor.sync();await refreshStatus();await refreshProducts();await refreshFiscalSales();showToast('Sincronização concluída.');};
   document.getElementById('settings').onclick=settingsModal;
   renderWorkspace();updateTop();
@@ -423,6 +424,35 @@ function cancelSaleModal(sale){
   };
 }
 
+async function openReturnShortcut(){
+  const m=modal('<h3>Devolução de venda</h3><p class="muted">Localize a venda concluída para selecionar os itens a devolver. A restituição é realizada por crédito/vale.</p><div class="field"><label>Pesquisar venda ou cliente</label><input id="returnQuickSearch" placeholder="Número da venda ou nome do cliente"></div><div id="returnQuickResults" class="detail-items">Carregando vendas...</div><div class="actions"><button class="secondary" id="returnQuickClose">Fechar</button></div>','wide');
+  m.querySelector('#returnQuickClose').onclick=()=>m.remove();
+  const input=m.querySelector('#returnQuickSearch'),results=m.querySelector('#returnQuickResults');
+  let request=0;
+  const load=async()=>{
+    const current=++request;
+    results.textContent='Buscando vendas...';
+    try{
+      const sales=await window.thor.fiscalSales(input.value.trim());
+      if(current!==request||!m.isConnected)return;
+      const rows=(Array.isArray(sales)?sales:[]).filter(s=>String(s.status||'').toLowerCase()==='completed'&&String(s.fiscal?.status||'').toLowerCase()!=='cancelled').slice(0,30);
+      results.innerHTML=rows.length?rows.map((s,i)=>`<div class="return-quick-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border,#ddd)"><span><b>Venda #${esc(s.number||'Local')}</b><small style="display:block">${esc(s.customer_name||'Consumidor')} · ${money(s.total)}</small></span><button class="secondary" data-return-quick="${i}">Selecionar</button></div>`).join(''):'Nenhuma venda concluída encontrada.';
+      results.querySelectorAll('[data-return-quick]').forEach(button=>button.onclick=async()=>{
+        const sale=rows[Number(button.dataset.returnQuick)];
+        if(!sale)return;
+        button.disabled=true;
+        try{
+          const detail=await window.thor.fiscalSale(saleKey(sale));
+          if(!detail||!Array.isArray(detail.items)||!detail.items.length)throw new Error('Venda sem itens disponíveis para devolução.');
+          m.remove();returnSaleModal(detail);
+        }catch(e){button.disabled=false;infoModal('Devolução',friendlyError(e.message));}
+      });
+    }catch(e){if(current===request&&m.isConnected)results.textContent='Falha ao consultar vendas: '+friendlyError(e.message);}
+  };
+  input.addEventListener('input',()=>{load();});
+  await load();
+}
+
 function returnSaleModal(sale){
   const items=sale.items||[];
   const m=modal(`<h3>Devolução da venda ${sale.number?`#${esc(sale.number)}`:''}</h3><p class="muted">Informe a quantidade de cada item que será devolvida. A devolução pode ser parcial.</p><div class="return-items">${items.map((i,n)=>{const max=Math.max(Number(i.quantity||0)-Number(i.returned_quantity||0),0);return `<label><span><b>${esc(i.name||i.description||i.sku||'Item')}</b><small>Vendido: ${Number(i.quantity||0)} • Já devolvido: ${Number(i.returned_quantity||0)}</small></span><input type="number" min="0" max="${max}" step="0.001" value="0" data-return-index="${n}"></label>`}).join('')}</div><div class="field"><label>Forma de restituição</label><select id="refundMethod">${Object.entries(paymentLabels).map(([k,n])=>`<option value="${k}">${n}</option>`).join('')}<option value="store_credit">Crédito em loja</option><option value="other">Outra</option></select></div><div class="field"><label>Motivo</label><textarea id="returnReason" rows="3" placeholder="Motivo da devolução..."></textarea></div><div class="actions"><button class="secondary" id="back">Voltar</button><button class="primary" id="confirmReturn">Concluir devolução</button></div>`,'wide');
@@ -544,8 +574,6 @@ function updateTop(){
 }
 
 boot().catch(e=>{app.innerHTML=`<main class="setup"><section class="setup-card"><h1>Falha ao iniciar</h1><div class="error">${esc(e.message)}</div></section></main>`;});
-
-;
 
 /* ---- checkout-v3.js ---- */
 const v3PaymentLabels={cash:'Dinheiro',pix:'PIX',debit_card:'Débito',credit_card:'Crédito',voucher:'Voucher'};
