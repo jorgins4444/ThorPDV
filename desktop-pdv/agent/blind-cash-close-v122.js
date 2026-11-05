@@ -6,7 +6,7 @@ function installBlindCashCloseV122(ThorAgent) {
   const originalLast = ThorAgent.prototype.lastCashCloseSummary;
   const originalDoc = ThorAgent.prototype.cashCloseDocument;
   const blind = (agent) => agent.currentOperator?.()?.permissions?.cash?.blind_close === true;
-  const methods = ['cash','pix','debit_card','credit_card','voucher','store_credit','store_credit_voucher','other','term_sale'];
+  const methods = ['cash','pix','debit_card','credit_card','voucher','store_credit','store_credit_voucher','term_sale','boleto','other'];
   const mask = (summary) => ({
     blind_close:true,
     source:summary?.source||'local',
