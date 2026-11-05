@@ -393,11 +393,19 @@ function installStoreCreditReturnV105(ThorAgent, Store) {
 
   ThorAgent.prototype.printStoreCreditVoucher = async function (input) {
     const doc = this.storeCreditVoucherDocument(input);
-    const target = this.settings().printerName;
-    if (!target) throw new Error('printer_not_configured');
-    if (target === '__PDF__') throw new Error('thermal_printer_required');
-    await hardware.printVoucherBarcode(target, doc.text, doc.voucher.metadata?.credit_kind === 'customer_credit' ? '' : doc.voucher.voucher_number);
-    return { ok:true, target, voucher_number:doc.voucher.voucher_number, width:WIDTH };
+    const target = String(this.settings()?.printerName || '').trim();
+    // A devolução e o crédito já foram gravados: falhas de impressão não desfazem a operação.
+    if (!target || target === '__PDF__') {
+      return { ok:false, printed:false, reason:target === '__PDF__' ? 'pdf_selected' : 'printer_not_configured',
+        text:doc.text, voucher_number:doc.voucher.voucher_number, width:WIDTH };
+    }
+    try {
+      await hardware.printVoucherBarcode(target, doc.text, doc.voucher.metadata?.credit_kind === 'customer_credit' ? '' : doc.voucher.voucher_number);
+      return { ok:true, printed:true, target, voucher_number:doc.voucher.voucher_number, width:WIDTH };
+    } catch (error) {
+      return { ok:false, printed:false, reason:String(error?.message || error || 'print_failed'),
+        text:doc.text, target, voucher_number:doc.voucher.voucher_number, width:WIDTH };
+    }
   };
 }
 
