@@ -1087,7 +1087,33 @@ async function cashClosingMovement(type,previewModal){
   }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,friendlyError(e.message));}
 }
 
+function renderBlindCashClosingModal(preview){
+  const labels=cashClosingLabels;
+  const methods=(preview.payment_methods||['cash','pix','debit_card','credit_card']).filter((x,i,a)=>a.indexOf(x)===i);
+  const m=modal(`<h3>Fechamento às cegas</h3><p class="muted">Informe os valores contados sem visualizar os valores registrados no sistema. O relatório detalhado ficará disponível somente à gestão autorizada.</p>
+    <div class="cash-payment-table">${methods.map(method=>`<label class="field"><span>${esc(labels[method]||method)} — valor conferido</span><input data-blind-count="${esc(method)}" type="number" min="0" step="0.01" placeholder="Informe o valor" autocomplete="off"></label>`).join('')}</div>
+    <label class="field">Dinheiro físico contado<input id="blindDrawerCount" type="number" min="0" step="0.01" placeholder="Informe o valor" autocomplete="off"></label>
+    <label class="field">Observações<textarea id="blindCloseNotes" rows="2"></textarea></label>
+    <div class="actions"><button class="secondary" id="blindCloseCancel">Voltar</button><button class="primary danger" id="blindCloseConfirm">Registrar e fechar caixa</button></div>`,'wide cash-close-modal');
+  m.querySelector('#blindCloseCancel').onclick=()=>m.remove();
+  m.querySelector('#blindCloseConfirm').onclick=async()=>{
+    const fields=[...m.querySelectorAll('[data-blind-count]')];
+    const valid=(field)=>field.value.trim()!==''&&Number.isFinite(Number(field.value))&&Number(field.value)>=0;
+    if(!fields.every(valid)||!valid(m.querySelector('#blindDrawerCount')))return infoModal('Conferência','Preencha todos os valores contados, inclusive zero quando aplicável.');
+    const countedPayments=fields.map(field=>({method:field.dataset.blindCount,counted:Number(field.value)}));
+    const closingAmount=Number(m.querySelector('#blindDrawerCount').value);
+    if(!confirm('Confirmar fechamento às cegas? Os valores esperados e diferenças não serão exibidos ao operador.'))return;
+    const btn=m.querySelector('#blindCloseConfirm');btn.disabled=true;
+    try{
+      await window.thor.closeCash({closingAmount,countedPayments,notes:m.querySelector('#blindCloseNotes').value});
+      m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
+      infoModal('Caixa fechado','Fechamento às cegas registrado. O relatório detalhado e eventuais diferenças ficam disponíveis somente para a gestão autorizada.');
+    }catch(error){btn.disabled=false;infoModal('Fechamento',friendlyError(error.message));}
+  };
+}
+
 function renderCashClosingModal(preview){
+  if(preview?.blind_close)return renderBlindCashClosingModal(preview);
   const methods=cashClosingMethods(preview);
   const pending=Number(preview.pending_events||0),rejected=Number(preview.rejected_events||0);
   const m=modal(`<div class="cash-close-head"><div><small>FECHAMENTO DE CAIXA</small><h3>Conferência por forma de pagamento</h3><p>Origem: <b>${esc(cashClosingSourceLabel(preview.source))}</b></p></div><div class="cash-close-total"><span>Esperado em dinheiro</span><strong>${money(preview.expected_cash)}</strong></div></div>
