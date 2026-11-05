@@ -24,18 +24,21 @@ function installBlindCashCloseV122(ThorAgent) {
     if (!operator?.permissions?.cash?.close) throw new Error('operator_not_allowed_to_close_cash');
     const counted=Array.isArray(payload.countedPayments)?payload.countedPayments:[];
     if (!counted.length) throw new Error('cash_count_required');
+    // A relação vem do próprio agente: admite modalidades registradas no caixa,
+    // sem devolver valores ou totais esperados ao renderer.
+    const preview=await originalPreview.call(this);
+    const allowed=new Set([...methods,...(preview.payments||[]).map(p=>String(p.method||''))]);
     const amounts=new Map();
     for (const item of counted) {
       const method=String(item?.method||'');
       const value=Number(item?.counted);
-      if (!methods.includes(method)||amounts.has(method)||!Number.isFinite(value)||value<0) throw new Error('invalid_cash_count');
+      if (!method||!allowed.has(method)||amounts.has(method)||!Number.isFinite(value)||value<0) throw new Error('invalid_cash_count');
       amounts.set(method,value);
     }
     const closingAmount=Number(payload.closingAmount);
     if (!Number.isFinite(closingAmount)||closingAmount<0) throw new Error('invalid_cash_count');
     // Nunca confiar em totais ou diferenças enviados pelo renderer.
     // Recuperar o preview real apenas internamente, sem retorná-lo ao operador.
-    const preview=await originalPreview.call(this);
     const reconciliation={
       ...preview,
       counted_payments:[...(preview.payments||[])].map(p=>{
