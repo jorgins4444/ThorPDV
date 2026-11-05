@@ -23,6 +23,12 @@ const effectiveAccess=(profile?:Row)=>{
   if(permission(perms,'sale','return')===true)labels.push('Devolve');
   if(permission(perms,'settings','edit')===true)labels.push('Configura PDV');
   if(permission(perms,'fiscal','view')===true)labels.push('Fiscal');
+  if(permission(perms,'cash','open')===true)labels.push('Abre caixa');
+  if(permission(perms,'cash','close')===true)labels.push('Fecha caixa');
+  if(permission(perms,'cash','blind_close')===true)labels.push('Fechamento às cegas');
+  if(permission(perms,'cash','movement')===true)labels.push('Sangria/suprimento');
+  if(permission(perms,'print','receipt')===true)labels.push('Imprime comprovante');
+  if(permission(perms,'print','reprint')===true)labels.push('Reimprime');
   return labels.length?labels:['Sem operações'];
 };
 
@@ -36,7 +42,7 @@ export function OperatorWorkspace({initialUsers,profiles,branches}:{initialUsers
   const save=()=>startTransition(async()=>{
     setMessage('');
     if(!form.name.trim())return setMessage('Informe o nome do operador.');
-    if(!form.profile_id)return setMessage('Selecione um perfil PDV.');
+    if(!form.profile_id||!selectedProfile)return setMessage('Selecione um perfil PDV válido. O perfil vinculado pode ter sido removido.');
     if(selectedProfile?.active===false)return setMessage('O perfil selecionado está inativo. Ative o perfil ou escolha outro.');
     const commission=Number(form.commission_percent||0);
     if(!Number.isFinite(commission)||commission<0||commission>100)return setMessage('A comissão deve ficar entre 0% e 100%.');
@@ -69,7 +75,7 @@ export function OperatorWorkspace({initialUsers,profiles,branches}:{initialUsers
     </section>
     <section className="operator-admin-card">
       <div className="operator-admin-head"><div><span>OPERADORES</span><h2>Usuários do caixa</h2><p>{users.length} usuário(s) PDV cadastrado(s). Confira a coluna <b>Acesso efetivo</b> antes de testar.</p></div></div>
-      <div className="operator-table-wrap"><table className="operator-table"><thead><tr><th>Nome</th><th>Perfil</th><th>Acesso efetivo</th><th>Filial</th><th>Comissão</th><th>Status</th><th>Ações</th></tr></thead><tbody>{users.map(u=>{const profile=profileMap.get(text(u.profile_id));const access=effectiveAccess(profile);return <tr key={text(u.id)}><td><strong>{text(u.name)}</strong><small>{text(u.email)||'—'}</small></td><td><strong>{text(u.profile)||text(profile?.name)||'Sem perfil'}</strong>{profile?.active===false?<small className="operator-profile-warning">Perfil inativo</small>:null}</td><td><div className="operator-access-chips">{access.map(label=><span className={label==='Supervisor'?'supervisor':''} key={label}>{label}</span>)}</div></td><td>{text(u.branch)||'Todas'}</td><td>{Number(u.commission_percent||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2})}%</td><td><span className={u.active===false?'op-inactive':'op-active'}>{u.active===false?'Inativo':'Ativo'}</span></td><td><div className="op-row-actions"><button onClick={()=>edit(u)}>Editar</button><button onClick={()=>quickPin(u)}>Definir PIN</button></div></td></tr>})}</tbody></table></div>
+      <div className="operator-table-wrap"><table className="operator-table"><thead><tr><th>Nome</th><th>Perfil</th><th>Acesso efetivo</th><th>Filial</th><th>Comissão</th><th>Status</th><th>Ações</th></tr></thead><tbody>{users.map(u=>{const profile=profileMap.get(text(u.profile_id));const access=effectiveAccess(profile);return <tr key={text(u.id)}><td><strong>{text(u.name)}</strong><small>{text(u.email)||'—'}</small></td><td><strong>{text(profile?.name)||'Perfil não encontrado'}</strong>{!profile?<small className="operator-profile-warning">Vínculo inválido: confira o perfil cadastrado</small>:profile.active===false?<small className="operator-profile-warning">Perfil inativo</small>:null}</td><td><div className="operator-access-chips">{access.map(label=><span className={label==='Supervisor'?'supervisor':''} key={label}>{label}</span>)}</div></td><td>{text(u.branch)||'Todas'}</td><td>{Number(u.commission_percent||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2})}%</td><td><span className={u.active===false?'op-inactive':'op-active'}>{u.active===false?'Inativo':'Ativo'}</span></td><td><div className="op-row-actions"><button onClick={()=>edit(u)}>Editar</button><button onClick={()=>quickPin(u)}>Definir PIN</button></div></td></tr>})}</tbody></table></div>
     </section>
     <section className="operator-admin-card operator-permissions-card"><h3>Alçadas dos perfis</h3><div className="permission-cards">{profiles.map(p=>{const perms=p.permissions;return <article key={text(p.id)}><strong>{text(p.name)}</strong><span>Desconto até {Number(permission(perms,'discount','max_percent')??0)}%</span><span>Acréscimo até {Number(permission(perms,'surcharge','max_percent')??0)}%</span><span>Cancelar venda: {permission(perms,'sale','cancel')===true?'Sim':'Não'}</span><span>Devolver: {permission(perms,'sale','return')===true?'Sim':'Não'}</span><span>Configurar PDV: {permission(perms,'settings','edit')===true?'Sim':'Não'}</span><span>Supervisor: {permission(perms,'supervisor','authorize')===true?'Sim':'Não'}</span></article>})}</div></section>
   </div>;
