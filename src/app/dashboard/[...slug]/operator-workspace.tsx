@@ -29,12 +29,24 @@ const effectiveAccess=(profile?:Row)=>{
   if(permission(perms,'cash','movement')===true)labels.push('Sangria/suprimento');
   if(permission(perms,'print','receipt')===true)labels.push('Imprime comprovante');
   if(permission(perms,'print','reprint')===true)labels.push('Reimprime');
+  if(permission(perms,'sale','remove_item')===true)labels.push('Remove item');
+  if(permission(perms,'discount','apply')===true)labels.push('Desconto');
+  if(permission(perms,'discount','override_limit')===true)labels.push('Excede desconto');
+  if(permission(perms,'customer','identify')===true)labels.push('Identifica cliente');
+  if(permission(perms,'hardware','manual_drawer')===true)labels.push('Abre gaveta');
+  if(permission(perms,'hardware','scale')===true)labels.push('Balança');
+  if(permission(perms,'fiscal','request_nfce')===true)labels.push('Solicita NFC-e');
+  if(permission(perms,'fiscal','reprint')===true)labels.push('Reimprime NFC-e');
+  if(permission(perms,'fiscal','cancel_nfce')===true)labels.push('Cancela NFC-e');
+  if(permission(perms,'print','nfce')===true)labels.push('Imprime NFC-e');
+  if(permission(perms,'sync','manual')===true)labels.push('Sincroniza');
+  for(const [key,label] of [['cash','Dinheiro'],['pix','PIX'],['debit_card','Débito'],['credit_card','Crédito'],['voucher','Voucher'],['integrated','TEF']] as const){if(permission(perms,'payment',key)===true)labels.push(label);}
   return labels.length?labels:['Sem operações'];
 };
 
 export function OperatorWorkspace({initialUsers,profiles,branches}:{initialUsers:Row[];profiles:Row[];branches:Row[]}){
   const [users,setUsers]=useState(initialUsers);const [pending,startTransition]=useTransition();const [message,setMessage]=useState('');
-  const emptyForm=()=>({id:'',name:'',email:'',profile_id:text(profiles[0]?.id),branch_id:text(branches[0]?.id),active:true,pin:'',commission_percent:'0'});
+  const emptyForm=()=>({id:'',name:'',email:'',profile_id:text(profiles.find(p=>p.active!==false)?.id),branch_id:text(branches[0]?.id),active:true,pin:'',commission_percent:'0'});
   const [form,setForm]=useState(emptyForm);
   const profileMap=useMemo(()=>new Map(profiles.map(p=>[text(p.id),p])),[profiles]);
   const selectedProfile=profileMap.get(form.profile_id);
@@ -70,7 +82,7 @@ export function OperatorWorkspace({initialUsers,profiles,branches}:{initialUsers
         <label><span>PIN {form.id?'(deixe vazio para manter)':''}</span><input type="password" inputMode="numeric" maxLength={8} value={form.pin} onChange={e=>setForm({...form,pin:e.target.value.replace(/\D/g,'')})} placeholder="4 a 8 dígitos"/></label>
         <label className="operator-check"><input type="checkbox" checked={form.active} onChange={e=>setForm({...form,active:e.target.checked})}/><span>Usuário ativo</span></label>
       </div>
-      <div className={`operator-effective-access ${permission(selectedProfile?.permissions,'supervisor','authorize')===true?'supervisor':''}`}><div><span>ACESSO EFETIVO DO PERFIL</span><strong>{text(selectedProfile?.name)||'Nenhum perfil selecionado'}</strong></div><div>{effectiveAccess(selectedProfile).map(label=><b key={label}>{label}</b>)}</div><small>O ThorPDV aplica estas alçadas ao operador após sincronizar. O nome do usuário não altera as permissões; quem manda é o perfil vinculado.</small></div>
+      <div className={`operator-effective-access ${permission(selectedProfile?.permissions,'supervisor','authorize')===true?'supervisor':''}`}><div><span>ACESSO EFETIVO DO PERFIL</span><strong>{text(selectedProfile?.name)||'Nenhum perfil selecionado'}</strong></div><div>{effectiveAccess(selectedProfile).map(label=><b key={label}>{label}</b>)}</div><small>Estas são as permissões cadastradas no perfil. A aplicação efetiva no ThorPDV depende da sincronização do servidor; o nome do usuário não altera permissões.</small></div>
       <div className="operator-actions"><button className="primary" disabled={pending} onClick={save}>{pending?'Salvando...':'Salvar operador'}</button></div>{message?<div className="operator-message">{message}</div>:null}
     </section>
     <section className="operator-admin-card">
