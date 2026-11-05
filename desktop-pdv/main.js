@@ -253,7 +253,16 @@ async function printCashClose(summary) {
   const target = agent.settings().printerName;
   if (!target) throw new Error('printer_not_configured');
   if (target === '__PDF__') return saveAsPdf(doc);
-  return printHtmlDocument(doc, target);
+  try {
+    return await printHtmlDocument(doc, target);
+  } catch (error) {
+    try {
+      await printThermalText(target, doc.text);
+      return { ok:true, target, fallback:'escpos_raw' };
+    } catch (fallbackError) {
+      throw new Error('cash_close_print_failed: '+String(error?.message||error)+'; raw: '+String(fallbackError?.message||fallbackError));
+    }
+  }
 }
 
 async function printCashMovement(receipt) {
