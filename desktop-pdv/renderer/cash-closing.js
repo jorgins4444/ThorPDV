@@ -27,13 +27,13 @@ async function cashClosingMovement(type,previewModal){
   }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,friendlyError(e.message));}
 }
 
-function renderBlindCashClosingModal(preview){
+function renderBlindCashClosingModal(preview,{historical=false,onDone=null}={}){
   const labels=cashClosingLabels;
   // Exibir todas as modalidades conhecidas, mesmo sem vendas no período.
   // O preview cego contém somente identificadores de formas de pagamento (sem valores).
   const available=Array.isArray(preview?.payment_methods)?preview.payment_methods:[];
   const methods=[...new Set([...blindCashClosingOrder,...available.map(String)])].filter(Boolean);
-  const m=modal(`<h3>Fechamento às cegas</h3><p class="muted">Informe os valores contados sem visualizar os valores registrados no sistema. O relatório detalhado ficará disponível somente à gestão autorizada.</p>
+  const m=modal(`<h3>${historical?'Fechamento às cegas de caixa pendente':'Fechamento às cegas'}</h3><p class="muted">Informe os valores contados sem visualizar os valores registrados no sistema. O relatório detalhado ficará disponível somente à gestão autorizada.</p>
     <div class="cash-payment-table">${methods.map(method=>`<label class="field"><span>${esc(labels[method]||method)} — valor conferido</span><input data-blind-count="${esc(method)}" type="number" min="0" step="0.01" placeholder="Informe o valor" autocomplete="off"></label>`).join('')}</div>
     <label class="field">Total de dinheiro físico na gaveta (incluindo fundo de troco e movimentações)<input id="blindDrawerCount" type="number" min="0" step="0.01" placeholder="Informe o valor contado" autocomplete="off"></label>
     <label class="field">Observações<textarea id="blindCloseNotes" rows="2"></textarea></label>
@@ -48,11 +48,16 @@ function renderBlindCashClosingModal(preview){
     if(!confirm('Confirmar fechamento às cegas? Os valores esperados e diferenças não serão exibidos ao operador.'))return;
     const btn=m.querySelector('#blindCloseConfirm');btn.disabled=true;
     try{
-      await window.thor.closeCash({closingAmount,countedPayments,notes:m.querySelector('#blindCloseNotes').value});
+      let supervisorAuthorization=null;
+      if(historical)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',0);
+      const payload={cashOpenEventId:preview.client_event_id,closingAmount,countedPayments,notes:m.querySelector('#blindCloseNotes').value,supervisorAuthorization};
+      if(historical)await window.thor.closeHistoricalCash(payload);else await window.thor.closeCash(payload);
       m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
       infoModal('Caixa fechado','Fechamento às cegas registrado. O relatório detalhado e eventuais diferenças ficam disponíveis somente para a gestão autorizada.');
+      if(typeof onDone==='function')await onDone();
     }catch(error){btn.disabled=false;infoModal('Fechamento',friendlyError(error.message));}
   };
+  return m;
 }
 
 function renderCashClosingModal(preview){
