@@ -196,6 +196,6 @@ function installOperationsCenterV120(ThorAgent){
     return originalCashMovement.call(this,input);
   };
   const originalCloseHistorical=proto.closeHistoricalCash;
-  if(typeof originalCloseHistorical==='function')proto.closeHistoricalCash=async function(input={}){if(!this._validAuthorization(input.supervisorAuthorization,'reopen_cash'))throw new Error('supervisor_authorization_required');this._recordSupervisorAudit(input.supervisorAuthorization,'reopen_cash',input.notes,0,{cash_open_event_id:input.cashOpenEventId});return originalCloseHistorical.call(this,input);};
+  if(typeof originalCloseHistorical==='function')proto.closeHistoricalCash=async function(input={}){const actor=this.currentOperator?.();const permitted=hasPermission(actor,'cash.close',false)&&hasPermission(actor,'cash.close_previous',false);if(!permitted&&!this._validAuthorization(input.supervisorAuthorization,'reopen_cash'))throw new Error('supervisor_authorization_required');if(!permitted)this._recordSupervisorAudit(input.supervisorAuthorization,'reopen_cash',input.notes,0,{cash_open_event_id:input.cashOpenEventId});return originalCloseHistorical.call(this,input);};
 }
 module.exports={installOperationsCenterV120};
