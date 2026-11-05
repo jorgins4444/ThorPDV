@@ -110,9 +110,10 @@ function total(){return state.cart.reduce((s,i)=>s+i.quantity*i.unitPrice,0);}
 
 function render(){
   if(!state.status?.enrolled)return renderSetup();
-  app.innerHTML=`<div class="shell"><header class="topbar"><div class="top-left"><div class="logo">ϟ THOR<b>PDV</b></div><span id="context"></span></div><div class="top-right"><button class="nav-button ${state.view==='sale'?'active':''}" id="navSale">Venda</button><button class="nav-button ${state.view==='fiscal'?'active':''}" id="navFiscal">Fiscal <kbd>F3</kbd></button><span id="queue" class="queue"></span><span id="status" class="status"><i></i><b></b></span><span class="pdv-version-chip" title="Versão atual do ThorPDV">v${esc(state.status?.appVersion||'—')}</span><button class="secondary" id="sync">Sincronizar <kbd>F6</kbd></button><button class="secondary" id="settings">Configurações <kbd>F12</kbd></button></div></header><div id="workspace" class="workspace"></div><footer class="bottom"><span id="hotkeyHelp"></span><span id="footerSync"></span></footer></div>`;
+  app.innerHTML=`<div class="shell"><header class="topbar"><div class="top-left"><div class="logo">ϟ THOR<b>PDV</b></div><span id="context"></span></div><div class="top-right"><button class="nav-button ${state.view==='sale'?'active':''}" id="navSale">Venda</button><button class="nav-button ${state.view==='fiscal'?'active':''}" id="navFiscal">Fiscal <kbd>F3</kbd></button><button class="nav-button" id="navReturn" title="Localizar venda para devolução">Devolução</button><span id="queue" class="queue"></span><span id="status" class="status"><i></i><b></b></span><span class="pdv-version-chip" title="Versão atual do ThorPDV">v${esc(state.status?.appVersion||'—')}</span><button class="secondary" id="sync">Sincronizar <kbd>F6</kbd></button><button class="secondary" id="settings">Configurações <kbd>F12</kbd></button></div></header><div id="workspace" class="workspace"></div><footer class="bottom"><span id="hotkeyHelp"></span><span id="footerSync"></span></footer></div>`;
   document.getElementById('navSale').onclick=()=>setView('sale');
   document.getElementById('navFiscal').onclick=()=>setView('fiscal');
+  document.getElementById('navReturn').onclick=openReturnShortcut;
   document.getElementById('sync').onclick=async()=>{await window.thor.sync();await refreshStatus();await refreshProducts();await refreshFiscalSales();showToast('Sincronização concluída.');};
   document.getElementById('settings').onclick=settingsModal;
   renderWorkspace();updateTop();
@@ -420,6 +421,35 @@ function cancelSaleModal(sale){
     const successMessage=fiscalCancellation?'NFC-e cancelada e venda estornada.':'Venda cancelada.';
     showToast(printWarning?`${successMessage} Impressão pendente: ${printWarning}`:`${successMessage} Comprovante impresso.`);
   };
+}
+
+async function openReturnShortcut(){
+  const m=modal('<h3>Devolução de venda</h3><p class="muted">Localize a venda concluída para selecionar os itens a devolver. A restituição é realizada por crédito/vale.</p><div class="field"><label>Pesquisar venda ou cliente</label><input id="returnQuickSearch" placeholder="Número da venda ou nome do cliente"></div><div id="returnQuickResults" class="detail-items">Carregando vendas...</div><div class="actions"><button class="secondary" id="returnQuickClose">Fechar</button></div>','wide');
+  m.querySelector('#returnQuickClose').onclick=()=>m.remove();
+  const input=m.querySelector('#returnQuickSearch'),results=m.querySelector('#returnQuickResults');
+  let request=0;
+  const load=async()=>{
+    const current=++request;
+    results.textContent='Buscando vendas...';
+    try{
+      const sales=await window.thor.fiscalSales(input.value.trim());
+      if(current!==request||!m.isConnected)return;
+      const rows=(Array.isArray(sales)?sales:[]).filter(s=>String(s.status||'').toLowerCase()==='completed'&&String(s.fiscal?.status||'').toLowerCase()!=='cancelled').slice(0,30);
+      results.innerHTML=rows.length?rows.map((s,i)=>`<div class="return-quick-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border,#ddd)"><span><b>Venda #${esc(s.number||'Local')}</b><small style="display:block">${esc(s.customer_name||'Consumidor')} · ${money(s.total)}</small></span><button class="secondary" data-return-quick="${i}">Selecionar</button></div>`).join(''):'Nenhuma venda concluída encontrada.';
+      results.querySelectorAll('[data-return-quick]').forEach(button=>button.onclick=async()=>{
+        const sale=rows[Number(button.dataset.returnQuick)];
+        if(!sale)return;
+        button.disabled=true;
+        try{
+          const detail=await window.thor.fiscalSale(saleKey(sale));
+          if(!detail||!Array.isArray(detail.items)||!detail.items.length)throw new Error('Venda sem itens disponíveis para devolução.');
+          m.remove();returnSaleModal(detail);
+        }catch(e){button.disabled=false;infoModal('Devolução',friendlyError(e.message));}
+      });
+    }catch(e){if(current===request&&m.isConnected)results.textContent='Falha ao consultar vendas: '+friendlyError(e.message);}
+  };
+  input.addEventListener('input',()=>{load();});
+  await load();
 }
 
 function returnSaleModal(sale){
