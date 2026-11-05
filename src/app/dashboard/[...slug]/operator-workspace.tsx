@@ -25,6 +25,7 @@ const effectiveAccess=(profile?:Row)=>{
   if(permission(perms,'fiscal','view')===true)labels.push('Fiscal');
   if(permission(perms,'cash','open')===true)labels.push('Abre caixa');
   if(permission(perms,'cash','close')===true)labels.push('Fecha caixa');
+  if(permission(perms,'cash','close_previous')===true)labels.push('Fecha caixas anteriores');
   if(permission(perms,'cash','blind_close')===true)labels.push('Fechamento às cegas');
   if(permission(perms,'cash','movement')===true)labels.push('Sangria/suprimento');
   if(permission(perms,'print','receipt')===true)labels.push('Imprime comprovante');
