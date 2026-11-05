@@ -54,10 +54,13 @@ function cashDailyCloseModal(preview,{historical=false,readonly=false,onDone=nul
       if(historical&&v3State()?.operator?.permissions?.cash?.close_previous!==true)supervisorAuthorization=await window.requestSupervisorAuthorizationV120('reopen_cash','Autorizar fechamento de caixa anterior',closingAmount);
       const payload={cashOpenEventId:preview.client_event_id,closingAmount,notes:m.querySelector('#cashDailyNotes').value,reconciliation,supervisorAuthorization};
       const result=historical?await window.thor.closeHistoricalCash(payload):await window.thor.closeCash(payload);
-      m.remove();await refreshStatus();await window.thor.sync().catch(()=>{});
-      let printed=false;try{const p=await window.thor.printCashClose(result.summary);printed=!p?.cancelled;}catch(e){infoModal('Caixa fechado',`O caixa foi fechado, mas o comprovante não foi impresso: ${friendlyError(e.message)}.`);return;}
-      showToast(`Caixa de ${business} fechado${printed?' e comprovante impresso':''}. Diferença: ${money(result.summary?.difference||0)}.`);
-      if(typeof onDone==='function')await onDone();else openCashModal();
+      m.remove();
+      const printing=await cashClosingPrintAfterClose(result.summary);
+      await refreshStatus().catch(()=>{});await window.thor.sync().catch(()=>{});
+      if(printing.printed){
+        showToast(`Caixa de ${business} fechado; comprovante enviado à impressora. Diferença: ${money(result.summary?.difference||0)}.`);
+        if(typeof onDone==='function')await onDone();else openCashModal();
+      }
     }catch(e){btn.disabled=false;btn.textContent=`Conferir e fechar ${historical?'caixa pendente':'caixa'}`;infoModal('Fechamento de caixa',friendlyError(e.message));}
   };
   return m;
