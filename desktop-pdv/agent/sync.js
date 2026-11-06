@@ -148,9 +148,21 @@ class SyncEngine {
 
   async pushEvents(events){
     if(!events?.length) return null;
-    const push=await this.request('/api/pdv/push',{events:events.map(({id,type,payload})=>({id,type,payload}))});
-    this.applyPushResults(push);
-    return push;
+    // Do not send a sale before its local-only customer/product is on the server.
+    // Keep queue order: sending events after a blocked sale could close a cash
+    // session before its related sale has been committed.
+    const newProducts=new Set(this.store.catalogUnconfirmedProductIds?.()||[]);
+    const newCustomers=new Set(this.store.catalogUnconfirmedCustomerIds?.()||[]);
+    const barrier=events.findIndex(e=>e.type==='sale_completed' &&
+      (newCustomers.has(String(e.payload?.customer_id||'')) ||
+      (e.payload?.items||[]).some(item=>newProducts.has(String(item.product_id||item.productId||'')))));
+    const ready=barrier<0?events:events.slice(0,barrier);
+    let push=null;
+    if(ready.length){
+      push=await this.request('/api/pdv/push',{events:ready.map(({id,type,payload})=>({id,type,payload}))});
+      this.applyPushResults(push);
+    }
+    return barrier<0?push:{...(push||{}),blocked:true,error:'catalog_dependency_unsynced'};
   }
 
   async flushPreviousBusinessDays(today){
@@ -166,7 +178,8 @@ class SyncEngine {
         return Boolean(date&&date<today);
       });
       if(!historical.length) return {drained:true,batches};
-      await this.pushEvents(historical);
+      const pushed=await this.pushEvents(historical);
+      if(pushed?.blocked) return {drained:false,batches,reason:'catalog_dependency_unsynced'};
       batches+=1;
       if(historical.length<100){
         const remaining=this.store.pending(100).some((event)=>{
@@ -204,7 +217,8 @@ class SyncEngine {
         const date=syncEventBusinessDate(event);
         return !date||date>=today;
       });
-      await this.pushEvents(current);
+      const pushed=await this.pushEvents(current);
+      if(pushed?.blocked) throw new Error('catalog_dependency_unsynced');
 
       await this.control('cash_rollover',{});
 
