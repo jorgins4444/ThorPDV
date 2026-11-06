@@ -191,6 +191,8 @@ class SyncEngine {
     this.running=true;
     this.onState({syncing:true});
     try{
+      // Register catalog changes before replaying sales that may reference new SKUs.
+      if(typeof this.beforeCatalogPush==='function')await this.beforeCatalogPush();
       const today=syncBusinessDate();
       const historical=await this.flushPreviousBusinessDays(today);
       if(!historical.drained) throw new Error('historical_sync_queue_too_large');
