@@ -89,3 +89,34 @@ test('pull do servidor não apaga preço local pendente',()=>{
     assert.equal(store.db.prepare('select price from price_items where product_id=?').get(id).price,9);
   }finally{close();}
 });
+
+test('saldo local não é somado novamente após pull com ACK perdido',()=>{
+  const {store,close}=newTestStore();
+  try{
+    const agent=new FakeAgent(store);
+    agent.catalogLocalSave('product_create',{id,name:'Estoque',unit:'UN',cost_price:2,sale_price:5});
+    agent.catalogLocalSave('stock_adjust',{id,delta:10,reason:'Inventário'});
+    assert.equal(store.db.prepare('select quantity from inventory where product_id=?').get(id).quantity,10);
+    store.applyPull({products:[],inventory:[{product_id:id,quantity:10,reserved_quantity:0}],
+      customers:[],price_items:[],promotions:[],sales_history:[]});
+    assert.equal(store.db.prepare('select quantity from inventory where product_id=?').get(id).quantity,10);
+  }finally{close();}
+});
+
+test('rejeição de produto novo desativa produto local e reenvio exige permissão',()=>{
+  const {store,close}=newTestStore();
+  try{
+    const agent=new FakeAgent(store);
+    const result=agent.catalogLocalSave('product_create',{id,name:'Rejeitado',unit:'UN',cost_price:1,sale_price:2});
+    const row=store.catalogOutbox(1)[0];
+    agent.catalogRollback(row.kind,row.payload);
+    store.catalogSetState(result.event_id,'rejected','category_not_found');
+    assert.equal(store.db.prepare('select active from products where id=?').get(id).active,0);
+    assert.equal(store.catalogOutbox(10).length,0);
+    agent.allowed=false;
+    assert.throws(()=>agent.catalogRetry(result.event_id),/permission_denied/);
+    agent.allowed=true;
+    assert.equal(agent.catalogRetry(result.event_id).ok,true);
+    assert.equal(store.catalogOutbox(10).length,1);
+  }finally{close();}
+});
