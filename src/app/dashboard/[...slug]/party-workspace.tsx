@@ -65,7 +65,7 @@ export function PartyWorkspace({ resource, initial }: { resource: Resource; init
     try{
       const res=await fetch(`/api/lookup/cnpj?cnpj=${cnpj}`,{cache:'no-store'});
       const body=await res.json();
-      if(!res.ok||!body.ok)throw new Error(body.error||'cnpj_not_found');
+      if(!res.ok||!body.ok)throw new Error(String(body.message||({'cnpj_rate_limited':'Limite de consultas gratuitas. Aguarde um minuto.','cnpj_not_found':'CNPJ não localizado.','invalid_cnpj':'CNPJ inválido.'} as Record<string,string>)[String(body.error)]||'Falha na consulta do CNPJ.'));
       const d=body.data||{};
       setForm(v=>({
         ...v,document:cnpj,
@@ -89,9 +89,9 @@ export function PartyWorkspace({ resource, initial }: { resource: Resource; init
       });
       setDocHint('Dados cadastrais consultados. Inscrição Estadual requer confirmação na SEFAZ.');
       if(d.postal_code)lastCep.current=String(d.postal_code);
-    }catch{
+    }catch(error){
       lastCnpj.current='';setCnpjMeta(null);
-      setDocHint('Consulta pública indisponível. Preencha os dados manualmente.');
+      setDocHint(error instanceof Error ? error.message : 'Não foi possível consultar o CNPJ. Tente novamente.');
     }finally{setCnpjBusy(false);}
   };
 
