@@ -245,7 +245,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
           const result=await this.sync.request('/api/pdv/catalog-mutation', {
             event_id:row.event_id,kind:row.kind,payload:Object.fromEntries(Object.entries(row.payload).filter(([key])=>key!=='local_before')),
           });
-          if (result?.ok) {
+          if (result?.ok && result?.applied !== false) {
             this.store.catalogSetState(row.event_id,'synced','');
             done++;
           } else {
@@ -272,6 +272,8 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
   agent.start=async function(...args) {
     const result=await oldStart.apply(this,args);
     clearInterval(this._catalogInterval);
+    // Ensure fresh product/customer records are sent before the standard sale queue.
+    this.sync.beforeCatalogPush=async()=>this.flushCatalogOutbox();
     this._catalogInterval=setInterval(()=>this.flushCatalogOutbox().catch(()=>{}),30000);
     this._catalogInterval.unref?.();
     setTimeout(()=>this.flushCatalogOutbox().catch(()=>{}),1500);
