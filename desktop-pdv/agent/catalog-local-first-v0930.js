@@ -118,6 +118,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
         const before = this.db.prepare('select sale_price from products where id=?').get(id);
         payload.local_before = before ? {sale_price:before.sale_price,
           table_price:this.db.prepare('select price from price_items where product_id=?').get(id)?.price ?? null} : null;
+        if (before) payload.expected_sale_price=before.sale_price;
         if (payload.sale_price<0) throw new Error('invalid_price');
         const updated = this.db.prepare('update products set sale_price=?,updated_at=? where id=?')
           .run(payload.sale_price,now,id);
@@ -130,9 +131,9 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
         if (!payload.delta || Math.abs(payload.delta)>9999999) throw new Error('invalid_quantity');
         if (!payload.reason) throw new Error('reason_required');
         if (!this.db.prepare('select id from products where id=?').get(id)) throw new Error('product_not_found');
-        const stock = this.db.prepare('select quantity from inventory where product_id=?').get(id);
+        const stock = this.db.prepare('select quantity,reserved_quantity from inventory where product_id=?').get(id);
         const next = Number(stock?.quantity||0) + payload.delta;
-        if (next < 0) throw new Error('insufficient_stock');
+        if (next < Number(stock?.reserved_quantity||0)) throw new Error('insufficient_stock');
         this.db.prepare(`insert into inventory(product_id,quantity,reserved_quantity,updated_at)
           values(?,?,0,?) on conflict(product_id) do update set quantity=excluded.quantity,updated_at=excluded.updated_at`)
           .run(id,next,now);
