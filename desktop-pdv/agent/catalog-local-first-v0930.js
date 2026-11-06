@@ -210,6 +210,11 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
       "select payload from catalog_outbox where kind='product_create' and state in ('pending','retry','rejected')"
     ).all().map(row=>String(JSON.parse(row.payload).id));
   };
+  Store.prototype.catalogUnconfirmedCustomerIds = function() {
+    return this.db.prepare(
+      "select payload from catalog_outbox where kind='customer_save' and state in ('pending','retry','rejected')"
+    ).all().map(row=>String(JSON.parse(row.payload).id));
+  };
   agent.catalogUnconfirmedProducts = function() {
     return this.store.catalogUnconfirmedProductIds().length;
   };
