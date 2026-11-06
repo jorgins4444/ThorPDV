@@ -205,8 +205,13 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
   };
   agent.catalogOutboxStatus = function() { return this.store.catalogHistory(100); };
   agent.catalogRetry = function(eventId) {
-    const row=this.store.db.prepare('select event_id,state from catalog_outbox where event_id=?').get(String(eventId||''));
+    const row=this.store.db.prepare('select event_id,kind,payload,state from catalog_outbox where event_id=?').get(String(eventId||''));
     if (!row || row.state!=='rejected') throw new Error('catalog_event_not_rejected');
+    const permission={customer_save:'customer.create',product_create:'product.create',product_price:'product.price_edit',stock_adjust:'stock.adjust'}[row.kind];
+    const operator=this.currentOperator?.();
+    if (!operator || !this._profileAllows?.(permission,false)) throw new Error('permission_denied');
+    const original=JSON.parse(row.payload).operator_user_id;
+    if (String(original)!==String(operator.id) && !this._profileAllows?.('supervisor.authorize',false)) throw new Error('permission_denied');
     this.store.db.prepare("update catalog_outbox set state='retry',error=null,updated_at=? where event_id=?")
       .run(new Date().toISOString(),row.event_id);
     setTimeout(()=>this.flushCatalogOutbox().catch(()=>{}),100);
@@ -238,7 +243,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
       for (const row of items) {
         try {
           const result=await this.sync.request('/api/pdv/catalog-mutation', {
-            event_id:row.event_id,kind:row.kind,payload:row.payload,
+            event_id:row.event_id,kind:row.kind,payload:Object.fromEntries(Object.entries(row.payload).filter(([key])=>key!=='local_before')),
           });
           if (result?.ok) {
             this.store.catalogSetState(row.event_id,'synced','');
