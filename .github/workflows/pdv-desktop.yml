@@ -27,7 +27,24 @@ jobs:
         with:
           node-version: 22
 
+      - name: Prevent overwrite of an existing Windows release
+        id: release_guard
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $pkg = Get-Content package.json | ConvertFrom-Json
+          $tag = 'pdv-v' + $pkg.version
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "::notice::Release $tag already exists. Skipping build and avoiding installer overwrite."
+            'skip=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            'skip=false' | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+
       - name: Validate JavaScript syntax
+        if: steps.release_guard.outputs.skip != 'true'
         shell: pwsh
         run: |
           $files = Get-ChildItem -Path . -Recurse -Filter *.js -File | Where-Object {
@@ -42,12 +59,15 @@ jobs:
           }
 
       - name: Install dependencies
+        if: steps.release_guard.outputs.skip != 'true'
         run: npm install
 
       - name: Build Windows installer
+        if: steps.release_guard.outputs.skip != 'true'
         run: npm run dist:win
 
       - name: Generate SHA-256
+        if: steps.release_guard.outputs.skip != 'true'
         shell: pwsh
         run: |
           $exe = Get-ChildItem dist\ThorPDV-Desktop-*-x64.exe | Select-Object -First 1
@@ -57,6 +77,7 @@ jobs:
           Write-Host ('SHA256 ' + $hash)
 
       - name: Upload installer artifact
+        if: steps.release_guard.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ThorPDV-Desktop-Windows
@@ -67,6 +88,7 @@ jobs:
           retention-days: 14
 
       - name: Publish GitHub Release assets
+        if: steps.release_guard.outputs.skip != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,4 +102,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --title ('ThorPDV Desktop ' + $pkg.version) --notes ('ThorPDV Desktop ' + $pkg.version + '. Build Windows estável baseado na série 0.8.79 com correções de sincronização.')
           }
-          gh release upload $tag $exe.FullName $sha --clobber
+          gh release upload $tag $exe.FullName $sha

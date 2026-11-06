@@ -1,0 +1,35 @@
+name: ThorPDV Catalog Local-First Tests
+
+on:
+  pull_request:
+    paths:
+      - 'desktop-pdv/**'
+      - 'src/app/api/pdv/catalog-mutation/**'
+      - 'supabase/migrations/*pdv_catalog_local_first*'
+      - '.github/workflows/pdv-catalog-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-catalog:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: desktop-pdv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Verify JavaScript syntax
+        shell: pwsh
+        run: |
+          node --check agent/catalog-local-first-v0930.js
+          node --check renderer/catalog-local-first-v0930.js
+          node --check tests/catalog-local-first-v0930.test.js
+      - name: Run offline-first tests
+        run: node --test tests/catalog-local-first-v0930.test.js

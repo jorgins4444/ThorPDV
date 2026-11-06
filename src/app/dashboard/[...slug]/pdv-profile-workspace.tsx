@@ -21,6 +21,16 @@ const groups: PermissionGroup[] = [
     ],
   },
   {
+    title: 'Cadastros no caixa',
+    subtitle: 'Operações local-first no ThorPDV Desktop e sincronização posterior com o ThorGestão.',
+    items: [
+      { path: 'customer.create', label: 'Cadastrar e editar clientes', description: 'Permite salvar clientes no SQLite local e sincronizar com o ThorGestão.', risk: 'sensitive' },
+      { path: 'product.create', label: 'Cadastrar produto simples', description: 'Permite criar um produto com nome, unidade, custo, venda, categoria e NCM.', risk: 'sensitive' },
+      { path: 'product.price_edit', label: 'Alterar preço de venda', description: 'Permite alterar somente o preço de venda dos produtos.', risk: 'critical' },
+      { path: 'stock.adjust', label: 'Ajustar estoque', description: 'Permite registrar entradas e saídas justificadas no estoque do caixa.', risk: 'critical' },
+    ],
+  },
+  {
     title: 'Descontos',
     subtitle: 'Controle de desconto e de operações acima da alçada do operador.',
     items: [
@@ -84,7 +94,9 @@ const groups: PermissionGroup[] = [
 
 const blankPermissions = (): PermissionTree => ({
   sale: { create: true, remove_item: true, cancel: false, return: false },
-  customer: { identify: true },
+  customer: { identify: true, create: false },
+  product: { create: false, price_edit: false },
+  stock: { adjust: false },
   cash: { open: true, close: true, close_previous: false, blind_close: false, movement: false },
   hardware: { manual_drawer: false, scale: true },
   fiscal: { view: true, request_nfce: true, reprint: true, cancel_nfce: false },
@@ -99,7 +111,9 @@ const blankPermissions = (): PermissionTree => ({
 
 const supervisorPermissions = (): PermissionTree => ({
   sale: { create: true, remove_item: true, cancel: true, return: true },
-  customer: { identify: true },
+  customer: { identify: true, create: true },
+  product: { create: true, price_edit: true },
+  stock: { adjust: true },
   cash: { open: true, close: true, close_previous: false, blind_close: false, movement: true },
   hardware: { manual_drawer: true, scale: true },
   fiscal: { view: true, request_nfce: true, reprint: true, cancel_nfce: true },
@@ -114,7 +128,9 @@ const supervisorPermissions = (): PermissionTree => ({
 
 const saleOnlyPermissions = (): PermissionTree => ({
   sale: { create: true, remove_item: true, cancel: false, return: false },
-  customer: { identify: true },
+  customer: { identify: true, create: false },
+  product: { create: false, price_edit: false },
+  stock: { adjust: false },
   cash: { open: false, close: false, close_previous: false, blind_close: false, movement: false },
   hardware: { manual_drawer: false, scale: true },
   fiscal: { view: false, request_nfce: false, reprint: false, cancel_nfce: false },

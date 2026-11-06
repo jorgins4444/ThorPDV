@@ -1,0 +1,34 @@
+name: ThorPDV Catalog Staging Database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-staging-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    env:
+      THORPDV_STAGING_DB_URL: ${{ secrets.THORPDV_STAGING_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check staging database configuration
+        run: |
+          test -n "$THORPDV_STAGING_DB_URL" || { echo "::error::Set THORPDV_STAGING_DB_URL in staging environment secrets"; exit 1; }
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Apply catalog migration to staging only
+        env:
+          PGSSLMODE: require
+        run: |
+          psql "$THORPDV_STAGING_DB_URL" -v ON_ERROR_STOP=1 -X \
+            -f supabase/migrations/20261106160000_pdv_catalog_local_first_v0930.sql
+      - name: Verify permissions and invalid-device protection
+        env:
+          PGSSLMODE: require
+        run: |
+          psql "$THORPDV_STAGING_DB_URL" -v ON_ERROR_STOP=1 -X \
+            -f supabase/tests/pdv_catalog_v0930_smoke.sql
