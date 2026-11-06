@@ -59,6 +59,13 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     return this.db.prepare("select * from catalog_outbox as q where state in ('pending','retry') and not exists (select 1 from catalog_outbox as blocked where blocked.state='rejected' and blocked.rowid<q.rowid) order by created_at,q.rowid limit ?")
       .all(limit).map(row => ({...row,payload:JSON.parse(row.payload)}));
   };
+  Store.prototype.catalogPendingOverlays = function(limit=1000) {
+    // These edits must survive server pull even while an older rejected event
+    // blocks transmission. The send queue and the local overlay are distinct.
+    return this.db.prepare(
+      "select * from catalog_outbox where state in ('pending','retry') order by created_at,rowid limit ?"
+    ).all(limit).map(row=>({...row,payload:JSON.parse(row.payload)}));
+  };
   Store.prototype.catalogHistory = function(limit=50) {
     return this.db.prepare('select event_id,kind,state,error,attempts,created_at,updated_at from catalog_outbox order by created_at desc,rowid desc limit ?').all(limit);
   };
@@ -150,7 +157,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     // Snapshot local balances for pending stock adjustments before the server pull.
     // Re-adding deltas after every pull risks double counting if the server accepted
     // an event but the ACK was lost. Keeping the local snapshot avoids that race.
-    const pending = this.catalogOutbox(1000);
+    const pending = this.catalogPendingOverlays(1000);
     const stockSnapshots = new Map();
     for (const entry of pending) if (entry.kind === 'stock_adjust' && !stockSnapshots.has(entry.payload.id)) {
       stockSnapshots.set(entry.payload.id, this.db.prepare('select quantity,reserved_quantity,updated_at from inventory where product_id=?').get(entry.payload.id));
