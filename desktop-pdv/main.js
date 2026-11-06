@@ -365,6 +365,7 @@ function registerIpc() {
   handle('thor:catalog-save', (kind,payload) => agent.catalogLocalSave(kind,payload));
   handle('thor:catalog-status', () => agent.catalogOutboxStatus());
   handle('thor:catalog-sync', () => agent.flushCatalogOutbox());
+  handle('thor:catalog-retry', (eventId) => agent.catalogRetry(eventId));
   handle('thor:sales-orders', (query) => agent.salesOrders(query));
   handle('thor:payment-terms', () => agent.paymentTerms());
   handle('thor:set-commercial-context', (payload) => agent.setCommercialContext(payload));
