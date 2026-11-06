@@ -32,6 +32,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'catalog_service_unavailable' }, { status: 503 });
   }
   const result = (data || { ok: false, error: 'empty_response' }) as { ok?: boolean; error?: string };
-  // Business rejections are returned in the JSON payload so the outbox can stop retrying permanently.
-  return NextResponse.json(result, { status: 200 });
+  // The sync worker rejects any JSON response with ok=false as a network failure.
+  // Return a transport-success envelope that distinguishes business rejection from
+  // availability errors, so the client stops retrying invalid data indefinitely.
+  return NextResponse.json(result.ok ? { ...result, applied: true } : { ok: true, applied: false, error: result.error || 'catalog_rejected' }, { status: 200 });
 }
