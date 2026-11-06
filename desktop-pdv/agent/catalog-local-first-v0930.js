@@ -55,7 +55,8 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
   };
 
   Store.prototype.catalogOutbox = function(limit=50) {
-    return this.db.prepare("select * from catalog_outbox where state in ('pending','retry') order by created_at,rowid limit ?")
+    // Never overtake a permanently rejected older edit: later edits can depend on it.
+    return this.db.prepare("select * from catalog_outbox as q where state in ('pending','retry') and not exists (select 1 from catalog_outbox as blocked where blocked.state='rejected' and blocked.rowid<q.rowid) order by created_at,q.rowid limit ?")
       .all(limit).map(row => ({...row,payload:JSON.parse(row.payload)}));
   };
   Store.prototype.catalogHistory = function(limit=50) {
@@ -137,9 +138,16 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
 
   const originalApplyPull = Store.prototype.applyPull;
   Store.prototype.applyPull = function(data) {
+    // Snapshot local balances for pending stock adjustments before the server pull.
+    // Re-adding deltas after every pull risks double counting if the server accepted
+    // an event but the ACK was lost. Keeping the local snapshot avoids that race.
+    const pending = this.catalogOutbox(1000);
+    const stockSnapshots = new Map();
+    for (const entry of pending) if (entry.kind === 'stock_adjust' && !stockSnapshots.has(entry.payload.id)) {
+      stockSnapshots.set(entry.payload.id, this.db.prepare('select quantity,reserved_quantity,updated_at from inventory where product_id=?').get(entry.payload.id));
+    }
     const result = originalApplyPull.call(this,data);
     // Preserve optimistic edits until confirmed by the authoritative server.
-    const pending = this.catalogOutbox(1000);
     const tx = this.db.transaction(() => {
       for (const entry of pending) {
         const p = entry.payload;
@@ -159,12 +167,9 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
           this.db.prepare('update products set sale_price=? where id=?').run(p.sale_price,p.id);
           this.db.prepare('update price_items set price=? where product_id=?').run(p.sale_price,p.id);
         } else if (entry.kind==='stock_adjust') {
-          // Inventory is server-authoritative. An optimistic stock delta must not be
-          // applied twice. A pending adjustment is only replayed if server pull
-          // carried a fresh balance for its product; otherwise retain local value.
-          if ((data.inventory||[]).some(i=>String(i.product_id)===String(p.id))) {
-            this.db.prepare('update inventory set quantity=quantity+? where product_id=?').run(p.delta,p.id);
-          }
+          const local=stockSnapshots.get(p.id);
+          if (local) this.db.prepare('update inventory set quantity=?,reserved_quantity=?,updated_at=? where product_id=?')
+            .run(local.quantity,local.reserved_quantity,local.updated_at,p.id);
         }
       }
     });
@@ -189,7 +194,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     if (this._catalogFlushing) return {ok:false,error:'sync_in_progress'};
     if (!this.deviceToken?.()) return {ok:false,error:'device_not_enrolled'};
     this._catalogFlushing = true;
-    let done=0,failed=0;
+    let done=0,failed=0,rejected=false;
     try {
       const items = this.store.catalogOutbox(50);
       for (const row of items) {
@@ -202,7 +207,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
             done++;
           } else {
             this.store.catalogSetState(row.event_id,'rejected',result?.error||'server_rejected');
-            failed++;
+            failed++;rejected=true;
             // A dependent operation cannot be sent until the previous one is resolved.
             break;
           }
@@ -213,7 +218,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
         }
       }
     } finally { this._catalogFlushing=false; }
-    if (done && !this.sync.running) {
+    if ((done || rejected) && !this.sync.running) {
       this.store.set('cursor','');
       void this.sync.run(true).catch(()=>{});
     }
