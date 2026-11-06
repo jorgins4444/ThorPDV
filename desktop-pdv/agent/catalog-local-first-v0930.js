@@ -80,6 +80,11 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
         payload.type = input.type === 'PJ' ? 'PJ' : 'PF';
         payload.email = trim(input.email,240);
         payload.phone = trim(input.phone,40);
+        const before = this.db.prepare('select * from customers where id=?').get(id);
+        payload.local_before = before ? {
+          name:before.name,document:before.document,email:before.email,
+          phone:before.phone,type:before.type,active:before.active,
+        } : null;
         if (!payload.name) throw new Error('customer_name_required');
         if (payload.document && !(payload.type === 'PJ' ? validCnpj(payload.document) : validCpf(payload.document))) {
           throw new Error('invalid_document');
@@ -110,6 +115,9 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
         this.db.prepare('insert or ignore into product_barcodes(barcode,product_id) values(?,?)').run(payload.sku.toLowerCase(),id);
       } else if (kind === 'product_price') {
         payload.sale_price = numeric(input.sale_price,'sale_price');
+        const before = this.db.prepare('select sale_price from products where id=?').get(id);
+        payload.local_before = before ? {sale_price:before.sale_price,
+          table_price:this.db.prepare('select price from price_items where product_id=?').get(id)?.price ?? null} : null;
         if (payload.sale_price<0) throw new Error('invalid_price');
         const updated = this.db.prepare('update products set sale_price=?,updated_at=? where id=?')
           .run(payload.sale_price,now,id);
@@ -147,6 +155,12 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
       stockSnapshots.set(entry.payload.id, this.db.prepare('select quantity,reserved_quantity,updated_at from inventory where product_id=?').get(entry.payload.id));
     }
     const result = originalApplyPull.call(this,data);
+    // Keep person type from the server, which older SQLite clients did not persist.
+    const updateType=this.db.prepare('update customers set type=? where id=?');
+    for (const row of data.customers||[]) {
+      if (!row.id || !row.type) continue;
+      updateType.run(row.type==='company'||row.type==='PJ'?'PJ':'PF',row.id);
+    }
     // Preserve optimistic edits until confirmed by the authoritative server.
     const tx = this.db.transaction(() => {
       for (const entry of pending) {
@@ -190,6 +204,30 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     return result;
   };
   agent.catalogOutboxStatus = function() { return this.store.catalogHistory(100); };
+  agent.catalogRetry = function(eventId) {
+    const row=this.store.db.prepare('select event_id,state from catalog_outbox where event_id=?').get(String(eventId||''));
+    if (!row || row.state!=='rejected') throw new Error('catalog_event_not_rejected');
+    this.store.db.prepare("update catalog_outbox set state='retry',error=null,updated_at=? where event_id=?")
+      .run(new Date().toISOString(),row.event_id);
+    setTimeout(()=>this.flushCatalogOutbox().catch(()=>{}),100);
+    return {ok:true};
+  };
+  agent.catalogRollback = function(kind,payload) {
+    const id=payload.id, old=payload.local_before;
+    const db=this.store.db;
+    if(kind==='product_create') {
+      db.prepare('update products set active=0 where id=?').run(id);
+    }else if(kind==='customer_save'){
+      if (!old) db.prepare('update customers set active=0 where id=?').run(id);
+      else db.prepare('update customers set name=?,document=?,email=?,phone=?,type=?,active=? where id=?')
+        .run(old.name,old.document,old.email,old.phone,old.type,old.active,id);
+    }else if(kind==='product_price'&&old){
+      db.prepare('update products set sale_price=? where id=?').run(old.sale_price,id);
+      if(old.table_price!=null)db.prepare('update price_items set price=? where product_id=?').run(old.table_price,id);
+    }
+    // Stock corrections are reconciled through the mandatory authoritative pull;
+    // they may coexist with legitimate sales and cannot safely be undone by a blind delta.
+  };
   agent.flushCatalogOutbox = async function() {
     if (this._catalogFlushing) return {ok:false,error:'sync_in_progress'};
     if (!this.deviceToken?.()) return {ok:false,error:'device_not_enrolled'};
@@ -207,6 +245,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
             done++;
           } else {
             this.store.catalogSetState(row.event_id,'rejected',result?.error||'server_rejected');
+            this.catalogRollback(row.kind,row.payload);
             failed++;rejected=true;
             // A dependent operation cannot be sent until the previous one is resolved.
             break;
