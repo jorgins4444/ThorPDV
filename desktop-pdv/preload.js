@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('thor', {
   catalogStatus: () => ipcRenderer.invoke('thor:catalog-status'),
   catalogSync: () => ipcRenderer.invoke('thor:catalog-sync'),
   catalogRetry: (eventId) => ipcRenderer.invoke('thor:catalog-retry', eventId),
+  catalogDiscard: (eventId) => ipcRenderer.invoke('thor:catalog-discard', eventId),
   salesOrders: (query = '') => ipcRenderer.invoke('thor:sales-orders', query),
   paymentTerms: () => ipcRenderer.invoke('thor:payment-terms'),
   setCommercialContext: (payload = {}) => ipcRenderer.invoke('thor:set-commercial-context', payload),
