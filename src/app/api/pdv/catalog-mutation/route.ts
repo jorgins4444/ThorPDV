@@ -9,6 +9,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const kinds = new Set(['customer_save', 'product_create', 'product_price', 'stock_adjust']);
 
 export async function POST(request: Request) {
+  // Feature gate: production must remain disabled until migration and security tests pass.
+  if (process.env.THORPDV_CATALOG_MUTATIONS_ENABLED !== 'true') {
+    return NextResponse.json({ ok: false, error: 'catalog_feature_not_enabled' }, { status: 503 });
+  }
   const header = request.headers.get('authorization') || '';
   const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
   if (!token) return NextResponse.json({ ok: false, error: 'device_token_required' }, { status: 401 });
