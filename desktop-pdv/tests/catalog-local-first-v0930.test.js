@@ -120,3 +120,38 @@ test('rejeição de produto novo desativa produto local e reenvio exige permiss�
     assert.equal(store.catalogOutbox(10).length,1);
   }finally{close();}
 });
+
+test('rejeição de regra de negócio não fica em retry infinito, e descarte destrava fila',async()=>{
+  const {store,close}=newTestStore();
+  try {
+    const agent=new FakeAgent(store);
+    agent.deviceToken=()=> 'token-de-teste';
+    agent.sync.request=async()=>({ok:true,applied:false,error:'category_not_found'});
+    const first=agent.catalogLocalSave('product_create',{id,name:'Produto sem grupo',unit:'UN',cost_price:1,sale_price:3,category:'Inexistente'});
+    const next=agent.catalogLocalSave('customer_save',{name:'Novo Cliente'});
+    const result=await agent.flushCatalogOutbox();
+    assert.equal(result.ok,false);
+    assert.equal(store.db.prepare('select state from catalog_outbox where event_id=?').get(first.event_id).state,'rejected');
+    assert.equal(store.db.prepare('select state from catalog_outbox where event_id=?').get(next.event_id).state,'pending');
+    assert.equal(store.catalogOutbox().length,0);
+    assert.equal(agent.catalogDiscard(first.event_id).ok,true);
+    assert.equal(store.db.prepare('select state from catalog_outbox where event_id=?').get(first.event_id).state,'discarded');
+    assert.equal(store.catalogOutbox().length,1);
+  }finally{close();}
+});
+
+test('erro de transporte preserva evento para nova tentativa',async()=>{
+  const {store,close}=newTestStore();
+  try{
+    const agent=new FakeAgent(store);
+    agent.deviceToken=()=> 'token-de-teste';
+    agent.sync.request=async()=>{throw new Error('sync_timeout');};
+    const mutation=agent.catalogLocalSave('customer_save',{name:'Cliente desconectado'});
+    const result=await agent.flushCatalogOutbox();
+    assert.equal(result.ok,false);
+    const row=store.db.prepare('select state,attempts,error from catalog_outbox where event_id=?').get(mutation.event_id);
+    assert.equal(row.state,'retry');
+    assert.equal(row.error,'sync_timeout');
+    assert.ok(row.attempts>=1);
+  }finally{close();}
+});
