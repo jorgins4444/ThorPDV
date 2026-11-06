@@ -155,3 +155,51 @@ test('erro de transporte preserva evento para nova tentativa',async()=>{
     assert.ok(row.attempts>=1);
   }finally{close();}
 });
+
+test('preço local envia versão esperada para detectar atualização concorrente',()=>{
+  const {store,close}=newTestStore();
+  try {
+    const agent=new FakeAgent(store);
+    agent.catalogLocalSave('product_create',{id,name:'Preço',unit:'UN',cost_price:2,sale_price:5});
+    agent.catalogLocalSave('product_price',{id,sale_price:8});
+    const item=store.catalogOutbox(10).find(r=>r.kind==='product_price');
+    assert.equal(item.payload.expected_sale_price,5);
+    assert.equal(item.payload.local_before.sale_price,5);
+  }finally{close();}
+});
+
+test('não permite retirar estoque reservado no SQLite',()=>{
+  const {store,close}=newTestStore();
+  try{
+    const agent=new FakeAgent(store);
+    agent.catalogLocalSave('product_create',{id,name:'Reservado',unit:'UN',cost_price:1,sale_price:5});
+    store.db.prepare('insert into inventory(product_id,quantity,reserved_quantity) values(?,?,?)').run(id,10,8);
+    assert.throws(()=>agent.catalogLocalSave('stock_adjust',{id,delta:-3,reason:'Acerto'}),/insufficient_stock/);
+    assert.equal(store.db.prepare('select quantity from inventory where product_id=?').get(id).quantity,10);
+  }finally{close();}
+});
+
+test('push respeita dependência de produto e cliente antes de vendas e fechamento',async()=>{
+  const {SyncEngine}=require('../agent/sync');
+  const {store,close}=newTestStore();
+  try{
+    const agent=new FakeAgent(store);
+    const product=agent.catalogLocalSave('product_create',{id,name:'Produto local',unit:'UN',cost_price:1,sale_price:2});
+    const c=agent.catalogLocalSave('customer_save',{name:'Cliente local'});
+    const sent=[];
+    const sync=new SyncEngine({store,apiBase:'https://example.invalid',tokenProvider:()=> 'fake'});
+    sync.request=async(_path,data)=>{sent.push(data.events.map(e=>e.type));return {ok:true,results:[]};};
+    const events=[
+      {id:'a',type:'cash_open',payload:{}},
+      {id:'b',type:'sale_completed',payload:{customer_id:c.id,items:[{product_id:id}]}},
+      {id:'c',type:'cash_close',payload:{}}
+    ];
+    const result=await sync.pushEvents(events);
+    assert.equal(result.blocked,true);
+    assert.deepEqual(sent,[['cash_open']]);
+    store.catalogSetState(product.event_id,'synced');
+    store.catalogSetState(c.event_id,'synced');
+    await sync.pushEvents(events.slice(1));
+    assert.deepEqual(sent,[['cash_open'],['sale_completed','cash_close']]);
+  }finally{close();}
+});
