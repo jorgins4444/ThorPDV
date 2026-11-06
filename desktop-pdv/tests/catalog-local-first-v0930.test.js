@@ -203,3 +203,22 @@ test('push respeita dependência de produto e cliente antes de vendas e fechamen
     assert.deepEqual(sent,[['cash_open'],['sale_completed','cash_close']]);
   }finally{close();}
 });
+
+test('pull preserva preço pendente mesmo com rejeição anterior na fila',()=>{
+  const {store,close}=newTestStore();
+  try{
+    const agent=new FakeAgent(store);
+    const rejected=agent.catalogLocalSave('customer_save',{name:'Cliente sem validação'});
+    agent.catalogLocalSave('product_create',{id,name:'Produto',unit:'UN',cost_price:2,sale_price:7});
+    agent.catalogLocalSave('product_price',{id,sale_price:11});
+    store.catalogSetState(rejected.event_id,'rejected','document_already_registered');
+    assert.equal(store.catalogOutbox(100).length,0);
+    assert.equal(store.catalogPendingOverlays(100).length,2);
+    store.applyPull({
+      products:[{id,name:'Produto remoto',unit:'UN',sale_price:7,active:true,barcodes:[]}],
+      inventory:[],customers:[],price_items:[{product_id:id,price:7}],promotions:[],sales_history:[]
+    });
+    assert.equal(store.db.prepare('select sale_price from products where id=?').get(id).sale_price,11);
+    assert.equal(store.db.prepare('select price from price_items where product_id=?').get(id).price,11);
+  }finally{close();}
+});
