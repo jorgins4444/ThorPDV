@@ -217,6 +217,22 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     setTimeout(()=>this.flushCatalogOutbox().catch(()=>{}),100);
     return {ok:true};
   };
+  agent.catalogDiscard = function(eventId) {
+    const row=this.store.db.prepare('select event_id,kind,payload,state from catalog_outbox where event_id=?')
+      .get(String(eventId||''));
+    if (!row || row.state!=='rejected') throw new Error('catalog_event_not_rejected');
+    const permission={customer_save:'customer.create',product_create:'product.create',
+      product_price:'product.price_edit',stock_adjust:'stock.adjust'}[row.kind];
+    const operator=this.currentOperator?.();
+    if (!operator || !this._profileAllows?.(permission,false)) throw new Error('permission_denied');
+    const original=JSON.parse(row.payload).operator_user_id;
+    if (String(original)!==String(operator.id) && !this._profileAllows?.('supervisor.authorize',false))
+      throw new Error('permission_denied');
+    this.store.db.prepare("update catalog_outbox set state='discarded',updated_at=? where event_id=?")
+      .run(new Date().toISOString(),row.event_id);
+    setTimeout(()=>this.flushCatalogOutbox().catch(()=>{}),100);
+    return {ok:true};
+  };
   agent.catalogRollback = function(kind,payload) {
     const id=payload.id, old=payload.local_before;
     const db=this.store.db;
