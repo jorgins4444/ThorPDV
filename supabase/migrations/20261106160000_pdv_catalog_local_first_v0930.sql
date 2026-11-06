@@ -46,10 +46,10 @@ begin
   v_permission:=private.pdv_staff_permissions(v.tenant_id,v.branch_id,v_operator);
   if v_permission is null then return jsonb_build_object('ok',false,'error','operator_not_authorized'); end if;
   v_path:=case p_kind
-    when 'customer_save' then array['customer','create']
-    when 'product_create' then array['product','create']
-    when 'product_price' then array['product','price_edit']
-    else array['stock','adjust'] end;
+    when 'customer_save' then array['permissions','customer','create']
+    when 'product_create' then array['permissions','product','create']
+    when 'product_price' then array['permissions','product','price_edit']
+    else array['permissions','stock','adjust'] end;
   if not coalesce((v_permission#>>v_path)::boolean,false) then
     return jsonb_build_object('ok',false,'error','permission_denied');
   end if;
