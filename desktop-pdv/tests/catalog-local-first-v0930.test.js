@@ -222,3 +222,19 @@ test('pull preserva preço pendente mesmo com rejeição anterior na fila',()=>{
     assert.equal(store.db.prepare('select price from price_items where product_id=?').get(id).price,11);
   }finally{close();}
 });
+
+test('saldo do servidor prevalece após rejeição de ajuste de estoque',()=>{
+  const {store,close}=newTestStore();
+  try{
+    const agent=new FakeAgent(store);
+    agent.catalogLocalSave('product_create',{id,name:'Estoque servidor',unit:'UN',cost_price:1,sale_price:2});
+    store.catalogApplyLocal('stock_adjust',{id,delta:4,reason:'Entrada',operator_user_id:agent.currentOperator().id});
+    const rejected=store.catalogOutbox().find(x=>x.kind==='stock_adjust');
+    store.catalogSetState(rejected.event_id,'rejected','permission_denied');
+    store.applyPull({
+      products:[],inventory:[{product_id:id,quantity:0,reserved_quantity:0}],
+      customers:[],price_items:[],promotions:[],sales_history:[]
+    });
+    assert.equal(store.db.prepare('select quantity from inventory where product_id=?').get(id).quantity,0);
+  }finally{close();}
+});
