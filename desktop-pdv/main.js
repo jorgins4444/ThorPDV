@@ -362,6 +362,9 @@ function registerIpc() {
   handle('thor:all-products', () => agent.store.searchProducts('', 5000));
   handle('thor:product-image-data', (source) => cachedProductImage(source));
   handle('thor:customers', (query) => agent.searchCustomers(query));
+  handle('thor:catalog-save', (kind,payload) => agent.catalogLocalSave(kind,payload));
+  handle('thor:catalog-status', () => agent.catalogOutboxStatus());
+  handle('thor:catalog-sync', () => agent.flushCatalogOutbox());
   handle('thor:sales-orders', (query) => agent.salesOrders(query));
   handle('thor:payment-terms', () => agent.paymentTerms());
   handle('thor:set-commercial-context', (payload) => agent.setCommercialContext(payload));
