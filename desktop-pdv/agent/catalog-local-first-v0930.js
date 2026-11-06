@@ -270,10 +270,10 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
   };
   const oldStart=agent.start;
   agent.start=async function(...args) {
+    // Register before sync.start() begins its first automatic push.
+    this.sync.beforeCatalogPush=async()=>this.flushCatalogOutbox();
     const result=await oldStart.apply(this,args);
     clearInterval(this._catalogInterval);
-    // Ensure fresh product/customer records are sent before the standard sale queue.
-    this.sync.beforeCatalogPush=async()=>this.flushCatalogOutbox();
     this._catalogInterval=setInterval(()=>this.flushCatalogOutbox().catch(()=>{}),30000);
     this._catalogInterval.unref?.();
     setTimeout(()=>this.flushCatalogOutbox().catch(()=>{}),1500);
