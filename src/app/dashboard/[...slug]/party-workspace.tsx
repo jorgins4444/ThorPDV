@@ -11,6 +11,7 @@ type Row = {
   store_credit_balance?: number | string; created_at?: string;
 };
 type Resource = 'customers' | 'suppliers';
+type CnpjLookupMeta = { status:string; statusDate:string; consultedAt:string; source:string; suggestedIE:string; uf:string };
 type PartyType = 'PF' | 'PJ';
 type FormState = {
   id?: string; type: PartyType; name: string; trade_name: string; document: string; birth_date: string;
@@ -44,19 +45,54 @@ export function PartyWorkspace({ resource, initial }: { resource: Resource; init
   const isCustomer=resource==='customers';
   const [rows,setRows]=useState<Row[]>(initial); const [search,setSearch]=useState(''); const [modal,setModal]=useState(false); const [form,setForm]=useState<FormState>({...EMPTY,type:isCustomer?'PF':'PJ'});
   const [saving,setSaving]=useState(false); const [message,setMessage]=useState(''); const [error,setError]=useState(false); const [docHint,setDocHint]=useState(''); const [cepHint,setCepHint]=useState('');
+  const [cnpjMeta,setCnpjMeta]=useState<CnpjLookupMeta|null>(null); const [cnpjBusy,setCnpjBusy]=useState(false);
   const lastCnpj=useRef(''); const lastCep=useRef('');
   const activeCount=useMemo(()=>rows.filter(r=>r.active!==false).length,[rows]); const creditTotal=useMemo(()=>isCustomer?rows.reduce((s,r)=>s+Number(r.store_credit_balance||0),0):0,[rows,isCustomer]);
   const set=(key:keyof FormState,value:string|boolean)=>setForm(v=>({...v,[key]:value}));
 
   const refresh=async(q=search)=>{const r=await partyList(resource,q);if(r.ok)setRows(r.data as Row[]);else{setError(true);setMessage(String(r.error||'Erro ao carregar registros.'));}};
-  const openNew=()=>{setForm({...EMPTY,type:isCustomer?'PF':'PJ'});setDocHint('');setCepHint('');setMessage('');setModal(true);lastCnpj.current='';lastCep.current='';};
-  const openEdit=(row:Row)=>{setForm(rowToForm(row,resource));setDocHint('');setCepHint('');setMessage('');setModal(true);lastCnpj.current='';lastCep.current='';};
+  const openNew=()=>{setForm({...EMPTY,type:isCustomer?'PF':'PJ'});setDocHint('');setCepHint('');setCnpjMeta(null);setMessage('');setModal(true);lastCnpj.current='';lastCep.current='';};
+  const openEdit=(row:Row)=>{setForm(rowToForm(row,resource));setDocHint('');setCepHint('');setCnpjMeta(null);setMessage('');setModal(true);lastCnpj.current='';lastCep.current='';};
 
   const lookupCep=async(raw=form.postal_code)=>{const cep=digits(raw); if(cep.length!==8){setCepHint(cep?'CEP deve possuir 8 dígitos.':'');return;} if(lastCep.current===cep)return; lastCep.current=cep; setCepHint('Consultando CEP...');
     try{const res=await fetch(`/api/lookup/cep?cep=${cep}`);const body=await res.json();if(!res.ok||!body.ok)throw new Error(body.error||'cep_not_found');const d=body.data||{};setForm(v=>({...v,postal_code:cep,street:d.street||v.street,complement:d.complement||v.complement,district:d.district||v.district,city:d.city||v.city,state:d.state||v.state,ibge_city_code:d.ibge_city_code||v.ibge_city_code}));setCepHint('Endereço localizado pelo CEP.');}catch{lastCep.current='';setCepHint('CEP não localizado. Você pode preencher o endereço manualmente.');}
   };
-  const lookupCnpj=async(raw=form.document)=>{const cnpj=digits(raw);if(cnpj.length!==14||!cnpjValid(cnpj)){setDocHint(cnpj.length===14?'CNPJ inválido.':'');return;}if(lastCnpj.current===cnpj)return;lastCnpj.current=cnpj;setDocHint('Consultando dados do CNPJ...');
-    try{const res=await fetch(`/api/lookup/cnpj?cnpj=${cnpj}`);const body=await res.json();if(!res.ok||!body.ok)throw new Error(body.error||'cnpj_not_found');const d=body.data||{};setForm(v=>({...v,document:cnpj,name:d.name||v.name,trade_name:d.trade_name||v.trade_name,email:d.email||v.email,phone:d.phone||v.phone,state_registration:d.state_registration||v.state_registration,postal_code:d.postal_code||v.postal_code,street:d.street||v.street,number:d.number||v.number,complement:d.complement||v.complement,district:d.district||v.district,city:d.city||v.city,state:d.state||v.state,ibge_city_code:d.ibge_city_code||v.ibge_city_code}));setDocHint('CNPJ válido e dados cadastrais preenchidos.');if(d.postal_code)lastCep.current=String(d.postal_code);}catch{lastCnpj.current='';setDocHint('CNPJ válido, mas a consulta cadastral não respondeu. Os campos podem ser preenchidos manualmente.');}
+  const lookupCnpj=async(raw=form.document)=>{
+    const cnpj=digits(raw);
+    if(cnpj.length!==14||!cnpjValid(cnpj)){setDocHint(cnpj.length===14?'CNPJ inválido.':'');return;}
+    if(lastCnpj.current===cnpj)return;
+    lastCnpj.current=cnpj;setCnpjBusy(true);setDocHint('Consultando cadastro nacional do CNPJ...');
+    try{
+      const res=await fetch(`/api/lookup/cnpj?cnpj=${cnpj}`,{cache:'no-store'});
+      const body=await res.json();
+      if(!res.ok||!body.ok)throw new Error(body.error||'cnpj_not_found');
+      const d=body.data||{};
+      setForm(v=>({
+        ...v,document:cnpj,
+        // Preservar campos previamente informados em cadastros existentes.
+        name:v.id?(v.name||d.name||''):(d.name||v.name),
+        trade_name:v.id?(v.trade_name||d.trade_name||''):(d.trade_name||v.trade_name),
+        email:v.email||d.email||'',phone:v.phone||d.phone||'',
+        postal_code:v.postal_code||d.postal_code||'',
+        street:v.street||d.street||'',number:v.number||d.number||'',
+        complement:v.complement||d.complement||'',district:v.district||d.district||'',
+        city:v.city||d.city||'',state:v.state||d.state||'',
+        ibge_city_code:v.ibge_city_code||d.ibge_city_code||'',
+      }));
+      setCnpjMeta({
+        status:String(d.registration_status||'Não informada'),
+        statusDate:String(d.registration_status_date||''),
+        consultedAt:String(d.consulted_at||''),
+        source:String(d.registration_source||'BrasilAPI'),
+        suggestedIE:String(d.state_registration||''),
+        uf:String(d.registration_state||d.state||''),
+      });
+      setDocHint('Dados cadastrais consultados. Inscrição Estadual requer confirmação na SEFAZ.');
+      if(d.postal_code)lastCep.current=String(d.postal_code);
+    }catch{
+      lastCnpj.current='';setCnpjMeta(null);
+      setDocHint('Consulta pública indisponível. Preencha os dados manualmente.');
+    }finally{setCnpjBusy(false);}
   };
 
   useEffect(()=>{const d=digits(form.document);if(form.type==='PJ'&&d.length===14&&cnpjValid(d)){const t=setTimeout(()=>lookupCnpj(d),350);return()=>clearTimeout(t);}if(form.type==='PF'&&d.length===11)setDocHint(cpfValid(d)?'CPF válido.':'CPF inválido.');},[form.document,form.type]);
@@ -75,11 +111,27 @@ export function PartyWorkspace({ resource, initial }: { resource: Resource; init
     </section>
 
     {modal&&<div className={styles.backdrop} onMouseDown={()=>setModal(false)}><div className={styles.modal} onMouseDown={e=>e.stopPropagation()}><div className={styles.modalHead}><div><h2>{form.id?'Editar':'Novo'} {isCustomer?'cliente':'fornecedor'}</h2><p>Documento validado, consulta cadastral e endereço completo integrado ao ThorPDV.</p></div><button className={styles.close} onClick={()=>setModal(false)}>×</button></div><form className={`${styles.form} ${saving?styles.loading:''}`} onSubmit={submit}>
-      <section className={styles.section}><div className={styles.sectionTitle}><div><b>Identificação</b><small>Defina pessoa física ou jurídica.</small></div><span className={styles.tag}>{form.type}</span></div><div className={styles.typeSwitch}><button type="button" className={form.type==='PF'?styles.active:''} onClick={()=>{setForm(v=>({...v,type:'PF',trade_name:'',state_registration:'',birth_date:isCustomer?v.birth_date:'',document:''}));setDocHint('');lastCnpj.current='';}}>Pessoa Física</button><button type="button" className={form.type==='PJ'?styles.active:''} onClick={()=>{setForm(v=>({...v,type:'PJ',birth_date:'',document:''}));setDocHint('');lastCnpj.current='';}}>Pessoa Jurídica</button></div>
+      <section className={styles.section}><div className={styles.sectionTitle}><div><b>Identificação</b><small>Defina pessoa física ou jurídica.</small></div><span className={styles.tag}>{form.type}</span></div><div className={styles.typeSwitch}><button type="button" className={form.type==='PF'?styles.active:''} onClick={()=>{setForm(v=>({...v,type:'PF',trade_name:'',state_registration:'',birth_date:isCustomer?v.birth_date:'',document:''}));setDocHint('');lastCnpj.current='';setCnpjMeta(null);}}>Pessoa Física</button><button type="button" className={form.type==='PJ'?styles.active:''} onClick={()=>{setForm(v=>({...v,type:'PJ',birth_date:'',document:''}));setDocHint('');lastCnpj.current='';setCnpjMeta(null);}}>Pessoa Jurídica</button></div>
         <div className={styles.grid} style={{marginTop:12}}><label className={styles.field}><span>{form.type==='PF'?'Nome completo':'Razão social'}</span><input value={form.name} onChange={e=>set('name',e.target.value)} required/></label>{form.type==='PJ'&&<label className={styles.field}><span>Nome fantasia</span><input value={form.trade_name} onChange={e=>set('trade_name',e.target.value)}/></label>}
-          <label className={styles.field}><span>{form.type==='PF'?'CPF':'CNPJ'}</span><div className={styles.lookupRow}><input value={fmtDocument(form.document)} onChange={e=>{const d=digits(e.target.value).slice(0,form.type==='PF'?11:14);set('document',d);lastCnpj.current='';}} onBlur={()=>form.type==='PJ'?lookupCnpj():setDocHint(cpfValid(form.document)?'CPF válido.':'CPF inválido.')} inputMode="numeric" required/>{form.type==='PJ'&&<button type="button" onClick={()=>lookupCnpj()}>Consultar CNPJ</button>}</div><small className={`${styles.hint} ${docHint.includes('inválido')?styles.error:docHint.includes('válido')?styles.ok:''}`}>{docHint}</small></label>
-          {form.type==='PF'&&isCustomer&&<label className={styles.field}><span>Data de nascimento</span><input type="date" value={form.birth_date} onChange={e=>set('birth_date',e.target.value)}/></label>}{form.type==='PJ'&&<label className={styles.field}><span>Inscrição Estadual</span><input value={form.state_registration} onChange={e=>set('state_registration',e.target.value)}/></label>}
-        </div></section>
+          <label className={styles.field}><span>{form.type==='PF'?'CPF':'CNPJ'}</span><div className={styles.lookupRow}><input value={fmtDocument(form.document)} onChange={e=>{const d=digits(e.target.value).slice(0,form.type==='PF'?11:14);set('document',d);lastCnpj.current='';}} onBlur={()=>form.type==='PJ'?lookupCnpj():setDocHint(cpfValid(form.document)?'CPF válido.':'CPF inválido.')} inputMode="numeric" required/>{form.type==='PJ'&&<button type="button" disabled={cnpjBusy} onClick={()=>{lastCnpj.current='';void lookupCnpj();}}>{cnpjBusy?'Consultando...':'Consultar CNPJ'}</button>}</div><small className={`${styles.hint} ${docHint.includes('inválido')?styles.error:docHint.includes('válido')?styles.ok:''}`}>{docHint}</small></label>
+          {form.type==='PF'&&isCustomer&&<label className={styles.field}><span>Data de nascimento</span><input type="date" value={form.birth_date} onChange={e=>set('birth_date',e.target.value)}/></label>}{form.type==='PJ'&&<label className={styles.field}><span>Inscrição Estadual</span><input value={form.state_registration} onChange={e=>set('state_registration',e.target.value)}/><small className={styles.hint}>A consulta nacional do CNPJ não substitui a validação na SEFAZ.</small></label>}
+        </div>
+        {form.type==='PJ'&&<div className={styles.lookupInfo}>
+          <strong>Consulta cadastral da pessoa jurídica</strong>
+          {cnpjMeta?<><span>Situação na Receita: <b>{cnpjMeta.status}</b>{cnpjMeta.statusDate?' · '+cnpjMeta.statusDate:''}</span>
+            <span>Fonte: {cnpjMeta.source}{cnpjMeta.consultedAt?' · Consulta: '+new Date(cnpjMeta.consultedAt).toLocaleString('pt-BR'):''}</span>
+            {cnpjMeta.suggestedIE&&<div><span>IE sugerida: <b>{cnpjMeta.suggestedIE}</b> ({cnpjMeta.uf||'UF não informada'}). Não validada na SEFAZ.</span>
+              <button type="button" className={styles.secondary} onClick={()=>set('state_registration',cnpjMeta.suggestedIE)}>Usar IE sugerida</button></div>}
+          </>:<span>Informe um CNPJ válido para consultar os dados públicos disponíveis.</span>}
+          <div><a href="https://www.sintegra.gov.br/" target="_blank" rel="noopener noreferrer">Conferir IE no Sintegra / SEFAZ</a><small>Selecione a UF da empresa no portal. A disponibilidade varia por estado, inclusive PI e MA.</small></div>
+        </div>}
+        {form.type==='PF'&&<div className={styles.lookupInfo}>
+          <strong>Validação de CPF</strong>
+          <span>O ThorGestão verifica o CPF, mas não descobre o nome do titular por uma base pública gratuita. Informe o nome fornecido pelo cliente.</span>
+          <a href="https://servicos.receita.fazenda.gov.br/Servicos/CPF/ConsultaSituacao/ConsultaPublica.asp" target="_blank" rel="noopener noreferrer">Consultar situação cadastral na Receita Federal</a>
+          <small>Consulta oficial exige CPF e data de nascimento. Não preenche automaticamente o cadastro.</small>
+        </div>}
+      </section>
       <section className={styles.section}><div className={styles.sectionTitle}><div><b>Contato</b><small>Dados para comunicação e documentos.</small></div><span className={styles.tag}>CONTATO</span></div><div className={styles.grid}><label className={styles.field}><span>E-mail</span><input type="email" value={form.email} onChange={e=>set('email',e.target.value)}/></label><label className={styles.field}><span>Telefone</span><input value={form.phone} onChange={e=>set('phone',e.target.value)}/></label></div></section>
       {isCustomer&&<section className={`${styles.section} ${styles.creditSection}`}><div className={styles.sectionTitle}><div><b>Crédito em loja</b><small>Limite disponível para devoluções e vendas em Crediário.</small></div><span className={styles.creditTag}>CRÉDITO</span></div><div className={styles.creditGrid}><label className={styles.field}><span>Crédito disponível</span><input type="number" min="0" step="0.01" value={form.store_credit_balance} onChange={e=>set('store_credit_balance',e.target.value)} inputMode="decimal"/><small className={styles.creditHint}>Defina o valor que o cliente pode utilizar neste momento.</small></label><div className={styles.creditRules}><b>Como funciona</b><span>↗ Devolução em crédito aumenta o saldo.</span><span>↘ Venda em Crediário reserva/consome o crédito disponível.</span><span>↗ Recebimento ou estorno do Crediário recompõe o limite.</span><strong>Sem saldo suficiente, a venda em Crediário é bloqueada no ThorPDV.</strong></div></div></section>}
       <section className={styles.section}><div className={styles.sectionTitle}><div><b>Endereço</b><small>Informe o CEP para completar automaticamente rua, bairro, cidade e UF.</small></div><span className={styles.tag}>CEP</span></div><div className={styles.grid}><label className={styles.field}><span>CEP</span><div className={styles.lookupRow}><input value={fmtCep(form.postal_code)} inputMode="numeric" onChange={e=>{set('postal_code',digits(e.target.value).slice(0,8));lastCep.current='';}} onBlur={()=>lookupCep()}/><button type="button" onClick={()=>lookupCep()}>Buscar CEP</button></div><small className={`${styles.hint} ${cepHint.includes('não')?styles.error:cepHint.includes('localizado')?styles.ok:''}`}>{cepHint}</small></label><label className={styles.field}><span>Rua / Logradouro</span><input value={form.street} onChange={e=>set('street',e.target.value)}/></label></div>
