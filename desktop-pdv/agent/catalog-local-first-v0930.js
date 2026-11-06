@@ -158,8 +158,12 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     // Re-adding deltas after every pull risks double counting if the server accepted
     // an event but the ACK was lost. Keeping the local snapshot avoids that race.
     const pending = this.catalogPendingOverlays(1000);
+    const stockRejections = new Set(this.db.prepare(
+      "select payload from catalog_outbox where kind='stock_adjust' and state='rejected'"
+    ).all().map(row=>String(JSON.parse(row.payload).id)));
     const stockSnapshots = new Map();
-    for (const entry of pending) if (entry.kind === 'stock_adjust' && !stockSnapshots.has(entry.payload.id)) {
+    for (const entry of pending) if (entry.kind === 'stock_adjust' &&
+      !stockRejections.has(String(entry.payload.id)) && !stockSnapshots.has(entry.payload.id)) {
       stockSnapshots.set(entry.payload.id, this.db.prepare('select quantity,reserved_quantity,updated_at from inventory where product_id=?').get(entry.payload.id));
     }
     const result = originalApplyPull.call(this,data);
