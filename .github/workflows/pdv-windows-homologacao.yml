@@ -1,0 +1,59 @@
+name: ThorPDV 0.9.27 Windows Homologation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'desktop-pdv/**'
+      - '.github/workflows/pdv-windows-homologacao.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-homologacao:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: desktop-pdv
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js for Electron build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          $pkg=Get-Content package.json | ConvertFrom-Json
+          if ($pkg.version -ne '0.9.27') { throw "Expected 0.9.27 but found $($pkg.version)" }
+      - name: Install dependencies
+        run: npm install
+      - name: Validate local-first catalog
+        shell: pwsh
+        run: |
+          node --check agent/catalog-local-first-v0930.js
+          node --check renderer/catalog-local-first-v0930.js
+          node --test tests/catalog-local-first-v0930.test.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build homologation installer
+        run: npm run dist:win
+      - name: Verify and generate checksum
+        shell: pwsh
+        run: |
+          $exe=Get-ChildItem -Path dist -Filter 'ThorPDV-Desktop-0.9.27-x64.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'ThorPDV 0.9.27 installer not found' }
+          $hash=(Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path ($exe.FullName+'.sha256') -Value ($hash+'  '+$exe.Name) -Encoding ascii
+      - name: Upload test installer only (no public release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThorPDV-0.9.27-Homologacao-Windows
+          path: |
+            desktop-pdv/dist/ThorPDV-Desktop-0.9.27-x64.exe
+            desktop-pdv/dist/ThorPDV-Desktop-0.9.27-x64.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
