@@ -26,7 +26,7 @@ declare
   v record; v_operator uuid; v_permission jsonb; v_path text[];
   v_existing jsonb; v_result jsonb; v_id uuid; v_group uuid;
   v_name text; v_document text; v_customer_type text; v_cost numeric; v_price numeric;
-  v_delta numeric; v_old numeric; v_table uuid; v_actor text;
+  v_delta numeric; v_old numeric; v_reserved numeric; v_expected numeric; v_table uuid; v_actor text;
 begin
   select * into v from private.resolve_pdv_device(p_device_token);
   if v.device_id is null then return jsonb_build_object('ok',false,'error','invalid_device'); end if;
@@ -116,9 +116,20 @@ begin
   elsif p_kind='product_price' then
     v_price:=nullif(p_payload->>'sale_price','')::numeric;
     if v_price is null or v_price<0 or v_price>9999999 then return jsonb_build_object('ok',false,'error','invalid_price'); end if;
+    if nullif(p_payload->>'expected_sale_price','') is null then
+      return jsonb_build_object('ok',false,'error','expected_price_required');
+    end if;
+    v_expected:=(p_payload->>'expected_sale_price')::numeric;
     update public.products set sale_price=v_price,updated_at=now()
-     where id=v_id and tenant_id=v.tenant_id;
-    if not found then return jsonb_build_object('ok',false,'error','product_not_found'); end if;
+     where id=v_id and tenant_id=v.tenant_id
+       and (company_id is null or company_id=v.company_id)
+       and sale_price=v_expected;
+    if not found then
+      if not exists(select 1 from public.products where id=v_id and tenant_id=v.tenant_id
+        and (company_id is null or company_id=v.company_id))
+      then return jsonb_build_object('ok',false,'error','product_not_found'); end if;
+      return jsonb_build_object('ok',false,'error','price_conflict');
+    end if;
     select pt.id into v_table from public.price_tables pt
       where pt.tenant_id=v.tenant_id and pt.company_id=v.company_id and pt.is_default=true and pt.active=true
       order by pt.updated_at desc limit 1;
@@ -133,14 +144,18 @@ begin
     v_delta:=nullif(p_payload->>'delta','')::numeric;
     if v_delta is null or v_delta=0 or abs(v_delta)>9999999 then
       return jsonb_build_object('ok',false,'error','invalid_quantity'); end if;
-    perform 1 from public.products where id=v_id and tenant_id=v.tenant_id;
+    if length(trim(coalesce(p_payload->>'reason','')))=0 then
+      return jsonb_build_object('ok',false,'error','reason_required'); end if;
+    perform 1 from public.products where id=v_id and tenant_id=v.tenant_id
+      and (company_id is null or company_id=v.company_id);
     if not found then return jsonb_build_object('ok',false,'error','product_not_found'); end if;
     insert into public.inventory_balances(tenant_id,branch_id,product_id,quantity,reserved_quantity,updated_at)
     values(v.tenant_id,v.branch_id,v_id,0,0,now())
     on conflict(branch_id,product_id) do nothing;
-    select quantity into v_old from public.inventory_balances
+    select quantity,reserved_quantity into v_old,v_reserved from public.inventory_balances
      where branch_id=v.branch_id and product_id=v_id for update;
-    if v_old+v_delta<0 then return jsonb_build_object('ok',false,'error','insufficient_stock'); end if;
+    if v_old+v_delta<coalesce(v_reserved,0) then
+      return jsonb_build_object('ok',false,'error','insufficient_available_stock'); end if;
     update public.inventory_balances set quantity=quantity+v_delta,updated_at=now()
      where branch_id=v.branch_id and product_id=v_id;
     insert into public.stock_movements(
