@@ -205,6 +205,11 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     return result;
   };
   agent.catalogOutboxStatus = function() { return this.store.catalogHistory(100); };
+  agent.catalogUnconfirmedProducts = function() {
+    return this.store.db.prepare(
+      "select count(*) as total from catalog_outbox where kind='product_create' and state in ('pending','retry','rejected')"
+    ).get().total;
+  };
   agent.catalogRetry = function(eventId) {
     const row=this.store.db.prepare('select event_id,kind,payload,state from catalog_outbox where event_id=?').get(String(eventId||''));
     if (!row || row.state!=='rejected') throw new Error('catalog_event_not_rejected');
@@ -288,7 +293,13 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
   const oldStart=agent.start;
   agent.start=async function(...args) {
     // Register before sync.start() begins its first automatic push.
-    this.sync.beforeCatalogPush=async()=>this.flushCatalogOutbox();
+    this.sync.beforeCatalogPush=async()=>{
+      const outcome=await this.flushCatalogOutbox();
+      // A sale referencing an unsynchronized local SKU would be rejected by the
+      // server. Leave the regular sale queue intact until that SKU is accepted.
+      if(this.catalogUnconfirmedProducts()>0)throw new Error('new_product_not_yet_synchronized');
+      return outcome;
+    };
     const result=await oldStart.apply(this,args);
     clearInterval(this._catalogInterval);
     this._catalogInterval=setInterval(()=>this.flushCatalogOutbox().catch(()=>{}),30000);
