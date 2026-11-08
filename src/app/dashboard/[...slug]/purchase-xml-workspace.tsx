@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChangeEvent, useMemo, useState } from 'react';
-import { purchaseXmlImport } from './purchase-actions';
+import { purchaseXmlImportWithLots } from './purchase-actions';
 
 type Row=Record<string,unknown>;
 type XmlRoot=Document|Element;
@@ -21,6 +21,7 @@ type ParsedNfe={
   rawXml:string;
 };
 type Step=0|1|2|3|4|5;
+type LotDraft={source_item_no:number;lot_number:string;expiry_date:string;quantity:string};
 
 const text=(v:unknown)=>v==null?'':String(v);
 const num=(v:unknown)=>{const n=Number(v??0);return Number.isFinite(n)?n:0};
@@ -160,7 +161,9 @@ export function PurchaseXmlWorkspace({
   const [installments,setInstallments]=useState<Installment[]>([]);
   const [message,setMessage]=useState('');
   const [saving,setSaving]=useState(false);
-  const [completed,setCompleted]=useState<{number:string;purchaseNumber:string;installments:string}|null>(null);
+  const [registerLots,setRegisterLots]=useState(false);
+  const [lotRows,setLotRows]=useState<LotDraft[]>([]);
+  const [completed,setCompleted]=useState<{number:string;purchaseNumber:string;installments:string;lots:number}|null>(null);
 
   const payableCategories=useMemo(()=>categories.filter(c=>c.active!==false&&['payable','both'].includes(text(c.entry_type))),[categories]);
   const postingAccounts=useMemo(()=>chartAccounts.filter(a=>a.active!==false&&a.posting!==false&&['liability','cost','expense'].includes(text(a.account_type))),[chartAccounts]);
@@ -187,7 +190,7 @@ export function PurchaseXmlWorkspace({
     setCategoryId(text(defaultCategory?.id));
     setAccountId(text(postingAccounts.find(a=>text(a.id)===text(defaultCategory?.default_chart_account_id))?.id??postingAccounts[0]?.id));
     setCostCenterId(text(defaultCenter?.id));
-    setCompleted(null);setStep(0);
+    setCompleted(null);setRegisterLots(false);setLotRows([]);setStep(0);
     if(!keepMessage)setMessage('');
   }
 
@@ -240,6 +243,7 @@ export function PurchaseXmlWorkspace({
       setFileName(file.name);
       setSupplierId(sid);
       setItems(preparedItems);
+      setRegisterLots(false);setLotRows([]);
       setInstallments(parsed.installments);
       setNotes(`Entrada por XML da NF-e ${parsed.number} · chave ${parsed.key}`);
       setMessage('');
@@ -284,6 +288,16 @@ export function PurchaseXmlWorkspace({
   const financialDiff=round((nfe?.totals.invoice??0)-financialTotal);
   const financeReady=Boolean(nfe)&&Boolean(categoryId)&&Boolean(accountId)&&Boolean(costCenterId)&&installments.length>0
     &&installments.every(i=>Boolean(i.due_date)&&i.amount>0)&&Math.abs(financialDiff)<=0.01;
+  const lotsValid=!registerLots||(items.length>0&&items.every(item=>{
+    const rows=lotRows.filter(l=>l.source_item_no===item.itemNo);
+    const sum=rows.reduce((a,l)=>a+num(l.quantity),0);
+    return rows.length>0&&rows.every(l=>l.lot_number.trim()&&l.expiry_date&&num(l.quantity)>0)&&sum<=stockQty(item)+0.0001&&Math.abs(sum-stockQty(item))<0.001;
+  }));
+  function enableLots(enabled:boolean){
+    setRegisterLots(enabled);
+    if(enabled&&lotRows.length===0)setLotRows(items.map(item=>({source_item_no:item.itemNo,lot_number:'',expiry_date:'',quantity:String(stockQty(item))})));
+  }
+  function updateLot(index:number,key:keyof LotDraft,value:string){setLotRows(rows=>rows.map((row,i)=>i===index?{...row,[key]:key==='source_item_no'?Number(value):value}:row));}
   const ready=Boolean(nfe)&&supplierReady&&pricesReady&&financeReady;
   const matchedCount=items.filter(i=>!i.createProduct&&i.productId).length;
   const newCount=items.filter(i=>i.createProduct).length;
@@ -316,9 +330,10 @@ export function PurchaseXmlWorkspace({
   }
 
   async function finish(){
-    if(!nfe||!ready||completed)return;
+    if(!nfe||!ready||!lotsValid||completed)return;
     setSaving(true);setMessage('');
-    const r=await purchaseXmlImport({
+    const r=await purchaseXmlImportWithLots({
+      lot_entries:registerLots?lotRows.map(l=>({...l,quantity:num(l.quantity)})):[],
       supplier_id:supplierId==='__new__'?null:supplierId,
       supplier:nfe.supplier,
       destination_document:nfe.destination.document,
@@ -340,7 +355,7 @@ export function PurchaseXmlWorkspace({
     });
     setSaving(false);
     if(!r.ok){setMessage(`Não foi possível importar a NF-e: ${importError(r.error)}`);return;}
-    setCompleted({number:nfe.number,purchaseNumber:text(r.number),installments:text(r.installments)});
+    setCompleted({number:nfe.number,purchaseNumber:text(r.number),installments:text(r.installments),lots:num(r.lots_registered)});
     setMessage('');
   }
 
@@ -522,14 +537,34 @@ export function PurchaseXmlWorkspace({
           <div><span>Total NF-e</span><strong>{money(nfe.totals.invoice)}</strong><small>Financeiro: {money(financialTotal)}</small></div>
           <div><span>Classificação</span><b>{text(postingAccounts.find(a=>text(a.id)===accountId)?.code)} · {text(postingAccounts.find(a=>text(a.id)===accountId)?.name)}</b><small>{text(activeCenters.find(c=>text(c.id)===costCenterId)?.name)}</small></div>
         </div>
+        <div className="pxml-card" style={{marginTop:20,padding:18}}>
+          <label style={{display:'flex',alignItems:'center',gap:10,fontWeight:700}}>
+            <input type="checkbox" checked={registerLots} onChange={e=>enableLots(e.target.checked)}/>
+            Deseja cadastrar os lotes e validades dos produtos desta NF-e?
+          </label>
+          <p style={{fontSize:12,opacity:.78}}>Opcional. Ao ativar, informe os lotes por item da nota. As quantidades devem fechar o total de entrada na unidade de estoque. O vínculo com a NF-e será gravado junto com a compra.</p>
+          {registerLots&&<div className="pxml-table-wrap"><table>
+            <thead><tr><th>Produto / item NF-e</th><th>Lote</th><th>Validade</th><th>Quantidade no estoque</th><th>Ações</th></tr></thead>
+            <tbody>{lotRows.map((l,index)=>{const item=items.find(it=>it.itemNo===l.source_item_no);return <tr key={index}>
+              <td><b>{item?.name??'Produto'} · nº {l.source_item_no}</b><small>Entrada: {item?stockQty(item).toLocaleString('pt-BR'):0} {item?.stockUnit??''}</small></td>
+              <td><input aria-label={`Lote do item ${l.source_item_no}`} maxLength={100} value={l.lot_number} onChange={e=>updateLot(index,'lot_number',e.target.value)} placeholder="Número do lote"/></td>
+              <td><input aria-label={`Validade do item ${l.source_item_no}`} type="date" value={l.expiry_date} onChange={e=>updateLot(index,'expiry_date',e.target.value)}/></td>
+              <td><input aria-label={`Quantidade do lote do item ${l.source_item_no}`} type="number" min="0.0001" step="0.0001" value={l.quantity} onChange={e=>updateLot(index,'quantity',e.target.value)}/></td>
+              <td><button type="button" className="pxml-secondary" onClick={()=>setLotRows(rows=>rows.filter((_,i)=>i!==index))}>Remover</button></td>
+            </tr>})}</tbody>
+          </table>
+          <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:12}}>{items.map(item=><button className="pxml-secondary" type="button" key={item.itemNo} onClick={()=>setLotRows(rows=>[...rows,{source_item_no:item.itemNo,lot_number:'',expiry_date:'',quantity:''}])}>+ Lote: {item.name}</button>)}</div>
+          {!lotsValid?<p role="alert" style={{color:'#bc4c4c'}}>Confira lote, validade e total por produto: a soma precisa corresponder à entrada da NF-e.</p>:<p style={{color:'#397953'}}>Conferência de lotes concluída.</p>}
+          </div>}
+        </div>
         <div className="pxml-nav">
           <button className="pxml-secondary" type="button" onClick={()=>go(4)}>Voltar</button>
-          <button className="pxml-import" disabled={!ready||saving} onClick={()=>void finish()}>{saving?'Importando NF-e...':'✓ Importar nota fiscal'}</button>
+          <button className="pxml-import" disabled={!ready||!lotsValid||saving} onClick={()=>void finish()}>{saving?'Importando NF-e...':'✓ Importar nota fiscal'}</button>
         </div>
       </>:<div className="pxml-success">
         <span>✓</span>
         <h3>NF-e {completed.number} importada com sucesso</h3>
-        <p>Compra nº {completed.purchaseNumber} criada. Estoque, custos, preços e {completed.installments} título(s) a pagar foram atualizados.</p>
+        <p>Compra nº {completed.purchaseNumber} criada. Estoque, custos, preços e {completed.installments} título(s) a pagar foram atualizados. {completed.lots>0?`${completed.lots} lote(s) vinculados à nota e à compra.`:'Sem lotes cadastrados nesta entrada.'}</p>
         <div>
           <button type="button" className="pxml-primary" onClick={()=>resetDraft()}>Importar outra NF-e</button>
           <Link className="pxml-secondary" href="/dashboard/compras">Ver Compras / Entradas</Link>
