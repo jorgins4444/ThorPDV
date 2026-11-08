@@ -66,15 +66,53 @@ async function load(){
   renderBody();
 }
 function customerForm(row={}){
+  const address=row.address||{};
+  const val=(key)=>row[key]??address[key]??'';
   return `<form id="cl930Customer" class="cl930-form">
     <input type="hidden" name="id" value="${esc(row.id||'')}">
-    ${select('type','Tipo de pessoa',[['PF','Pessoa física'],['PJ','Pessoa jurídica']],row.type||'PF')}
-    ${field('name','Nome / Razão social',row.name||'','text','required maxlength="240"')}
-    ${field('document','CPF / CNPJ',row.document||'','text','inputmode="numeric"')}
+    ${select('type','Tipo de pessoa',[['PF','Pessoa física'],['PJ','Pessoa jurídica']],row.type==='company'||row.type==='PJ'?'PJ':'PF')}
+    ${field('name','Nome completo / Razão social',row.name||'','text','required maxlength="240"')}
+    <div data-cl930-company>
+      ${field('trade_name','Nome fantasia',val('trade_name'),'text','maxlength="240"')}
+      ${field('state_registration','Inscrição estadual (IE)',val('state_registration'),'text','maxlength="30"')}
+    </div>
+    ${field('document','CPF / CNPJ',row.document||'','text','inputmode="numeric" required maxlength="18"')}
     ${field('email','E-mail',row.email||'','email')}
     ${field('phone','Telefone',row.phone||'','tel')}
-    <div class="cl930-actions"><button type="submit" class="cl930-primary">Salvar cliente no caixa</button><button type="button" id="cl930Clear">Limpar</button></div>
+    <h3>Endereço completo</h3>
+    ${field('zip_code','CEP',val('zip_code'),'text','inputmode="numeric" required maxlength="9"')}
+    ${field('street','Rua / Logradouro',val('street'),'text','required maxlength="240"')}
+    ${field('number','Número',val('number'),'text','required maxlength="20"')}
+    ${field('complement','Complemento',val('complement'),'text','maxlength="120"')}
+    ${field('neighborhood','Bairro',val('neighborhood'),'text','required maxlength="120"')}
+    ${field('city','Cidade',val('city'),'text','required maxlength="120"')}
+    ${field('state','UF',val('state'),'text','required maxlength="2" minlength="2" placeholder="PI"')}
+    <p class="cl930-note">O cadastro é salvo primeiro no caixa e enviado ao ThorGestão pela fila de sincronização. Confira os dados antes de finalizar a venda.</p>
+    <div class="cl930-actions"><button type="submit" class="cl930-primary">Salvar e identificar cliente</button><button type="button" id="cl930Clear">Limpar</button></div>
   </form>`;
+}
+function bindCustomerForm(body){
+  const form=body.querySelector('#cl930Customer');
+  if(!form)return;
+  const type=form.elements.namedItem('type');
+  const company=form.querySelector('[data-cl930-company]');
+  const update=()=>{company.hidden=type.value!=='PJ';company.style.display=type.value==='PJ'?'':'none';};
+  type.addEventListener('change',update);update();
+  const zip=form.elements.namedItem('zip_code');
+  zip.addEventListener('blur',()=>{const digits=zip.value.replace(/\\D/g,'');if(digits.length===8)zip.value=digits.slice(0,5)+'-'+digits.slice(5);});
+  form.onsubmit=e=>{
+    e.preventDefault();
+    const data=formData(form);
+    const digits=v=>String(v||'').replace(/\\D/g,'');
+    if(digits(data.zip_code).length!==8)return message('Informe um CEP válido com 8 dígitos.','bad');
+    if(data.state.trim().length!==2)return message('Informe uma UF válida com 2 letras.','bad');
+    data.zip_code=digits(data.zip_code);
+    data.state=data.state.trim().toUpperCase();
+    data.document=digits(data.document);
+    if(data.document.length!==(data.type==='PJ'?14:11))return message('Informe um CPF ou CNPJ com a quantidade correta de dígitos.','bad');
+    if(data.type!=='PJ'){data.trade_name='';data.state_registration='';}
+    save('customer_save',data);
+  };
 }
 function productForm(){
   return `<form id="cl930Product" class="cl930-form">
@@ -94,7 +132,7 @@ function renderBody(){
   if(tab==='customers'){
     body.innerHTML=`<div class="cl930-search"><input id="cl930Search" placeholder="Pesquisar clientes por nome ou documento" value="${esc(search)}"><button id="cl930SearchButton">Pesquisar</button></div>
       ${customerForm(selected||{})}<h3>Clientes encontrados</h3><div class="cl930-list">${customers.map(c=>`<button data-cl930-customer="${esc(c.id)}"><b>${esc(c.name)}</b><small>${esc(c.document||'Sem documento')} • ${esc(c.phone||'')}</small></button>`).join('')||'<p>Nenhum cliente encontrado.</p>'}</div>`;
-    body.querySelector('#cl930Customer').onsubmit=e=>{e.preventDefault();save('customer_save',formData(e.currentTarget));};
+    bindCustomerForm(body);
     body.querySelector('#cl930Clear').onclick=()=>{selected=null;renderBody();};
     body.querySelector('#cl930SearchButton').onclick=()=>{search=body.querySelector('#cl930Search').value.trim();load();};
     body.querySelector('#cl930Search').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();search=e.target.value.trim();load();}};
