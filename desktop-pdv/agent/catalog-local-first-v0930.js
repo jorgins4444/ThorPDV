@@ -274,14 +274,32 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     // Stock corrections are reconciled through the mandatory authoritative pull;
     // they may coexist with legitimate sales and cannot safely be undone by a blind delta.
   };
-  agent.flushCatalogOutbox = async function() {
+  // Immediate local-first push, two quick retries (15s/30s), then 2-minute checks.
+  // Keep the original event_id on every retry: server RPC is idempotent.
+  const CATALOG_RETRY_MS=[15000,30000,120000];
+  const retryDelay=attempts=>CATALOG_RETRY_MS[Math.min(Math.max(0,attempts-1),2)];
+  agent.scheduleCatalogRetry=function(delayMs){
+    clearTimeout(this._catalogRetryTimer);
+    this._catalogRetryTimer=setTimeout(()=>this.flushCatalogOutbox().catch(()=>{}),delayMs);
+    this._catalogRetryTimer.unref?.();
+  };
+  agent.flushCatalogOutbox = async function(force=false) {
     if (this._catalogFlushing) return {ok:false,error:'sync_in_progress'};
     if (!this.deviceToken?.()) return {ok:false,error:'device_not_enrolled'};
     this._catalogFlushing = true;
-    let done=0,failed=0,rejected=false;
+    let done=0,failed=0,rejected=false,delayed=false;
     try {
       const items = this.store.catalogOutbox(50);
       for (const row of items) {
+        if (!force && row.state==='retry') {
+          const wait=retryDelay(Number(row.attempts)||1);
+          const elapsed=Date.now()-Date.parse(row.updated_at||'');
+          if(Number.isFinite(elapsed) && elapsed<wait){
+            this.scheduleCatalogRetry(Math.max(1000,wait-elapsed));
+            delayed=true;
+            break; // Preserve strict FIFO; do not overtake a failed mutation.
+          }
+        }
         try {
           const result=await this.sync.request('/api/pdv/catalog-mutation', {
             event_id:row.event_id,kind:row.kind,payload:Object.fromEntries(Object.entries(row.payload).filter(([key])=>key!=='local_before')),
@@ -293,11 +311,13 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
             this.store.catalogSetState(row.event_id,'rejected',result?.error||'server_rejected');
             this.catalogRollback(row.kind,row.payload);
             failed++;rejected=true;
-            // A dependent operation cannot be sent until the previous one is resolved.
+            // Business validation errors need operator correction, not blind retries.
             break;
           }
         } catch(error) {
           this.store.catalogSetState(row.event_id,'retry',String(error?.message||'connection_failed'));
+          const attempts=(Number(row.attempts)||0)+1;
+          this.scheduleCatalogRetry(retryDelay(attempts));
           failed++;
           break;
         }
@@ -307,7 +327,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
       this.store.set('cursor','');
       void this.sync.run(true).catch(()=>{});
     }
-    return {ok:failed===0,done,failed};
+    return {ok:failed===0&&!delayed,done,failed,delayed};
   };
   const oldStart=agent.start;
   agent.start=async function(...args) {
@@ -317,7 +337,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     this.sync.beforeCatalogPush=async()=>this.flushCatalogOutbox();
     const result=await oldStart.apply(this,args);
     clearInterval(this._catalogInterval);
-    this._catalogInterval=setInterval(()=>this.flushCatalogOutbox().catch(()=>{}),30000);
+    this._catalogInterval=setInterval(()=>this.flushCatalogOutbox().catch(()=>{}),120000);
     this._catalogInterval.unref?.();
     setTimeout(()=>this.flushCatalogOutbox().catch(()=>{}),1500);
     return result;
@@ -325,6 +345,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
   const oldStop=agent.stop;
   agent.stop=async function(...args) {
     clearInterval(this._catalogInterval);
+    clearTimeout(this._catalogRetryTimer);
     return oldStop.apply(this,args);
   };
 }
