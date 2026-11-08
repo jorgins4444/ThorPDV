@@ -1,5 +1,6 @@
 import './dashboard-studio-v2.css';
 import './dashboard-midnight-polish.css';
+import './dashboard-reference-polish.css';
 import './[...slug]/module.css';
 import './[...slug]/management-shell.css';
 import './dashboard-fullscreen-fix.css';
