@@ -50,7 +50,7 @@ begin
 
   if p_kind='customer_save' then
     v_name:=trim(coalesce(p_payload->>'name',''));
-    v_document:=regexp_replace(coalesce(p_payload->>'document',''),'\D','','g');
+    v_document:=regexp_replace(coalesce(p_payload->>'document',''),'[^0-9]','','g');
     v_customer_type:=case when upper(coalesce(p_payload->>'type','PF'))='PJ' then 'company' else 'individual' end;
     if v_name='' or length(v_name)>240 then return jsonb_build_object('ok',false,'error','invalid_name'); end if;
     if v_document<>'' and (
@@ -63,7 +63,7 @@ begin
     if exists(select 1 from public.customers where id=v_id and tenant_id<>v.tenant_id) then
       return jsonb_build_object('ok',false,'error','record_not_found'); end if;
     if p_payload ? 'zip_code' and (
-      regexp_replace(coalesce(p_payload->>'zip_code',''),'\\D','','g') !~ '^[0-9]{8}
+      regexp_replace(coalesce(p_payload->>'zip_code',''),'[^0-9]','','g') !~ '^[0-9]{8}
     v_result:=jsonb_build_object('ok',true,'id',v_id,'kind',p_kind);
 
   elsif p_kind='product_create' then
@@ -273,7 +273,7 @@ end $$;
       nullif(trim(coalesce(p_payload->>'neighborhood','')),''),
       nullif(trim(coalesce(p_payload->>'city','')),''),
       nullif(upper(trim(coalesce(p_payload->>'state',''))),''),
-      nullif(regexp_replace(coalesce(p_payload->>'zip_code',''),'\\D','','g'),'')
+      nullif(regexp_replace(coalesce(p_payload->>'zip_code',''),'[^0-9]','','g'),'')
     ) on conflict(id) do update set
       name=excluded.name,type=excluded.type,document=excluded.document,
       email=excluded.email,phone=excluded.phone,
