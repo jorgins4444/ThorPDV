@@ -20,13 +20,13 @@ function Kpi({points,color}:{points:Point[];color:string}){if(!points.length)ret
 function Bar({points,color}:{points:Point[];color:string}){const list=points.slice(0,14),max=Math.max(1,...list.map(p=>Math.abs(p.value)));if(!list.length)return <Empty/>;return <div className="bi-bars">{list.map((p,i)=><div className="bi-bar" key={`${p.label}-${i}`}><div><span>{p.label}</span><b>{display(p)}</b></div><div className="bi-track"><i style={{width:`${Math.max(2,Math.abs(p.value)/max*100)}%`,background:colorAt(color,i)}}/></div></div>)}</div>}
 function Columns({points,color}:{points:Point[];color:string}){const list=points.slice(-18),max=Math.max(1,...list.map(p=>Math.abs(p.value)));if(!list.length)return <Empty/>;return <div className="bi-columns">{list.map((p,i)=><div key={`${p.label}-${i}`} className="bi-col" title={`${p.label} · ${display(p)}`}><div><i style={{height:`${Math.max(3,Math.abs(p.value)/max*100)}%`,background:colorAt(color,i)}}/></div><span>{p.label}</span></div>)}</div>}
 function Line({points,color,area=false,spark=false}:{points:Point[];color:string;area?:boolean;spark?:boolean}){
+ const gradientId=useId();
  if(!points.length)return <Empty/>;
  const list=points.slice(-30),values=list.map(p=>Number(p.value)||0);
  const min=Math.min(0,...values),max=Math.max(1,...values),range=Math.max(1,max-min);
  const w=700,h=spark?90:245,pad=spark?8:20;
  const coords=values.map((v,i)=>[list.length===1?w/2:pad+i*(w-pad*2)/(list.length-1),h-pad-(v-min)/range*(h-pad*2)] as const);
  const curve=coords.map(([x,y],i)=>i===0?`M ${x} ${y}`:`L ${x} ${y}`).join(' ');
- const gradientId=useId();
  const fill=coords.length?`${curve} L ${coords[coords.length-1][0]} ${h-pad} L ${coords[0][0]} ${h-pad} Z`:'';
  return <div className={`bi-line ${spark?'spark':''}`}>
   <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label="Evolução de valores">
