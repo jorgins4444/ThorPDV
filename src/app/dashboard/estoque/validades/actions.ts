@@ -36,3 +36,20 @@ export async function expiryLotManualDecrement(id:string,quantity:number,note:st
  if(error)return {ok:false,error:error.message};
  return (data??{ok:false}) as {ok?:boolean;error?:string;remaining?:number};
 }
+
+export async function saleLotPending(){
+ const token=(await cookies()).get('thorpdv_test_session')?.value;
+ if(!token)redirect('/login');
+ const supabase=await createClient();
+ const {data,error}=await supabase.rpc('erp_sale_lot_pending',{p_token:token});
+ if(error)return {ok:false,error:error.message,pending:[]};
+ return (data??{ok:false,pending:[]}) as {ok?:boolean;error?:string;pending?:Row[]};
+}
+export async function saleLotManualAssign(saleItemId:string,lotId:string,quantity:number){
+ const token=(await cookies()).get('thorpdv_test_session')?.value;
+ if(!token)redirect('/login');
+ const supabase=await createClient();
+ const {data,error}=await supabase.rpc('erp_sale_lot_manual_assign',{p_token:token,p_sale_item:saleItemId,p_lot:lotId,p_quantity:quantity});
+ if(error)return {ok:false,error:error.message};
+ return (data??{ok:false}) as {ok?:boolean;error?:string};
+}
