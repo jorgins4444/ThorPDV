@@ -180,10 +180,15 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     }
     const result = originalApplyPull.call(this,data);
     // Keep person type from the server, which older SQLite clients did not persist.
-    const updateType=this.db.prepare('update customers set type=? where id=?');
+    const updateDetails=this.db.prepare(`update customers set
+      type=?,trade_name=?,state_registration=?,street=?,number=?,complement=?,
+      neighborhood=?,city=?,state=?,zip_code=? where id=?`);
     for (const row of data.customers||[]) {
-      if (!row.id || !row.type) continue;
-      updateType.run(row.type==='company'||row.type==='PJ'?'PJ':'PF',row.id);
+      if (!row.id) continue;
+      updateDetails.run(row.type==='company'||row.type==='PJ'?'PJ':'PF',
+        row.trade_name||'',row.state_registration||'',row.street||'',row.number||'',
+        row.complement||'',row.district||row.neighborhood||'',row.city||'',row.state||'',
+        row.postal_code||row.zip_code||'',row.id);
     }
     // Preserve optimistic edits until confirmed by the authoritative server.
     const tx = this.db.transaction(() => {
@@ -191,11 +196,15 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
         const p = entry.payload;
         const now = entry.created_at;
         if (entry.kind==='customer_save') {
-          this.db.prepare(`insert into customers(id,name,document,email,phone,active,updated_at,type)
-            values(?,?,?,?,?,1,?,?) on conflict(id) do update set
+          this.db.prepare(`insert into customers(id,name,document,email,phone,active,updated_at,type,trade_name,state_registration,street,number,complement,neighborhood,city,state,zip_code)
+            values(?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?) on conflict(id) do update set
             name=excluded.name,document=excluded.document,email=excluded.email,
-            phone=excluded.phone,type=excluded.type,updated_at=excluded.updated_at`)
-            .run(p.id,p.name,p.document||'',p.email||'',p.phone||'',now,p.type||'PF');
+            phone=excluded.phone,type=excluded.type,updated_at=excluded.updated_at,
+            trade_name=excluded.trade_name,state_registration=excluded.state_registration,
+            street=excluded.street,number=excluded.number,complement=excluded.complement,
+            neighborhood=excluded.neighborhood,city=excluded.city,state=excluded.state,zip_code=excluded.zip_code`)
+            .run(p.id,p.name,p.document||'',p.email||'',p.phone||'',now,p.type||'PF',
+              ...['trade_name','state_registration','street','number','complement','neighborhood','city','state','zip_code'].map(k=>p[k]||''));
         } else if (entry.kind==='product_create') {
           const found=this.db.prepare('select id from products where id=?').get(p.id);
           if (!found) this.db.prepare(`insert into products(id,sku,name,unit,group_id,sale_price,active,barcodes,updated_at,cost_price,ncm,category_name)
