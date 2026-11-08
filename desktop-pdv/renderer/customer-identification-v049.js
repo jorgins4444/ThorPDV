@@ -103,7 +103,7 @@
       <div class="v49-current" id="v49Current"></div>
       <section class="v49-section">
         <div class="v49-section-head"><div><b>Buscar cliente do Gestão</b><small>Pesquise pelo nome ou CPF/CNPJ do cadastro sincronizado.</small></div><span>CADASTRO</span></div>
-        <div class="v49-search"><span>⌕</span><input id="v49CustomerSearch" autocomplete="off" placeholder="Nome ou CPF/CNPJ..."><button type="button" class="secondary" id="v49SyncCustomers">Sincronizar</button></div>
+        <div class="v49-search"><span>⌕</span><input id="v49CustomerSearch" autocomplete="off" placeholder="Nome ou CPF/CNPJ..."><button type="button" class="secondary" id="v49SyncCustomers">Sincronizar</button><button type="button" class="primary" id="v49NewCustomer">+ Novo cliente</button></div>
         <div class="v49-results" id="v49CustomerResults"><div class="v49-empty">Digite para pesquisar um cliente.</div></div>
       </section>
       <div class="v49-divider"><span>ou</span></div>
@@ -200,6 +200,16 @@
         showToast(`Cliente ${rows[0].name} identificado na venda.`);
         close();
       }
+    };
+
+    wrap.querySelector('#v49NewCustomer').onclick = () => {
+      if(!v49Allowed('customer.create',false))return infoModal('Novo cliente','Operador sem permissão para cadastrar clientes.');
+      if(typeof window.openThorCatalogV0930!=='function')return infoModal('Novo cliente','Cadastro local indisponível nesta versão.');
+      window.openThorCatalogV0930('customers',{onCustomerSaved:customer=>{
+        v49SetCustomer(customer);
+        showToast('Cliente salvo no caixa e identificado na venda. Sincronização pendente.');
+        close();
+      }});
     };
 
     wrap.querySelector('#v49SyncCustomers').onclick = async (event) => {

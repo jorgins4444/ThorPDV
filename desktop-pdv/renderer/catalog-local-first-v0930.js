@@ -18,12 +18,12 @@ const errors={
   product_not_found:'Produto não localizado.',
   catalog_service_unavailable:'Serviço de sincronização temporariamente indisponível.'
 };
-let panel=null, tab='customers', search='', products=[], customers=[], busy=false, selected=null;
-const title={customers:'Cadastro de Clientes',products:'Produtos e Preços',create:'Cadastrar Produto',history:'Sincronização'};
+let panel=null, tab='customers', search='', products=[], customers=[], busy=false, selected=null, onCustomerSaved=null, requestedProductId=null;
+const title={customers:'Novo Cliente',products:'Ajustar Preço / Estoque',create:'Cadastrar Produto',history:'Sincronização'};
 const field=(name,label,value='',type='text',extra='')=>`<label><span>${esc(label)}</span><input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;
 const select=(name,label,options,current)=>`<label><span>${esc(label)}</span><select name="${name}">${options.map(([id,text])=>`<option value="${esc(id)}" ${String(id)===String(current)?'selected':''}>${esc(text)}</option>`).join('')}</select></label>`;
 const controls=()=>`<div class="cl930-head"><div><small>THORPDV • CADASTROS LOCAIS</small><h2>${title[tab]}</h2><p>Os dados são gravados neste caixa primeiro. A sincronização com o ThorGestão acontece automaticamente.</p></div><button class="cl930-close" id="cl930Close" aria-label="Fechar">×</button></div>
-<div class="cl930-tabs">${[['customers','Clientes'],['products','Preços / Estoque'],['create','Novo Produto'],['history','Sincronização']].map(([id,label])=>`<button data-cl930-tab="${id}" class="${tab===id?'on':''}">${label}</button>`).join('')}</div><div id="cl930Body"></div><div class="cl930-feedback" id="cl930Feedback" role="status"></div>`;
+<div id="cl930Body"></div><div class="cl930-feedback" id="cl930Feedback" role="status"></div>`;
 function message(text,kind=''){const el=panel?.querySelector('#cl930Feedback');if(el){el.textContent=text;el.className='cl930-feedback '+kind;}}
 function err(e){return errors[String(e?.message||e)]||String(e?.message||e||'Não foi possível concluir a operação.');}
 function formData(form){return Object.fromEntries(new FormData(form).entries());}
@@ -33,7 +33,13 @@ async function save(kind,body){
   try{
     const result=await window.thor.catalogSave(kind,body);
     if(!result?.ok)throw new Error(result?.error||'operation_failed');
-    message('Salvo neste caixa. Envio automático ao ThorGestão pendente.','good');
+    message('Salvo neste caixa. Sincronização com ThorGestão ainda não confirmada.','good');
+    if(kind==='customer_save' && typeof onCustomerSaved==='function'){
+      const customer={id:result.id||body.id,name:body.name,document:body.document,email:body.email,phone:body.phone};
+      onCustomerSaved(customer);
+      panel?.remove();panel=null;onCustomerSaved=null;
+      return;
+    }
     selected=null;
     if(tab==='products'||tab==='create')products=await window.thor.allProducts();
     if(tab==='customers')customers=await window.thor.customers(search);
@@ -48,6 +54,7 @@ async function load(){
   if(!panel)return;
   try{
     if(tab==='products')products=await window.thor.allProducts();
+    if(tab==='products'&&requestedProductId){const id=requestedProductId;requestedProductId=null;requestAnimationFrame(()=>openProductEdit(id,'stock_adjust'));}
     if(tab==='customers')customers=await window.thor.customers(search);
   }catch(e){message(err(e),'bad');}
   renderBody();
@@ -99,7 +106,22 @@ function renderBody(){
       <button data-cl930-stock="${esc(p.id)}">Estoque</button>
     </article>`).join('')||'<p>Nenhum produto encontrado.</p>'}</div>
     <div id="cl930Edit"></div>`;
-    body.querySelector('#cl930Search').oninput=e=>{search=e.target.value;renderBody();body.querySelector('#cl930Search')?.focus();};
+    body.querySelector('#cl930Search').oninput=e=>{
+      search=e.target.value;
+      // Keep the active input node and caret intact while filtering results.
+      // Re-rendering the entire form on each keystroke breaks typing and IME composition.
+      const matches=products.filter(matchesProduct).slice(0,100);
+      const list=body.querySelector('.cl930-products');
+      if(!list)return;
+      list.innerHTML=matches.map(p=>`<article>
+        <div><b>${esc(p.name)}</b><small>${esc(p.sku||'')} • ${esc(p.unit||'UN')} • Estoque: ${Number(p.quantity||0).toLocaleString('pt-BR',{maximumFractionDigits:3})}</small></div>
+        <strong>${money(p.base_price??p.sale_price)}</strong>
+        <button data-cl930-price="${esc(p.id)}">Preço</button>
+        <button data-cl930-stock="${esc(p.id)}">Estoque</button>
+      </article>`).join('')||'<p>Nenhum produto encontrado.</p>';
+      list.querySelectorAll('[data-cl930-price]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Price,'product_price'));
+      list.querySelectorAll('[data-cl930-stock]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Stock,'stock_adjust'));
+    };
     body.querySelectorAll('[data-cl930-price]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Price,'product_price'));
     body.querySelectorAll('[data-cl930-stock]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Stock,'stock_adjust'));
   }else if(tab==='history'){
@@ -132,35 +154,18 @@ async function openTab(next){
   panel.querySelectorAll('[data-cl930-tab]').forEach(b=>b.classList.toggle('on',b.dataset.cl930Tab===tab));
   message('');await load();
 }
-async function open(next){
+async function open(next,options={}){
+  onCustomerSaved=typeof options.onCustomerSaved==='function'?options.onCustomerSaved:null;
+  requestedProductId=options.productId||null;
   if(panel){await openTab(next);return;}
   tab=next;search='';selected=null;
   panel=document.createElement('div');panel.className='cl930-overlay';
   panel.innerHTML=`<section class="cl930-panel" role="dialog" aria-modal="true" aria-label="Cadastros ThorPDV">${controls()}</section>`;
   document.body.appendChild(panel);
-  panel.querySelector('#cl930Close').onclick=()=>{panel.remove();panel=null;};
+  panel.querySelector('#cl930Close').onclick=()=>{panel.remove();panel=null;onCustomerSaved=null;};
   panel.addEventListener('click',e=>{if(e.target===panel){panel.remove();panel=null;}});
-  panel.querySelectorAll('[data-cl930-tab]').forEach(b=>b.onclick=()=>openTab(b.dataset.cl930Tab));
+
   await load();
 }
-function decorate(){
-  const header=document.querySelector('.top-right');
-  if(header&&!header.querySelector('#cl930Nav')){
-    const button=document.createElement('button');button.id='cl930Nav';button.className='nav-button';button.textContent='Cadastros';
-    button.onclick=()=>open('customers');
-    const sibling=header.querySelector('#navFiscal');
-    sibling?.after(button);
-    if(!sibling)header.prepend(button);
-  }
-  document.querySelectorAll('.v089-menu-grid').forEach(grid=>{
-    if(grid.querySelector('[data-cl930-menu]'))return;
-    const button=document.createElement('button');button.dataset.cl930Menu='1';
-    button.innerHTML='<i>▤</i><b>Cadastro de Clientes e Produtos</b><small>Preços, estoque e sincronização</small>';
-    button.onclick=()=>{grid.closest('.modal')?.remove();open('customers');};
-    grid.appendChild(button);
-  });
-}
-new MutationObserver(decorate).observe(document.documentElement,{childList:true,subtree:true});
-decorate();
 window.openThorCatalogV0930=open;
 })();
