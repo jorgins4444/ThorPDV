@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo,useState,type FormEvent } from 'react';
-import { expiryLotsLoad,expiryLotsRemove,expiryLotsSave,expiryLotManualDecrement,expiryLotTrace } from './actions';
+import { expiryLotsLoad,expiryLotsSave,expiryLotManualDecrement,expiryLotTrace } from './actions';
 
 type Row=Record<string,unknown>;
 type Result={ok?:boolean;error?:string;lots?:Row[];products?:Row[];branch_id?:string};
@@ -37,15 +37,6 @@ export function ExpiryLotsWorkspace({initial,initialTraces=[]}:{initial:Result;i
    if(!result.ok){setMessage('Falha ao salvar: '+String(result.error??'erro'));return;}
    setForm(initialForm);await reload();setMessage('Lote salvo. Os alertas de validade utilizarão esta informação.');
   }catch{setMessage('Falha de conexão ao salvar o lote.');}finally{setBusy(false);}
- }
- async function remove(row:Row){
-  if(!window.confirm('Dar baixa no lote '+String(row.lot_number??'')+'? O registro será mantido para histórico, com quantidade zero.'))return;
-  setBusy(true);setMessage('');
-  try{
-   const result=await expiryLotsRemove(String(row.id));
-   if(!result.ok){setMessage('Falha ao dar baixa: '+String(result.error??'erro'));return;}
-   await reload();setMessage('Baixa registrada: lote sem saldo e fora dos alertas de vencimento.');
-  }catch{setMessage('Falha de conexão ao dar baixa.');}finally{setBusy(false);}
  }
  async function manualDecrement(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
@@ -95,7 +86,7 @@ export function ExpiryLotsWorkspace({initial,initialTraces=[]}:{initial:Result;i
      </div><div className="lot-row-actions"><button className="erp-primary" disabled={busy} type="submit">{busy?'Registrando…':'Confirmar baixa'}</button><button className="erp-ghost" type="button" onClick={()=>setManualLotId('')}>Cancelar</button></div>
     </form>:null}
    <div className="lot-filters"><input aria-label="Buscar por nome, código ou lote" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar produto, código ou lote…"/><select aria-label="Filtrar vencimentos" value={group} onChange={e=>setGroup(e.target.value)}><option value="all">Todas as validades</option><option value="expired">Vencidos</option><option value="30">Até 30 dias</option><option value="45">31 a 45 dias</option><option value="60">46 a 60 dias</option><option value="90">61 a 90 dias</option><option value="90plus">Mais de 90 dias</option></select></div>
-   <div className="lot-table-wrap"><table className="lot-table"><thead><tr><th>Produto</th><th>Lote</th><th>Validade</th><th>Prazo</th><th>Quantidade</th><th>NF-e / Fornecedor de origem</th><th>Ações</th></tr></thead><tbody>{filtered.length?filtered.map(r=>{const days=daysTo(r.expiry_date);return <tr key={String(r.id)}><td><b>{String(r.name??'Produto')}</b><small>{String(r.sku??'')}</small></td><td>{String(r.lot_number??'')}</td><td>{formatDate(r.expiry_date)}</td><td><span className={`lot-status ${days<0?'expired':days<=30?'soon':''}`}>{classification(days)}{days<0?` · ${Math.abs(days)}d`:''}</span></td><td>{number(r.quantity)}</td><td>{purchaseTraces(r.id).length?purchaseTraces(r.id).map((p,i)=><div key={i} className="lot-origin"><b>NF-e {String(p.nfe_number??p.purchase_number??'—')}</b><small>{String(p.supplier??'Fornecedor não informado')} · {number(p.received_quantity)} un. recebidas</small><small>Emissão: {formatDate(p.issue_date)} · Chave: {String(p.nfe_access_key??'—')}</small></div>):<small>Sem NF-e de origem vinculada (cadastro manual)</small>}</td><td><div className="lot-row-actions"><button type="button" disabled={busy} onClick={()=>{setForm({id:String(r.id),product_id:String(r.product_id),lot_number:String(r.lot_number),expiry_date:String(r.expiry_date).slice(0,10),quantity:String(r.quantity)});window.scrollTo({top:0,behavior:'smooth'});}}>Editar</button><button type="button" disabled={busy} onClick={()=>{setManualLotId(String(r.id));setManualQuantity('');setManualReason('');}}>Baixa manual</button><button type="button" disabled={busy} onClick={()=>void remove(r)}>Zerar lote</button></div></td></tr>;}):<tr><td colSpan={7} className="lot-empty">Nenhum lote com saldo encontrado. Cadastre as validades para ativar os alertas.</td></tr>}</tbody></table></div>
+   <div className="lot-table-wrap"><table className="lot-table"><thead><tr><th>Produto</th><th>Lote</th><th>Validade</th><th>Prazo</th><th>Quantidade</th><th>NF-e / Fornecedor de origem</th><th>Ações</th></tr></thead><tbody>{filtered.length?filtered.map(r=>{const days=daysTo(r.expiry_date);return <tr key={String(r.id)}><td><b>{String(r.name??'Produto')}</b><small>{String(r.sku??'')}</small></td><td>{String(r.lot_number??'')}</td><td>{formatDate(r.expiry_date)}</td><td><span className={`lot-status ${days<0?'expired':days<=30?'soon':''}`}>{classification(days)}{days<0?` · ${Math.abs(days)}d`:''}</span></td><td>{number(r.quantity)}</td><td>{purchaseTraces(r.id).length?purchaseTraces(r.id).map((p,i)=><div key={i} className="lot-origin"><b>NF-e {String(p.nfe_number??p.purchase_number??'—')}</b><small>{String(p.supplier??'Fornecedor não informado')} · {number(p.received_quantity)} un. recebidas</small><small>Emissão: {formatDate(p.issue_date)} · Chave: {String(p.nfe_access_key??'—')}</small></div>):<small>Sem NF-e de origem vinculada (cadastro manual)</small>}</td><td><div className="lot-row-actions"><button type="button" disabled={busy} onClick={()=>{setForm({id:String(r.id),product_id:String(r.product_id),lot_number:String(r.lot_number),expiry_date:String(r.expiry_date).slice(0,10),quantity:String(r.quantity)});window.scrollTo({top:0,behavior:'smooth'});}}>Editar</button><button type="button" disabled={busy} onClick={()=>{setManualLotId(String(r.id));setManualQuantity('');setManualReason('');}}>Baixa manual</button></div></td></tr>;}):<tr><td colSpan={7} className="lot-empty">Nenhum lote com saldo encontrado. Cadastre as validades para ativar os alertas.</td></tr>}</tbody></table></div>
   </section>
  </div>;
 }
