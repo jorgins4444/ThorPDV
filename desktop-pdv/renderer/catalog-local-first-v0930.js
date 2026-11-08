@@ -99,7 +99,22 @@ function renderBody(){
       <button data-cl930-stock="${esc(p.id)}">Estoque</button>
     </article>`).join('')||'<p>Nenhum produto encontrado.</p>'}</div>
     <div id="cl930Edit"></div>`;
-    body.querySelector('#cl930Search').oninput=e=>{search=e.target.value;renderBody();body.querySelector('#cl930Search')?.focus();};
+    body.querySelector('#cl930Search').oninput=e=>{
+      search=e.target.value;
+      // Keep the active input node and caret intact while filtering results.
+      // Re-rendering the entire form on each keystroke breaks typing and IME composition.
+      const matches=products.filter(matchesProduct).slice(0,100);
+      const list=body.querySelector('.cl930-products');
+      if(!list)return;
+      list.innerHTML=matches.map(p=>`<article>
+        <div><b>${esc(p.name)}</b><small>${esc(p.sku||'')} • ${esc(p.unit||'UN')} • Estoque: ${Number(p.quantity||0).toLocaleString('pt-BR',{maximumFractionDigits:3})}</small></div>
+        <strong>${money(p.base_price??p.sale_price)}</strong>
+        <button data-cl930-price="${esc(p.id)}">Preço</button>
+        <button data-cl930-stock="${esc(p.id)}">Estoque</button>
+      </article>`).join('')||'<p>Nenhum produto encontrado.</p>';
+      list.querySelectorAll('[data-cl930-price]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Price,'product_price'));
+      list.querySelectorAll('[data-cl930-stock]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Stock,'stock_adjust'));
+    };
     body.querySelectorAll('[data-cl930-price]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Price,'product_price'));
     body.querySelectorAll('[data-cl930-stock]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Stock,'stock_adjust'));
   }else if(tab==='history'){
