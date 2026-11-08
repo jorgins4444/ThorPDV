@@ -26,3 +26,18 @@
 .bi-stage.theme-light .bi-legend>div{font-size:10px}
 .bi-stage.theme-light .bi-presets button:hover{background:#f5edfd}
 @media(max-width:760px){.bi-stage.theme-light .bi-card>header{padding:14px 14px 5px}.bi-stage.theme-light .bi-body{padding:4px 14px 15px}}
+
+.bi-ranking-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 16px}
+.bi-ranking-card{background:#fff;border:1px solid #eeecf2;border-radius:17px;padding:18px;min-width:0}
+.bi-ranking-head>span{font-size:10px;color:#8b52df;font-weight:800;letter-spacing:.05em}
+.bi-ranking-head h3{font-size:15px;color:#29283a;font-weight:800;margin:5px 0 3px}
+.bi-ranking-head small{font-size:11px;color:#92909f}
+.bi-ranking-list{display:flex;flex-direction:column;gap:2px;margin-top:13px}
+.bi-ranking-row{display:grid;grid-template-columns:29px minmax(0,1fr) auto;align-items:center;gap:8px;padding:9px 3px;border-bottom:1px solid #f3f0f7;font-size:12px;color:#373344}
+.bi-ranking-row:last-child{border-bottom:0}
+.bi-ranking-row>b{color:#8952da;font-size:11px;background:#f4edfc;border-radius:7px;padding:5px 3px;text-align:center}
+.bi-ranking-row>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bi-ranking-row>strong{color:#322d41;font-size:11px;white-space:nowrap}
+.bi-ranking-empty{color:#92909f;font-size:12px;padding:14px 0}
+@media(max-width:1000px){.bi-ranking-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.bi-ranking-grid{grid-template-columns:1fr}}
