@@ -1,0 +1,28 @@
+/* ThorGestão · painel de gráficos inspirado no layout claro de referência. */
+.bi-stage.theme-light{--bi-bg:#f7f7f9;--bi-panel:#fff;--bi-panel-soft:#fbf9ff;--bi-text:#29283a;--bi-muted:#89889b;--bi-border:#eceaf1;--bi-grid:#f0edf5;--bi-track:#f2edf9;--bi-shadow:none}
+.bi-stage.theme-light .bi-topline h2{font-size:24px;font-weight:800;letter-spacing:-.035em}
+.bi-stage.theme-light .bi-topline>div:first-child>span{color:#8b52df}
+.bi-stage.theme-light .bi-toolbar{box-shadow:none;border-radius:16px}
+.bi-stage.theme-light .bi-canvas{gap:12px}
+.bi-stage.theme-light .bi-card{border:1px solid #eeecf2;border-radius:17px;box-shadow:none;min-height:180px}
+.bi-stage.theme-light .bi-card:before{display:none}
+.bi-stage.theme-light .bi-card:hover{border-color:#d9c8f5;box-shadow:0 8px 22px rgba(109,69,163,.065)}
+.bi-stage.theme-light .bi-card>header{padding:17px 17px 5px}
+.bi-stage.theme-light .bi-card>header>div:first-child>span{font-size:9px;color:#a49db1;letter-spacing:.05em}
+.bi-stage.theme-light .bi-card h3{font-size:13px;font-weight:800;margin:4px 0 0}
+.bi-stage.theme-light .bi-dot{background:#8d4edc;box-shadow:0 0 0 6px #f2e9fc;width:7px;height:7px}
+.bi-stage.theme-light .bi-body{padding:5px 17px 18px}
+.bi-stage.theme-light .bi-kpi>strong{color:#8650d8;font-size:29px;font-weight:850;margin:18px 0 9px}
+.bi-stage.theme-light .bi-kpi-accent{background:#efe3fc!important;width:32px;height:32px;top:-4px;border-radius:10px}
+.bi-stage.theme-light .bi-kpi p{font-size:11px}
+.bi-stage.theme-light .bi-line svg{height:225px}
+.bi-stage.theme-light .bi-grid-line{stroke:#f2eef8;stroke-width:.8}
+.bi-stage.theme-light .bi-axis{font-size:10px;color:#aaa4b4;padding:3px 2px 0}
+.bi-stage.theme-light .bi-bars{gap:13px}
+.bi-stage.theme-light .bi-track{height:7px}
+.bi-stage.theme-light .bi-bar>div:first-child{font-size:11px}
+.bi-stage.theme-light .bi-donut{width:155px}
+.bi-stage.theme-light .bi-donut:after{width:108px}
+.bi-stage.theme-light .bi-legend>div{font-size:10px}
+.bi-stage.theme-light .bi-presets button:hover{background:#f5edfd}
+@media(max-width:760px){.bi-stage.theme-light .bi-card>header{padding:14px 14px 5px}.bi-stage.theme-light .bi-body{padding:4px 14px 15px}}
