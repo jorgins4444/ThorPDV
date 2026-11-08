@@ -39,6 +39,9 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     const result = migrate.apply(this, args);
     const customerColumns = new Set(this.db.prepare('pragma table_info(customers)').all().map(row => row.name));
     if (!customerColumns.has('type')) this.db.exec("alter table customers add column type text not null default 'PF'");
+    for(const col of ['trade_name','state_registration','street','number','complement','neighborhood','city','state','zip_code']) {
+      if(!customerColumns.has(col))this.db.exec(`alter table customers add column ${col} text not null default ''`);
+    }
     const productColumns = new Set(this.db.prepare('pragma table_info(products)').all().map(row => row.name));
     if (!productColumns.has('category_name')) this.db.exec("alter table products add column category_name text not null default ''");
     this.db.exec(`
@@ -87,10 +90,15 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
         payload.type = input.type === 'PJ' ? 'PJ' : 'PF';
         payload.email = trim(input.email,240);
         payload.phone = trim(input.phone,40);
+        for(const [col,max] of Object.entries({trade_name:240,state_registration:30,street:240,number:20,complement:120,neighborhood:120,city:120,state:2,zip_code:8}))payload[col]=trim(input[col],max);
+        payload.zip_code=digits(input.zip_code);
+        payload.state=payload.state.toUpperCase();
+        if(!/^\\d{8}$/.test(payload.zip_code)||!payload.street||!payload.number||!payload.neighborhood||!payload.city||!/^[A-Z]{2}$/.test(payload.state))throw new Error('invalid_customer_address');
         const before = this.db.prepare('select * from customers where id=?').get(id);
         payload.local_before = before ? {
           name:before.name,document:before.document,email:before.email,
           phone:before.phone,type:before.type,active:before.active,
+          ...Object.fromEntries(['trade_name','state_registration','street','number','complement','neighborhood','city','state','zip_code'].map(k=>[k,before[k]])),
         } : null;
         if (!payload.name) throw new Error('customer_name_required');
         if (payload.document && !(payload.type === 'PJ' ? validCnpj(payload.document) : validCpf(payload.document))) {
@@ -98,11 +106,15 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
         }
         const duplicate = payload.document && this.db.prepare('select id from customers where document=? and id<>?').get(payload.document,id);
         if (duplicate) throw new Error('document_already_registered');
-        this.db.prepare(`insert into customers(id,name,document,email,phone,active,updated_at,type)
-          values(?,?,?,?,?,1,?,?)
+        this.db.prepare(`insert into customers(id,name,document,email,phone,active,updated_at,type,trade_name,state_registration,street,number,complement,neighborhood,city,state,zip_code)
+          values(?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?)
           on conflict(id) do update set name=excluded.name,document=excluded.document,
-            email=excluded.email,phone=excluded.phone,type=excluded.type,updated_at=excluded.updated_at`)
-          .run(id,payload.name,payload.document,payload.email,payload.phone,now,payload.type);
+            email=excluded.email,phone=excluded.phone,type=excluded.type,updated_at=excluded.updated_at,
+            trade_name=excluded.trade_name,state_registration=excluded.state_registration,street=excluded.street,
+            number=excluded.number,complement=excluded.complement,neighborhood=excluded.neighborhood,
+            city=excluded.city,state=excluded.state,zip_code=excluded.zip_code`)
+          .run(id,payload.name,payload.document,payload.email,payload.phone,now,payload.type,
+            ...['trade_name','state_registration','street','number','complement','neighborhood','city','state','zip_code'].map(k=>payload[k]));
       } else if (kind === 'product_create') {
         payload.name = trim(input.name,240);
         payload.unit = trim(input.unit||'UN',4).toUpperCase();
