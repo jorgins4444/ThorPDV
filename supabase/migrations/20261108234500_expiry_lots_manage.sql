@@ -17,6 +17,9 @@ declare
 begin
  select * into v from private.resolve_temp_context(p_token);
  if v.user_id is null then return jsonb_build_object('ok',false,'error','invalid_session'); end if;
+ if p_action in ('save','remove') and not private.management_has_permission(p_token,'stock.adjust') then
+   return jsonb_build_object('ok',false,'error','permission_denied');
+ end if;
  -- A filial ativa da sessão é o escopo de escrita, nunca um tenant/branch vindo do cliente.
  v_branch:=v.branch_id;
  if v_branch is null then return jsonb_build_object('ok',false,'error','branch_required'); end if;
