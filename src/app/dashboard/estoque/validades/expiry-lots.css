@@ -12,3 +12,12 @@
 .lot-table-wrap{overflow:auto}.lot-table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}.lot-table th{background:#f7f4fb;color:#756b82;font-weight:700;font-size:11px;padding:12px;white-space:nowrap}.lot-table td{padding:12px;border-bottom:1px solid #f1edf6;color:#393046}.lot-table td b{display:block}.lot-table td small{display:block;color:#968a9d;margin-top:3px}.lot-status{display:inline-flex;padding:5px 9px;border-radius:9px;background:#f1ebfa;color:#754bc6;font-size:11px;white-space:nowrap}.lot-status.expired{background:#fff0f0;color:#b7354b}.lot-status.soon{background:#fff4e0;color:#a56610}.lot-row-actions{display:flex;gap:7px}.lot-row-actions button{border:1px solid #ddd1ed;background:#fff;color:#734dc1;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:12px}.lot-row-actions button:disabled{opacity:.55;cursor:not-allowed}.lot-empty{text-align:center;padding:28px!important;color:#90849c!important}
 @media(max-width:1120px){.lot-summary{grid-template-columns:repeat(3,minmax(0,1fr))}.lot-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.lot-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.lot-form{grid-template-columns:1fr}.lot-filters{flex-direction:column}.lot-filters select{max-width:none}.lot-panel{padding:13px}}
+
+.lot-origin{min-width:210px;margin:4px 0;padding:6px 8px;border-left:3px solid #9878d4;background:#faf7fe;border-radius:0 7px 7px 0}.lot-origin b{font-size:12px;color:#6c44af}.lot-origin small{display:block;max-width:280px;overflow-wrap:anywhere;font-size:10px;color:#81708f}
+.lot-manual-panel{padding:18px;margin-bottom:16px;border:1px solid #d9c9ef;background:#fbf8ff;border-radius:14px}.lot-manual-panel h3{margin:0 0 6px;color:#56358e}.lot-manual-panel p{font-size:12px;color:#6f6080}.lot-manual-fields{display:grid;grid-template-columns:1fr 2fr;gap:12px;margin-bottom:14px}.lot-manual-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:#56476c}.lot-manual-fields input{height:40px;border:1px solid #d6c8e9;border-radius:9px;padding:8px 12px;background:#fff;color:#352a42}
+@media(max-width:650px){.lot-manual-fields{grid-template-columns:1fr}}
+
+.lot-manual-fields select{height:40px;width:100%;min-width:0;border:1px solid #d6c8e9;border-radius:9px;padding:8px 12px;background:#fff;color:#352a42}
+.lot-pending{border-color:#ead09c;background:#fffcf6}
+.lot-pending .lot-section-heading span{color:#a46b19}
+.lot-pending .lot-section-heading h2{color:#654b21}
