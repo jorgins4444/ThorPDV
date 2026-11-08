@@ -13,6 +13,7 @@ export default async function StockPage() {
   return <AdvancedShell title="Gestão de Estoque" subtitle="Movimentações e saldos separados por loja e por estoque físico." activePath="/dashboard/estoque">
     <div className="erp-stock-hub-links">
       <Link className="erp-primary" href="/dashboard/estoque/locais">Locais de Estoque</Link>
+      <Link className="erp-ghost" href="/dashboard/estoque/validades">Lotes e Validades</Link>
       <Link className="erp-ghost" href="/dashboard/compras">Compras / Entradas</Link>
       <Link className="erp-ghost" href="/dashboard/estoque/inventario">Inventário</Link>
       <Link className="erp-ghost" href="/dashboard/estoque/transferencias">Transferências</Link>
