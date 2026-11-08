@@ -67,7 +67,7 @@ function installCatalogLocalFirstV0930(ThorAgent, Store) {
     ).all(limit).map(row=>({...row,payload:JSON.parse(row.payload)}));
   };
   Store.prototype.catalogHistory = function(limit=50) {
-    return this.db.prepare('select event_id,kind,state,error,attempts,created_at,updated_at from catalog_outbox order by created_at desc,rowid desc limit ?').all(limit);
+    return this.db.prepare('select event_id,kind,payload,state,error,attempts,created_at,updated_at from catalog_outbox order by created_at desc,rowid desc limit ?').all(limit);
   };
   Store.prototype.catalogSetState = function(eventId, state, error='') {
     this.db.prepare('update catalog_outbox set state=?,error=?,attempts=attempts+1,updated_at=? where event_id=?')
