@@ -16,7 +16,13 @@ const errors={
   reason_required:'Informe o motivo do ajuste de estoque.',
   category_not_found:'A categoria precisa estar cadastrada anteriormente no ThorGestão.',
   product_not_found:'Produto não localizado.',
-  catalog_service_unavailable:'Serviço de sincronização temporariamente indisponível.'
+  catalog_service_unavailable:'Serviço de sincronização temporariamente indisponível.',
+  catalog_feature_not_enabled:'Envio de cadastros e estoque desabilitado no servidor (configuração THORPDV_CATALOG_MUTATIONS_ENABLED).',
+  operator_not_authorized:'Operador não autorizado pelo servidor.',
+  price_conflict:'O preço foi alterado no Gestão; sincronize os produtos antes de tentar novamente.',
+  product_id_exists:'O produto já existe no servidor.',
+  invalid_quantity:'Quantidade inválida.',
+  sync_in_progress:'Uma sincronização já está em andamento.'
 };
 let panel=null, tab='customers', search='', products=[], customers=[], busy=false, selected=null, onCustomerSaved=null, requestedProductId=null;
 const title={customers:'Novo Cliente',products:'Ajustar Preço / Estoque',create:'Cadastrar Produto',history:'Sincronização'};
@@ -125,14 +131,44 @@ function renderBody(){
     body.querySelectorAll('[data-cl930-price]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Price,'product_price'));
     body.querySelectorAll('[data-cl930-stock]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Stock,'stock_adjust'));
   }else if(tab==='history'){
-    body.innerHTML='<p>Consultando registros locais...</p>';
+    body.innerHTML='<p>Consultando histórico de sincronização...</p>';
     window.thor.catalogStatus().then(rows=>{
       if(tab!=='history'||!panel)return;
-      body.innerHTML=`<div class="cl930-actions"><button id="cl930ForceSync" class="cl930-primary">Sincronizar agora</button><button id="cl930Reload">Atualizar</button></div><div class="cl930-list">${rows.map(r=>`<article><div><b>${esc({customer_save:'Cliente',product_create:'Novo produto',product_price:'Preço de venda',stock_adjust:'Ajuste de estoque'}[r.kind]||r.kind)}</b><small>${esc(r.created_at)} • ${esc(r.error||'')}</small></div><strong>${esc({pending:'Pendente',retry:'Tentando novamente',synced:'Sincronizado',rejected:'Rejeitado'}[r.state]||r.state)}</strong>${r.state==='rejected'?`<button data-cl930-retry="${esc(r.event_id)}">Reenviar</button><button data-cl930-discard="${esc(r.event_id)}">Descartar</button>`:''}</article>`).join('')||'<p>Nenhuma alteração local registrada.</p>'}</div>`;
-      body.querySelector('#cl930ForceSync').onclick=async()=>{message('Solicitando envio...');try{const r=await window.thor.catalogSync();message(r.ok?'Envio concluído. Confira os estados abaixo.':'Existem operações pendentes ou rejeitadas.',r.ok?'good':'bad');renderBody();}catch(e){message(err(e),'bad');}};
+      rows=Array.isArray(rows)?rows:[];
+      const counts={synced:0,pending:0,retry:0,rejected:0};
+      rows.forEach(r=>{if(Object.hasOwn(counts,r.state))counts[r.state]++;});
+      const labels={customer_save:'Cadastro de cliente',product_create:'Novo produto',product_price:'Alteração de preço',stock_adjust:'Ajuste de estoque'};
+      const states={pending:'Pendente',retry:'Falha temporária / aguardando reenvio',synced:'Sucesso — recebido pelo servidor',rejected:'Falha — rejeitado pelo servidor',discarded:'Descartado'};
+      body.innerHTML=`<div class="cl930-actions"><button id="cl930ForceSync" class="cl930-primary">Tentar sincronizar novamente</button><button id="cl930Reload">Atualizar histórico</button></div>
+        <p class="cl930-note">Últimas ${rows.length} operações deste caixa. Sucesso indica confirmação da API; falhas exibem o motivo informado pelo servidor. Não repita ajustes de estoque manualmente.</p>
+        <div class="cl930-actions"><strong>Sucesso: ${counts.synced}</strong><strong>Pendentes: ${counts.pending}</strong><strong>Aguardando reenvio: ${counts.retry}</strong><strong>Falhas: ${counts.rejected}</strong></div>
+        <div class="cl930-list">${rows.map(r=>{
+          let payload={};try{payload=typeof r.payload==='string'?JSON.parse(r.payload):(r.payload||{});}catch{}
+          const details=[payload.name,payload.sku,payload.id].filter(Boolean).slice(0,2).join(' • ');
+          const reason=r.error?err(r.error):'Nenhum erro informado';
+          const canRetry=r.state==='rejected';
+          return `<article><div><b>${esc(labels[r.kind]||r.kind)}</b><small>${esc(details)} • ${esc(r.created_at||'Data indisponível')}</small><small><b>${esc(states[r.state]||r.state)}</b></small>${r.error?`<small>Motivo: ${esc(reason)} (${esc(r.error)})</small>`:''}</div><div class="cl930-actions">${canRetry?`<button data-cl930-retry="${esc(r.event_id)}">Reenviar</button><button data-cl930-discard="${esc(r.event_id)}">Descartar</button>`:''}</div></article>`;
+        }).join('')||'<p>Nenhuma operação de cadastro ou estoque registrada neste caixa.</p>'}</div>`;
+      body.querySelector('#cl930ForceSync').onclick=async()=>{
+        message('Tentando enviar operações pendentes...');
+        try{
+          const result=await window.thor.catalogSync();
+          message(result?.ok?'Tentativa de sincronização concluída. Confira o status de cada operação.':err(result?.error||'Ainda existem operações não confirmadas.'),result?.ok?'good':'bad');
+        }catch(e){message(err(e),'bad');}
+        renderBody();
+      };
       body.querySelector('#cl930Reload').onclick=()=>renderBody();
-      body.querySelectorAll('[data-cl930-retry]').forEach(b=>b.onclick=async()=>{try{await window.thor.catalogRetry(b.dataset.cl930Retry);message('Reenvio autorizado; acompanhamento na fila.','good');renderBody();}catch(e){message(err(e),'bad');}});
-      body.querySelectorAll('[data-cl930-discard]').forEach(b=>b.onclick=async()=>{if(!window.confirm('Descartar esta operação rejeitada e liberar a fila? O registro de auditoria será mantido.'))return;try{await window.thor.catalogDiscard(b.dataset.cl930Discard);message('Operação descartada; fila liberada.','good');renderBody();}catch(e){message(err(e),'bad');}});
+      body.querySelectorAll('[data-cl930-retry]').forEach(button=>button.onclick=async()=>{
+        button.disabled=true;
+        try{await window.thor.catalogRetry(button.dataset.cl930Retry);message('Reenvio solicitado. Verifique o status atualizado.','good');}
+        catch(e){message(err(e),'bad');}
+        renderBody();
+      });
+      body.querySelectorAll('[data-cl930-discard]').forEach(button=>button.onclick=async()=>{
+        if(!window.confirm('Descartar esta operação rejeitada? Ela NÃO será enviada ao ThorGestão. Confirme apenas após verificar os dados.'))return;
+        try{await window.thor.catalogDiscard(button.dataset.cl930Discard);message('Operação descartada.','good');renderBody();}
+        catch(e){message(err(e),'bad');}
+      });
     }).catch(e=>message(err(e),'bad'));
   }
 }
