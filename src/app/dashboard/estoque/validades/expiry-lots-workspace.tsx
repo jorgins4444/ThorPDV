@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo,useState,type FormEvent } from 'react';
-import { expiryLotsLoad,expiryLotsSave,expiryLotManualDecrement,expiryLotTrace } from './actions';
+import { expiryLotsLoad,expiryLotsSave,expiryLotManualDecrement,expiryLotTrace,saleLotPending,saleLotManualAssign } from './actions';
 
 type Row=Record<string,unknown>;
 type Result={ok?:boolean;error?:string;lots?:Row[];products?:Row[];branch_id?:string};
@@ -9,9 +9,11 @@ const number=(value:unknown)=>new Intl.NumberFormat('pt-BR',{maximumFractionDigi
 const formatDate=(value:unknown)=>{const iso=String(value??'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return '—';const [y,m,d]=iso.split('-');return `${d}/${m}/${y}`;};
 const classification=(days:number)=>days<0?'Vencido':days<=30?'Até 30 dias':days<=45?'31–45 dias':days<=60?'46–60 dias':days<=90?'61–90 dias':'Mais de 90 dias';
 const initialForm={id:'',product_id:'',lot_number:'',expiry_date:'',quantity:''};
-export function ExpiryLotsWorkspace({initial,initialTraces=[]}:{initial:Result;initialTraces?:Row[]}){
+export function ExpiryLotsWorkspace({initial,initialTraces=[],initialPending=[]}:{initial:Result;initialTraces?:Row[];initialPending?:Row[]}){
  const [data,setData]=useState<Result>(initial),[form,setForm]=useState(initialForm);
  const [traces,setTraces]=useState<Row[]>(initialTraces);
+ const [pending,setPending]=useState<Row[]>(initialPending);
+ const [assignSaleItem,setAssignSaleItem]=useState(''),[assignLot,setAssignLot]=useState(''),[assignQty,setAssignQty]=useState('');
  const [manualLotId,setManualLotId]=useState(''),[manualQuantity,setManualQuantity]=useState(''),[manualReason,setManualReason]=useState('');
  const [busy,setBusy]=useState(false),[message,setMessage]=useState(''),[search,setSearch]=useState(''),[group,setGroup]=useState('all');
  const lots=useMemo(()=>Array.isArray(data.lots)?data.lots:[],[data.lots]);
@@ -25,7 +27,7 @@ export function ExpiryLotsWorkspace({initial,initialTraces=[]}:{initial:Result;i
   const d=daysTo(row.expiry_date);
   return group==='all'||(group==='expired'&&d<0)||(group==='30'&&d>=0&&d<=30)||(group==='45'&&d>30&&d<=45)||(group==='60'&&d>45&&d<=60)||(group==='90'&&d>60&&d<=90)||(group==='90plus'&&d>90);
  });
- async function reload(){const [result,traceResult]=await Promise.all([expiryLotsLoad(),expiryLotTrace()]);if(result.ok)setData(result);else setMessage(String(result.error??'Não foi possível atualizar.'));if(traceResult.ok)setTraces(traceResult.traces??[]);}
+ async function reload(){const [result,traceResult,pendingResult]=await Promise.all([expiryLotsLoad(),expiryLotTrace(),saleLotPending()]);if(result.ok)setData(result);else setMessage(String(result.error??'Não foi possível atualizar.'));if(traceResult.ok)setTraces(traceResult.traces??[]);if(pendingResult.ok)setPending(pendingResult.pending??[]);}
  async function save(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
   if(!form.product_id||!form.lot_number.trim()||!form.expiry_date||!form.quantity){setMessage('Preencha os campos obrigatórios.');return;}
@@ -53,6 +55,20 @@ export function ExpiryLotsWorkspace({initial,initialTraces=[]}:{initial:Result;i
    await reload();setMessage('Baixa manual registrada com justificativa e histórico.');
   }catch{setMessage('Não foi possível registrar a baixa manual.');}finally{setBusy(false);}
  }
+ async function assignPending(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  const qty=Number(assignQty);
+  if(!assignSaleItem||!assignLot||!Number.isFinite(qty)||qty<=0){setMessage('Informe lote e quantidade para a baixa da venda.');return;}
+  setBusy(true);setMessage('');
+  try{
+   const result=await saleLotManualAssign(assignSaleItem,assignLot,qty);
+   if(!result.ok){setMessage('Baixa da venda não concluída: '+String(result.error??'erro'));return;}
+   setAssignSaleItem('');setAssignLot('');setAssignQty('');
+   await reload();setMessage('Lote atribuído à venda. Pendência de rastreabilidade atualizada.');
+  }catch{setMessage('Falha ao atribuir lote à venda.');}finally{setBusy(false);}
+ }
+ const selectedGap=pending.find(r=>String(r.sale_item_id)===assignSaleItem);
+ const candidateLots=active.filter(l=>String(l.product_id)===String(selectedGap?.product_id)&&daysTo(l.expiry_date)>=0);
  const purchaseTraces=(id:unknown)=>{const record=traces.find(t=>String(t.lot_id)===String(id));return Array.isArray(record?.purchases)?record.purchases as Row[]:[];};
  const change=(key:keyof typeof initialForm,value:string)=>setForm(prev=>({...prev,[key]:value}));
  const alerts=[{title:'Vencidos',count:active.filter(r=>daysTo(r.expiry_date)<0).length,className:'expired'},
@@ -64,6 +80,17 @@ export function ExpiryLotsWorkspace({initial,initialTraces=[]}:{initial:Result;i
  return <div className="lot-workspace">
   {!data.ok?<div className="lot-notice">Não foi possível consultar lotes: {String(data.error??'Verifique a migração no Supabase.')}</div>:null}
   <section className="lot-summary">{alerts.map(a=><div key={a.title} className={`lot-summary-card ${a.className}`}><span>{a.title}</span><strong>{a.count}</strong><small>Lotes com saldo</small></div>)}</section>
+  {pending.length>0?<section className="lot-panel lot-pending">
+   <div className="lot-section-heading"><div><span>BAIXA AUTOMÁTICA FEFO</span><h2>{pending.length} venda(s) com saldo de lote não identificado</h2><p>As saídas foram registradas, mas não havia saldo suficiente de lote válido para rastrear toda a quantidade. Selecione manualmente o lote correto, sem alterar novamente o estoque físico.</p></div></div>
+   <div className="lot-table-wrap"><table className="lot-table"><thead><tr><th>Venda</th><th>Produto</th><th>Quantidade pendente</th><th>Ação</th></tr></thead><tbody>{pending.map(row=><tr key={String(row.sale_item_id)}><td>Nº {String(row.sale_number??'—')}</td><td>{String(row.product??'Produto')}</td><td>{number(row.untracked_quantity)}</td><td><button type="button" className="erp-ghost" onClick={()=>{setAssignSaleItem(String(row.sale_item_id));setAssignLot('');setAssignQty(String(row.untracked_quantity));}}>Escolher lote</button></td></tr>)}</tbody></table></div>
+   {assignSaleItem?<form onSubmit={assignPending} className="lot-manual-panel"><h3>Vincular lote à venda nº {String(selectedGap?.sale_number??'')}</h3>
+    <div className="lot-manual-fields">
+     <label>Lote válido com saldo<select required value={assignLot} onChange={e=>setAssignLot(e.target.value)}><option value="">Selecione…</option>{candidateLots.map(l=><option key={String(l.id)} value={String(l.id)}>{String(l.lot_number)} · vence {formatDate(l.expiry_date)} · saldo {number(l.quantity)}</option>)}</select></label>
+     <label>Quantidade para alocar<input required type="number" min="0.0001" step="0.0001" max={Number(selectedGap?.untracked_quantity??0)} value={assignQty} onChange={e=>setAssignQty(e.target.value)}/></label>
+    </div><div className="lot-row-actions"><button className="erp-primary" type="submit" disabled={busy||!candidateLots.length}>{busy?'Registrando…':'Confirmar lote na venda'}</button><button className="erp-ghost" type="button" onClick={()=>setAssignSaleItem('')}>Cancelar</button></div>
+    {!candidateLots.length?<p>Não há lotes válidos com saldo para esse produto. Regularize o cadastro antes da atribuição.</p>:null}
+   </form>:null}
+  </section>:null}
   <section className="lot-panel"><div className="lot-section-heading"><div><span>CADASTRO POR LOTE</span><h2>{form.id?'Editar lote':'Cadastrar lote e validade'}</h2><p>A validade é cadastrada individualmente por produto e lote. O saldo aqui não movimenta o estoque físico.</p></div></div>
    <form className="lot-form" onSubmit={save}>
     <label>Produto<select required value={form.product_id} onChange={e=>change('product_id',e.target.value)}><option value="">Selecione um produto…</option>{products.map(p=><option key={String(p.id)} value={String(p.id)}>{String(p.name)} · {String(p.sku??'Sem código')} · estoque {number(p.stock)}</option>)}</select></label>
