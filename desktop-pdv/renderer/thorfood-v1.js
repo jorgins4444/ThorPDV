@@ -1,6 +1,7 @@
 (function(){
 'use strict';
 const KEY='thorfood.prototype.v1';
+window.ThorFoodDemo={list:()=>{try{return JSON.parse(sessionStorage.getItem(KEY)||'{}').tables?.filter(t=>t.status==='occupied')||[]}catch{return []}},open:(id)=>{window.dispatchEvent(new CustomEvent('thorfood:open',{detail:{id}}))}};
 const sample=Array.from({length:20},(_,i)=>({id:i+1,name:'Mesa '+String(i+1).padStart(2,'0'),status:'free',items:[],openedAt:null}));
 let state={tables:sample,selected:1,filter:'all',search:'',view:'tables',history:[]};
 try{const saved=JSON.parse(sessionStorage.getItem(KEY)||'null');if(saved&&Array.isArray(saved.tables))state={...state,...saved,history:Array.isArray(saved.history)?saved.history:[],view:'tables'};}catch{}
@@ -36,6 +37,7 @@ root.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const p=catalog[Nu
 root.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{t.items.splice(Number(b.dataset.remove),1);save();render()});
 root.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{switch(b.dataset.action){case 'open':t.status='occupied';t.openedAt=new Date().toISOString();break;case 'transfer':{const dest=Number(prompt('Transferir comanda para qual número de mesa?'));const other=state.tables.find(x=>x.id===dest);if(!other||other.id===t.id||other.status!=='free'){alert('Selecione outra mesa livre.');return;}other.status='occupied';other.items=t.items;other.openedAt=t.openedAt;t.status='free';t.items=[];t.openedAt=null;state.selected=other.id;break;}case 'split':{const people=Number(prompt('Dividir igualmente entre quantas pessoas?'));if(!Number.isInteger(people)||people<1||people>100)return;alert('Simulação: '+people+' parcela(s) de aproximadamente '+money(total(t)/people)+'. Nenhum pagamento será registrado.');return;}case 'finish':if(!confirm('Encerrar somente esta comanda de demonstração?'))return;state.history.push({table:t.name,total:total(t),closedAt:new Date().toISOString()});t.status='free';t.items=[];t.openedAt=null;break;case 'reset':if(!confirm('Limpar todas as comandas demonstrativas?'))return;state.tables=JSON.parse(JSON.stringify(sample));state.history=[];break;case 'close':root.remove();root=null;return;}save();render()})
 }
+window.addEventListener('thorfood:open',e=>{if(Number.isInteger(Number(e.detail?.id))){state.selected=Number(e.detail.id);state.view='tables';save();if(!root)open();else render();}});
 function open(){if(root){root.remove();root=null;return}root=document.createElement('div');root.id='thorfood-prototype';document.body.appendChild(root);render()}
 function install(){if(document.querySelector('#thorfood-launch'))return;const b=document.createElement('button');b.id='thorfood-launch';b.type='button';b.textContent='🍽 ThorFood · Mesas';b.title='Abrir protótipo de mesas e comandas';b.onclick=open;document.body.appendChild(b)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
