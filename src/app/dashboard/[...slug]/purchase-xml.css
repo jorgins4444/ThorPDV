@@ -120,3 +120,44 @@
   .pxml-price-card>div:not(.pxml-price-name),.pxml-price-card label{padding:9px 0 0;border-left:0;border-top:1px solid #edf1f5}
   .pxml-review-grid{grid-template-columns:1fr}
 }
+
+/* Entrada XML: elimina ornamentos circulares/ovais sobre os dados.
+   Mantém apenas os indicadores pequenos das etapas e de sucesso. */
+.pxml .pxml-card::before,
+.pxml .pxml-card::after,
+.pxml .pxml-stage::before,
+.pxml .pxml-stage::after,
+.pxml .pxml-summarybar::before,
+.pxml .pxml-summarybar::after,
+.pxml .pxml-nfe-overview::before,
+.pxml .pxml-nfe-overview::after,
+.pxml .pxml-review-grid::before,
+.pxml .pxml-review-grid::after,
+.pxml .pxml-price-card::before,
+.pxml .pxml-price-card::after,
+.pxml .pxml-branch-lock::before,
+.pxml .pxml-branch-lock::after {
+  content: none !important;
+  display: none !important;
+}
+.pxml .pxml-card,
+.pxml .pxml-stage,
+.pxml .pxml-price-card,
+.pxml .pxml-review-grid > div,
+.pxml .pxml-nfe-overview > div {
+  background-image: none !important;
+}
+.pxml .pxml-summarybar b,
+.pxml .pxml-summarybar strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+.pxml .pxml-title,
+.pxml .pxml-stage-head,
+.pxml .pxml-summarybar,
+.pxml .pxml-nfe-overview,
+.pxml .pxml-review-grid {
+  position: relative;
+  z-index: 1;
+}
