@@ -164,6 +164,8 @@ export function PurchaseXmlWorkspace({
   const [registerLots,setRegisterLots]=useState(false);
   const [costMode,setCostMode]=useState<'gross'|'net'|'custom'>('gross');
   const [deductIcms,setDeductIcms]=useState(false);
+  const [confirmedFiscalCredit,setConfirmedFiscalCredit]=useState(false);
+  const [applyCalculatedCost,setApplyCalculatedCost]=useState(false);
   const [includeFreight,setIncludeFreight]=useState(true);
   const [includeInsurance,setIncludeInsurance]=useState(true);
   const [includeOther,setIncludeOther]=useState(true);
@@ -191,7 +193,7 @@ export function PurchaseXmlWorkspace({
   const branchCnpjReady=expectedRecipient.length===14;
 
   function resetDraft(keepMessage=false){
-    setCostMode('gross');setDeductIcms(false);setIncludeFreight(true);setIncludeInsurance(true);setIncludeOther(true);
+    setCostMode('gross');setDeductIcms(false);setConfirmedFiscalCredit(false);setApplyCalculatedCost(false);setIncludeFreight(true);setIncludeInsurance(true);setIncludeOther(true);
     setNfe(null);setFileName('');setSupplierId('');setItems([]);setInstallments([]);setNotes('');
     setCategoryId(text(defaultCategory?.id));
     setAccountId(text(postingAccounts.find(a=>text(a.id)===text(defaultCategory?.default_chart_account_id))?.id??postingAccounts[0]?.id));
@@ -294,6 +296,8 @@ export function PurchaseXmlWorkspace({
     (costMode!=='gross'&&deductIcms?nfe.totals.icms:0)
   ):0;
   const totalItemValue=items.reduce((sum,item)=>sum+item.netTotal,0);
+  const fiscalCostValid=totalItemValue+fiscalAdjustment>=0&&(!deductIcms||confirmedFiscalCredit);
+  const calculatedCostTotal=totalItemValue+fiscalAdjustment;
   const unitCost=(i:ReviewItem)=>{const q=i.quantity*Math.max(i.conversionFactor,0);const allocation=totalItemValue>0?fiscalAdjustment*i.netTotal/totalItemValue:0;return q>0?Math.max(0,(i.netTotal+allocation)/q):0};
   const supplierReady=Boolean(nfe&&supplierId);
   const productsReady=items.length>0&&items.every(i=>(i.createProduct||Boolean(i.productId))&&i.conversionFactor>0&&stockQty(i)>0&&unitCost(i)>=0&&Boolean(i.stockUnit));
@@ -344,7 +348,7 @@ export function PurchaseXmlWorkspace({
   }
 
   async function finish(){
-    if(!nfe||!ready||!lotsValid||completed)return;
+    if(!nfe||!ready||!lotsValid||completed||!fiscalCostValid)return;
     setSaving(true);setMessage('');
     const r=await purchaseXmlImportWithLots({
       lot_entries:registerLots?lotRows.map(l=>({...l,quantity:num(l.quantity)})):[],
@@ -360,9 +364,9 @@ export function PurchaseXmlWorkspace({
         product_id:i.createProduct?null:i.productId,create_product:i.createProduct,
         source_item_no:i.itemNo,source_code:i.code,source_ean:i.ean,source_name:i.name,source_unit:i.unit,
         source_quantity:i.quantity,source_unit_cost:i.unitPrice,source_ncm:i.ncm,source_cest:i.cest,source_cfop:i.cfop,
-        stock_unit:i.stockUnit,conversion_factor:i.conversionFactor,quantity:stockQty(i),unit_cost:i.netTotal/Math.max(stockQty(i),0.000001),sale_price:i.salePrice
+        stock_unit:i.stockUnit,conversion_factor:i.conversionFactor,quantity:stockQty(i),unit_cost:applyCalculatedCost?unitCost(i):i.netTotal/Math.max(stockQty(i),0.000001),sale_price:i.salePrice
       })),
-      xml_metadata:{cost_simulation:{mode:costMode,deduct_icms:deductIcms,include_freight:includeFreight,include_insurance:includeInsurance,include_other:includeOther,estimated_total:totalItemValue+fiscalAdjustment},
+      xml_metadata:{cost_simulation:{apply_calculated_cost:applyCalculatedCost,confirmed_fiscal_credit:confirmedFiscalCredit,mode:costMode,deduct_icms:deductIcms,include_freight:includeFreight,include_insurance:includeInsurance,include_other:includeOther,estimated_total:totalItemValue+fiscalAdjustment},
         file_name:fileName,raw_xml:nfe.rawXml,ide:nfe.ide,totals:nfe.totals,supplier:nfe.supplier,
         destination:nfe.destination,transport:nfe.transport,payments:nfe.payments,imported_from:'thorgestao_purchase_xml'
       },
@@ -506,19 +510,23 @@ export function PurchaseXmlWorkspace({
           <div>Total NF-e <b>{money(nfe.totals.invoice)}</b></div>
         </div>
         <label>Modo de simulação
-          <select value={costMode} onChange={e=>{const mode=e.target.value as 'gross'|'net'|'custom';setCostMode(mode);setDeductIcms(false)}}>
+          <select value={costMode} onChange={e=>{const mode=e.target.value as 'gross'|'net'|'custom';setCostMode(mode);setDeductIcms(false);setConfirmedFiscalCredit(false);setApplyCalculatedCost(false)}}>
             <option value="gross">Bruto — sem dedução de crédito tributário</option>
             <option value="net">Líquido — créditos confirmados</option>
             <option value="custom">Personalizado — selecionar componentes</option>
           </select>
         </label>
         <div className="pxml-fiscal-options">
-          {costMode!=='gross'&&<label><input type="checkbox" checked={deductIcms} onChange={e=>setDeductIcms(e.target.checked)}/> Simular dedução do ICMS recuperável (confirmar com a contabilidade)</label>}
+          {costMode!=='gross'&&<label><input type="checkbox" checked={deductIcms} onChange={e=>{setDeductIcms(e.target.checked);setConfirmedFiscalCredit(false);setApplyCalculatedCost(false)}}/> Simular dedução do ICMS recuperável (confirmar com a contabilidade)</label>}
           <label><input type="checkbox" checked={includeFreight} onChange={e=>setIncludeFreight(e.target.checked)}/> Ratear frete</label>
           <label><input type="checkbox" checked={includeInsurance} onChange={e=>setIncludeInsurance(e.target.checked)}/> Ratear seguro</label>
           <label><input type="checkbox" checked={includeOther} onChange={e=>setIncludeOther(e.target.checked)}/> Ratear despesas acessórias</label>
         </div>
-        <p><strong>Custo simulado total: {money(Math.max(0,totalItemValue+fiscalAdjustment))}</strong>. DIFAL, ICMS-ST e IPI exigem classificação por produto; valores já incorporados não devem ser somados novamente.</p>
+        <p><strong>Custo calculado total: {money(calculatedCostTotal)}</strong>. DIFAL, ICMS-ST e IPI exigem classificação por produto; valores já incorporados não devem ser somados novamente.</p>
+        {deductIcms&&<label><input type="checkbox" checked={confirmedFiscalCredit} onChange={e=>{setConfirmedFiscalCredit(e.target.checked);setApplyCalculatedCost(false)}}/> Confirmo que o crédito de ICMS é permitido e foi validado pela contabilidade.</label>}
+        {!fiscalCostValid&&<p role="alert" style={{color:'#b4232c'}}>Custo negativo ou crédito não confirmado. Revise os parâmetros antes de prosseguir.</p>}
+        <label><input type="checkbox" checked={applyCalculatedCost} disabled={!fiscalCostValid} onChange={e=>setApplyCalculatedCost(e.target.checked)}/> Aplicar o custo calculado aos itens enviados para importação (requer backend compatível e homologação).</label>
+        <p>Quando desmarcado, o custo persistido usa o valor líquido dos produtos, sem os ajustes simulados. Confira a gravação real após a importação: o servidor pode recalcular o custo.</p>
       </div>
       <div className="pxml-price-grid">
         {items.map((item,index)=>{
@@ -565,7 +573,7 @@ export function PurchaseXmlWorkspace({
       </div>
       <div className="pxml-nav">
         <button className="pxml-secondary" type="button" onClick={()=>go(3)}>Voltar</button>
-        <button className="pxml-primary" type="button" disabled={!financeReady} onClick={next}>Revisar e confirmar</button>
+        <button className="pxml-primary" type="button" disabled={!financeReady||!fiscalCostValid} onClick={next}>Revisar e confirmar</button>
       </div>
     </section>}
 
@@ -602,7 +610,7 @@ export function PurchaseXmlWorkspace({
         </div>
         <div className="pxml-nav">
           <button className="pxml-secondary" type="button" onClick={()=>go(4)}>Voltar</button>
-          <button className="pxml-import" disabled={!ready||!lotsValid||saving} onClick={()=>void finish()}>{saving?'Importando NF-e...':'✓ Importar nota fiscal'}</button>
+          <button className="pxml-import" disabled={!ready||!lotsValid||!fiscalCostValid||saving} onClick={()=>void finish()}>{saving?'Importando NF-e...':'✓ Importar nota fiscal'}</button>
         </div>
       </>:<div className="pxml-success">
         <span>✓</span>
