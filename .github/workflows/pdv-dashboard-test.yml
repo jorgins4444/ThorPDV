@@ -1,0 +1,51 @@
+name: ThorPDV Dashboard 0.9.33 - Instalador de Teste
+on:
+  push:
+    branches:
+      - test/dashboard-categorias-v0933
+    paths:
+      - 'desktop-pdv/**'
+      - '.github/workflows/pdv-dashboard-test.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-test:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: desktop-pdv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar sintaxe JavaScript
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path . -Recurse -Filter *.js -File | Where-Object { $_.FullName -notmatch '\\node_modules\\' -and $_.FullName -notmatch '\\dist\\' }
+          foreach ($file in $files) {
+            node --check $file.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Erro de sintaxe em $($file.FullName)" }
+          }
+      - name: Instalar dependencias
+        run: npm install
+      - name: Compilar instalador de homologacao
+        run: npm run dist:win
+      - name: Gerar checksum SHA256
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist\ThorPDV-Desktop-0.9.33-x64.exe | Select-Object -First 1
+          if (-not $exe) { throw 'Instalador nao encontrado' }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path ($exe.FullName + '.sha256') -Value ($hash + '  ' + $exe.Name) -Encoding ascii
+      - name: Disponibilizar instalador apenas como artefato de teste
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThorPDV-0.9.33-Dashboard-Teste-Windows
+          path: |
+            desktop-pdv/dist/ThorPDV-Desktop-0.9.33-x64.exe
+            desktop-pdv/dist/ThorPDV-Desktop-0.9.33-x64.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
