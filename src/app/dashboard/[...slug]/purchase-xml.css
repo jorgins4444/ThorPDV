@@ -161,3 +161,18 @@
   position: relative;
   z-index: 1;
 }
+
+/* Correção visual confirmada por captura: o painel principal estava em formato
+   de cápsula, cortando o título à esquerda. Não alterar badges ou etapas. */
+.erp-module-shell .pxml > section.pxml-card.pxml-stage,
+.erp-module-shell .pxml > section.pxml-card.pxml-upload-stage,
+.erp-module-shell .pxml > section.pxml-card.pxml-final-stage {
+  border-radius: 12px !important;
+  clip-path: none !important;
+  overflow: visible !important;
+  min-width: 0;
+}
+.erp-module-shell .pxml > section.pxml-card.pxml-stage > .pxml-stage-head {
+  padding: 24px !important;
+  margin: 0 !important;
+}
