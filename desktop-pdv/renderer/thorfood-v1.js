@@ -1,0 +1,35 @@
+(function(){
+'use strict';
+const KEY='thorfood.prototype.v1';
+const sample=Array.from({length:20},(_,i)=>({id:i+1,name:'Mesa '+String(i+1).padStart(2,'0'),status:'free',items:[],openedAt:null}));
+let state={tables:sample,selected:1,filter:'all',search:''};
+try{const saved=JSON.parse(sessionStorage.getItem(KEY)||'null');if(saved&&Array.isArray(saved.tables))state={...state,...saved};}catch{}
+const money=n=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const catalog=[{name:'Hambúrguer artesanal',price:29.9},{name:'Refrigerante lata',price:6.5},{name:'Batata frita',price:17.9},{name:'Pizza média',price:49.9},{name:'Suco natural',price:9.9},{name:'Água mineral',price:4}];
+let root=null;
+const save=()=>{try{sessionStorage.setItem(KEY,JSON.stringify(state))}catch{}};
+const selected=()=>state.tables.find(t=>t.id===state.selected);
+const total=t=>t.items.reduce((s,i)=>s+i.price*i.qty,0);
+function render(){
+if(!root)return;
+const active=state.tables.filter(t=>t.status==='occupied').length;
+const visible=state.tables.filter(t=>(state.filter==='all'||t.status===state.filter)&&t.name.toLowerCase().includes(state.search.toLowerCase()));
+const t=selected();
+root.innerHTML=`<div class="tf-shell"><header class="tf-head"><div><div class="tf-eyebrow">THORFOOD <span>• PRÉVIA DE INTERFACE</span></div><h1>Mesas & Comandas</h1><p>Salão organizado, pedidos claros e atendimento ágil.</p></div><div class="tf-head-actions"><span class="tf-demo">● Modo demonstração · sem sincronização</span><button data-action="close">Voltar ao PDV ✕</button></div></header>
+<div class="tf-stats"><div><small>MESAS CADASTRADAS</small><strong>${state.tables.length}</strong><span>Mapa do salão</span></div><div><small>EM ATENDIMENTO</small><strong>${active}</strong><span>Comandas abertas</span></div><div><small>DISPONÍVEIS</small><strong>${state.tables.length-active}</strong><span>Prontas para atender</span></div><div><small>CONSUMO EM ABERTO</small><strong>${money(state.tables.reduce((s,t)=>s+total(t),0))}</strong><span>Somente dados demonstrativos</span></div></div>
+<div class="tf-layout"><section class="tf-panel"><div class="tf-panel-title"><div><h2>Mapa do salão</h2><p>Selecione uma mesa para visualizar a comanda</p></div><button data-action="reset">Limpar demonstração</button></div><div class="tf-tools"><div class="tf-filters"><button data-filter="all" class="${state.filter==='all'?'active':''}">Todas</button><button data-filter="free" class="${state.filter==='free'?'active':''}">Livres</button><button data-filter="occupied" class="${state.filter==='occupied'?'active':''}">Ocupadas</button></div><input id="tf-search" placeholder="Buscar mesa..." value="${esc(state.search)}"></div><div class="tf-table-grid">${visible.map(a=>`<button class="tf-table ${a.status} ${state.selected===a.id?'selected':''}" data-table="${a.id}"><span class="tf-table-icon">▦</span><strong>${esc(a.name)}</strong><span class="tf-state">${a.status==='free'?'● Livre':'● Ocupada'}</span><small>${a.status==='free'?'Disponível':money(total(a))}</small></button>`).join('')||'<p>Nenhuma mesa encontrada.</p>'}</div></section>
+<aside class="tf-panel tf-order"><div class="tf-order-top"><div><small>COMANDA SELECIONADA</small><h2>${esc(t.name)}</h2><span class="tf-status ${t.status}">${t.status==='free'?'Mesa disponível':'Em atendimento'}</span></div><span class="tf-order-icon">▤</span></div>
+${t.status==='free'?'<div class="tf-empty"><span>♨</span><h3>Pronta para receber clientes</h3><p>Abra uma comanda para começar o atendimento.</p><button data-action="open">+ Abrir comanda</button></div>':`<div class="tf-items">${t.items.length?t.items.map((i,k)=>`<div class="tf-item"><div><strong>${esc(i.name)}</strong><small>${i.qty} × ${money(i.price)}</small></div><b>${money(i.price*i.qty)}</b><button data-remove="${k}" title="Remover item">×</button></div>`).join(''):'<p class="tf-no-items">Nenhum item lançado ainda.</p>'}</div><div class="tf-menu"><h3>Adicionar produto <small>Exemplos para testar a interface</small></h3><div class="tf-menu-grid">${catalog.map((p,i)=>`<button data-add="${i}"><span>${esc(p.name)}</span><b>+ ${money(p.price)}</b></button>`).join('')}</div></div><div class="tf-total"><span>Total da comanda</span><strong>${money(total(t))}</strong></div><button class="tf-close-order" data-action="finish">Encerrar comanda de demonstração</button>`}
+<div class="tf-notice">Esta etapa apresenta a navegação e as interações de mesas/comandas. Não emite NFC-e, não movimenta estoque, não grava no banco e não sincroniza com ThorGestão.</div></aside></div></div>`;
+root.querySelectorAll('[data-table]').forEach(b=>b.onclick=()=>{state.selected=Number(b.dataset.table);save();render()});
+root.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{state.filter=b.dataset.filter;save();render()});
+root.querySelector('#tf-search').oninput=e=>{state.search=e.target.value;const pos=e.target.selectionStart;render();const input=root.querySelector('#tf-search');input.focus();input.setSelectionRange(pos,pos)};
+root.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const p=catalog[Number(b.dataset.add)];const item=t.items.find(x=>x.name===p.name);if(item)item.qty++;else t.items.push({...p,qty:1});save();render()});
+root.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{t.items.splice(Number(b.dataset.remove),1);save();render()});
+root.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{switch(b.dataset.action){case 'open':t.status='occupied';t.openedAt=new Date().toISOString();break;case 'finish':if(!confirm('Encerrar somente esta comanda de demonstração?'))return;t.status='free';t.items=[];t.openedAt=null;break;case 'reset':if(!confirm('Limpar todas as comandas demonstrativas?'))return;state.tables=JSON.parse(JSON.stringify(sample));break;case 'close':root.remove();root=null;return;}save();render()}})
+}
+function open(){if(root){root.remove();root=null;return}root=document.createElement('div');root.id='thorfood-prototype';document.body.appendChild(root);render()}
+function install(){if(document.querySelector('#thorfood-launch'))return;const b=document.createElement('button');b.id='thorfood-launch';b.type='button';b.textContent='🍽 ThorFood · Mesas';b.title='Abrir protótipo de mesas e comandas';b.onclick=open;document.body.appendChild(b)}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install);else install();
+})();
