@@ -56,3 +56,11 @@ export async function pdvSetDeviceStatus(deviceId: string, status: 'offline' | '
   if (error) return { ok: false, error: error.message };
   return (data ?? { ok: false }) as Record<string, unknown>;
 }
+
+export async function pdvRemoveDevice(deviceId: string) {
+  const pToken = await token();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('erp_pdv_device_remove', { p_token: pToken, p_device_id: deviceId });
+  if (error) return { ok: false, error: error.message };
+  return (data ?? { ok: false }) as { ok: boolean; error?: string };
+}
