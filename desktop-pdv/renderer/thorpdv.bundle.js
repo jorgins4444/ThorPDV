@@ -104,14 +104,14 @@ async function boot(){
   void window.thor.recordPerformance?.('ui.boot',performance.now()-started,{enrolled:Boolean(state.status.enrolled)});
 }
 
-async function refreshStatus(){state.status=await window.thor.status();state.settings=state.status.settings||state.settings;updateTop();}
+async function refreshStatus(){const prior=state.status?.deviceAccess;const enrolled=state.status?.enrolled;state.status=await window.thor.status();state.settings=state.status.settings||state.settings;const current=state.status.deviceAccess;if(enrolled!==state.status.enrolled||prior?.allowed!==current?.allowed||prior?.reason!==current?.reason){render();return;}if(state.status.enrolled&&current?.allowed)updateTop();}
 async function refreshProducts(q=state.query){state.query=q;state.products=await window.thor.searchProducts(q);if(state.view==='sale')renderProducts();}
 async function refreshFiscalSales(q=state.fiscalQuery){state.fiscalQuery=q;state.fiscalSales=await window.thor.fiscalSales(q);if(state.view==='fiscal')renderFiscalTable();}
 function total(){return state.cart.reduce((s,i)=>s+i.quantity*i.unitPrice,0);}
 
 function render(){
   const access = state.status?.deviceAccess;
-  if (access && !access.allowed && !access.reconnectRequired) {
+  if (access && state.status?.enrolled && !access.allowed && !access.reconnectRequired) {
     const labels = { device_blocked: 'Este terminal foi bloqueado no ThorGestão.',
       license_blocked: 'A licença foi bloqueada.', license_inactive: 'A licença está inativa.',
       license_expired: 'A licença expirou.', offline_authorization_expired: 'O prazo de 12 horas de contingência offline expirou.',
