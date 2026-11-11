@@ -109,6 +109,17 @@ async function refreshFiscalSales(q=state.fiscalQuery){state.fiscalQuery=q;state
 function total(){return state.cart.reduce((s,i)=>s+i.quantity*i.unitPrice,0);}
 
 function render(){
+  const access = state.status?.deviceAccess;
+  if (access && !access.allowed && !access.reconnectRequired) {
+    const labels = { device_blocked: 'Este terminal foi bloqueado no ThorGestão.',
+      license_blocked: 'A licença foi bloqueada.', license_inactive: 'A licença está inativa.',
+      license_expired: 'A licença expirou.', offline_authorization_expired: 'O prazo de 12 horas de contingência offline expirou.',
+      device_clock_invalid: 'A data/hora do computador precisa ser corrigida.',
+      device_authorization_denied: 'A autorização do terminal foi negada.' };
+    app.innerHTML = `<main class="setup"><section class="setup-card"><div class="brand">ϟ THOR<span>PDV</span></div><h1>Operação bloqueada</h1><p class="muted">${esc(labels[access.reason] || 'A licença ou o dispositivo não está autorizado para operar.')}</p><p class="muted">Vendas e operações comerciais estão suspensas. As informações locais foram preservadas.</p><button id="accessRefresh" class="primary">Verificar novamente</button></section></main>`;
+    document.getElementById('accessRefresh').onclick = async () => { state.status = await window.thor.status(); render(); };
+    return;
+  }
   if(!state.status?.enrolled)return renderSetup();
   app.innerHTML=`<div class="shell"><header class="topbar"><div class="top-left"><div class="logo">ϟ THOR<b>PDV</b></div><span id="context"></span></div><div class="top-right"><button class="nav-button ${state.view==='sale'?'active':''}" id="navSale">Venda</button><button class="nav-button ${state.view==='fiscal'?'active':''}" id="navFiscal">Fiscal <kbd>F3</kbd></button><button class="nav-button" id="navReturn" title="Localizar venda para devolução">Devolução</button><span id="queue" class="queue"></span><span id="status" class="status"><i></i><b></b></span><span class="pdv-version-chip" title="Versão atual do ThorPDV">v${esc(state.status?.appVersion||'—')}</span><button class="secondary" id="sync">Sincronizar <kbd>F6</kbd></button><button class="secondary" id="settings">Configurações <kbd>F12</kbd></button></div></header><div id="workspace" class="workspace"></div><footer class="bottom"><span id="hotkeyHelp"></span><span id="footerSync"></span></footer></div>`;
   document.getElementById('navSale').onclick=()=>setView('sale');
