@@ -11,6 +11,7 @@ const { installDataConsistency } = require('./agent/consistency');
 const { installProfilePermissions } = require('./agent/v3-profile-permissions');
 const { installAdvancedPermissions } = require('./agent/v4-permissions');
 const { installSyncPolicy } = require('./agent/sync-policy');
+const { installDeviceAccessV133 } = require('./agent/device-access-v133');
 const { installSyncRecovery } = require('./agent/recovery');
 const { installCashClosing } = require('./agent/cash-closing');
 const { installProductionPrinting } = require('./agent/production');
@@ -38,6 +39,7 @@ installSalesOptionsV071(ThorAgent);
 installSalesSettlementV073(ThorAgent);
 installSyncPolicy(ThorAgent);
 installDailyCashV083(ThorAgent);
+installDeviceAccessV133(ThorAgent);
 
 let mainWindow;
 let agent;
