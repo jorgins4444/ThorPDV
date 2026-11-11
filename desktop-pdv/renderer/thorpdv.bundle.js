@@ -118,7 +118,7 @@ function render(){
       device_clock_invalid: 'A data/hora do computador precisa ser corrigida.',
       device_authorization_denied: 'A autorização do terminal foi negada.' };
     app.innerHTML = `<main class="setup"><section class="setup-card"><div class="brand">ϟ THOR<span>PDV</span></div><h1>Operação bloqueada</h1><p class="muted">${esc(labels[access.reason] || 'A licença ou o dispositivo não está autorizado para operar.')}</p><p class="muted">Vendas e operações comerciais estão suspensas. As informações locais foram preservadas.</p><button id="accessRefresh" class="primary">Verificar novamente</button></section></main>`;
-    document.getElementById('accessRefresh').onclick = async () => { state.status = await window.thor.status(); render(); };
+    document.getElementById('accessRefresh').onclick = async () => { state.status = await window.thor.checkDeviceAccess(); render(); };
     return;
   }
   if(!state.status?.enrolled)return renderSetup();
