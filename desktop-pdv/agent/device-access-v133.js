@@ -44,6 +44,7 @@ function installDeviceAccessV133(ThorAgent) {
           this.store.set('device_access_validated_at', String(Date.now()));
           this.store.set('device_access_last_observed_at', String(Date.now()));
           this.store.set('device_access_denied', '');
+          if (!this.sync.timer) this.sync.start();
         } else if (DENIED.has(String(result.error || ''))) {
           this.store.set('device_access_denied', String(result.error));
           this.sync.stop();
