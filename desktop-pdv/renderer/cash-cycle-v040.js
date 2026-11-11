@@ -183,7 +183,15 @@ settingsModal = async function () {
         <option value="lazy" ${settings.askCashOpening === false ? 'selected' : ''}>Não perguntar — abrir no primeiro movimento</option>
       </select>
     </div>
-    <p class="muted">No modo automático, nenhuma sessão de caixa é criada no login. A primeira venda, suprimento/sangria ou devolução em dinheiro cria o caixa com fundo R$ 0,00.</p>`;
+    <p class="muted">No modo automático, a primeira operação válida abre o caixa com fundo R$ 0,00.</p>
+    <div class="field"><label>Quando existir caixa anterior pendente de fechamento</label>
+      <select id="cash40PendingPolicy">
+        <option value="allow" ${(settings.pendingCashPolicy || 'allow') === 'allow' ? 'selected' : ''}>Permitir abrir novo caixa normalmente</option>
+        <option value="warn" ${settings.pendingCashPolicy === 'warn' ? 'selected' : ''}>Permitir abertura, mas exibir aviso</option>
+        <option value="block" ${settings.pendingCashPolicy === 'block' ? 'selected' : ''}>Exigir fechamento do caixa anterior</option>
+      </select>
+    </div>
+    <p class="muted">Caixas anteriores permanecem registrados para conferência. O bloqueio só ocorre se essa política for selecionada.</p>`;
   grid.appendChild(section);
 
   const save = m.querySelector('#saveSettings');
@@ -191,7 +199,8 @@ settingsModal = async function () {
     const originalSave = save.onclick;
     save.onclick = async (event) => {
       const askCashOpening = m.querySelector('#cash40OpeningPolicy').value === 'ask';
-      const updated = await window.thor.saveV3Settings({ askCashOpening });
+      const pendingCashPolicy = m.querySelector('#cash40PendingPolicy').value;
+      const updated = await window.thor.saveV3Settings({ askCashOpening, pendingCashPolicy });
       try { v3State().settings = { ...(v3State().settings || {}), ...updated }; } catch {}
       return originalSave?.call(save, event);
     };
