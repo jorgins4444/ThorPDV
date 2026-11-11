@@ -132,8 +132,6 @@ function installThorAgentV3(ThorAgent) {
     const operator = this.currentOperator();
     if (!operator) throw new Error('operator_required');
     if (!getPath(operator, 'permissions.sale.create', false)) throw new Error('operator_not_allowed_to_sell');
-    const cashOpenEventId = this.store.get('cash_open_event_id');
-    if (!cashOpenEventId) throw new Error('cash_not_open');
     const document = digits(consumerDocument);
     if (document && ![11, 14].includes(document.length)) throw new Error('invalid_consumer_document');
     const quote = this.quoteCheckout({ items, discount, surcharge });
