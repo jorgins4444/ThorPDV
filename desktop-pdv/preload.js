@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('thor', {
   status: () => ipcRenderer.invoke('thor:status'),
   enroll: (payload) => ipcRenderer.invoke('thor:enroll', payload),
+  checkDeviceAccess: () => ipcRenderer.invoke('thor:check-device-access'),
   sync: () => ipcRenderer.invoke('thor:sync'),
   syncDiagnostics: () => ipcRenderer.invoke('thor:sync-diagnostics'),
   performanceMetrics: (limit = 200) => ipcRenderer.invoke('thor:performance-metrics', limit),
