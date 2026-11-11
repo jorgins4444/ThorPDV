@@ -27,5 +27,3 @@ export async function purchaseXmlContext(){
 }
 export async function purchaseXmlPrecheck(accessKey:string){return rpc('erp_purchase_xml_precheck',{p_token:await token(),p_access_key:accessKey})}
 export async function purchaseXmlImport(payload:Record<string,unknown>){return rpc('erp_purchase_xml_import',{p_token:await token(),p_payload:payload})}
-
-export async function purchaseXmlImportWithLots(payload:Record<string,unknown>){return rpc('erp_purchase_xml_import_with_lots',{p_token:await token(),p_payload:payload})}

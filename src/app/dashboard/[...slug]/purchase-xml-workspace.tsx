@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChangeEvent, useMemo, useState } from 'react';
-import { purchaseXmlImportWithLots } from './purchase-actions';
+import { purchaseXmlImport } from './purchase-actions';
 
 type Row=Record<string,unknown>;
 type XmlRoot=Document|Element;
@@ -21,7 +21,6 @@ type ParsedNfe={
   rawXml:string;
 };
 type Step=0|1|2|3|4|5;
-type LotDraft={source_item_no:number;lot_number:string;expiry_date:string;quantity:string};
 
 const text=(v:unknown)=>v==null?'':String(v);
 const num=(v:unknown)=>{const n=Number(v??0);return Number.isFinite(n)?n:0};
@@ -161,16 +160,7 @@ export function PurchaseXmlWorkspace({
   const [installments,setInstallments]=useState<Installment[]>([]);
   const [message,setMessage]=useState('');
   const [saving,setSaving]=useState(false);
-  const [registerLots,setRegisterLots]=useState(false);
-  const [costMode,setCostMode]=useState<'gross'|'net'|'custom'>('gross');
-  const [deductIcms,setDeductIcms]=useState(false);
-  const [confirmedFiscalCredit,setConfirmedFiscalCredit]=useState(false);
-  const [applyCalculatedCost,setApplyCalculatedCost]=useState(false);
-  const [includeFreight,setIncludeFreight]=useState(true);
-  const [includeInsurance,setIncludeInsurance]=useState(true);
-  const [includeOther,setIncludeOther]=useState(true);
-  const [lotRows,setLotRows]=useState<LotDraft[]>([]);
-  const [completed,setCompleted]=useState<{number:string;purchaseNumber:string;installments:string;lots:number}|null>(null);
+  const [completed,setCompleted]=useState<{number:string;purchaseNumber:string;installments:string}|null>(null);
 
   const payableCategories=useMemo(()=>categories.filter(c=>c.active!==false&&['payable','both'].includes(text(c.entry_type))),[categories]);
   const postingAccounts=useMemo(()=>chartAccounts.filter(a=>a.active!==false&&a.posting!==false&&['liability','cost','expense'].includes(text(a.account_type))),[chartAccounts]);
@@ -193,12 +183,11 @@ export function PurchaseXmlWorkspace({
   const branchCnpjReady=expectedRecipient.length===14;
 
   function resetDraft(keepMessage=false){
-    setCostMode('gross');setDeductIcms(false);setConfirmedFiscalCredit(false);setApplyCalculatedCost(false);setIncludeFreight(true);setIncludeInsurance(true);setIncludeOther(true);
     setNfe(null);setFileName('');setSupplierId('');setItems([]);setInstallments([]);setNotes('');
     setCategoryId(text(defaultCategory?.id));
     setAccountId(text(postingAccounts.find(a=>text(a.id)===text(defaultCategory?.default_chart_account_id))?.id??postingAccounts[0]?.id));
     setCostCenterId(text(defaultCenter?.id));
-    setCompleted(null);setRegisterLots(false);setLotRows([]);setStep(0);
+    setCompleted(null);setStep(0);
     if(!keepMessage)setMessage('');
   }
 
@@ -251,7 +240,6 @@ export function PurchaseXmlWorkspace({
       setFileName(file.name);
       setSupplierId(sid);
       setItems(preparedItems);
-      setRegisterLots(false);setLotRows([]);
       setInstallments(parsed.installments);
       setNotes(`Entrada por XML da NF-e ${parsed.number} · chave ${parsed.key}`);
       setMessage('');
@@ -288,17 +276,7 @@ export function PurchaseXmlWorkspace({
   }
 
   const stockQty=(i:ReviewItem)=>round(i.quantity*Math.max(i.conversionFactor,0));
-  // Rateio proporcional ao valor líquido de cada item. A dedução é somente
-  // simulação até a regra fiscal/contábil ser validada no backend.
-  const fiscalAdjustment=(nfe&&items.length)?(
-    (includeFreight?nfe.totals.freight:0)+(includeInsurance?nfe.totals.insurance:0)+
-    (includeOther?nfe.totals.other:0)-
-    (costMode!=='gross'&&deductIcms?nfe.totals.icms:0)
-  ):0;
-  const totalItemValue=items.reduce((sum,item)=>sum+item.netTotal,0);
-  const fiscalCostValid=totalItemValue+fiscalAdjustment>=0&&(!deductIcms||confirmedFiscalCredit);
-  const calculatedCostTotal=totalItemValue+fiscalAdjustment;
-  const unitCost=(i:ReviewItem)=>{const q=i.quantity*Math.max(i.conversionFactor,0);const allocation=totalItemValue>0?fiscalAdjustment*i.netTotal/totalItemValue:0;return q>0?Math.max(0,(i.netTotal+allocation)/q):0};
+  const unitCost=(i:ReviewItem)=>{const q=i.quantity*Math.max(i.conversionFactor,0);return q>0?i.netTotal/q:0};
   const supplierReady=Boolean(nfe&&supplierId);
   const productsReady=items.length>0&&items.every(i=>(i.createProduct||Boolean(i.productId))&&i.conversionFactor>0&&stockQty(i)>0&&unitCost(i)>=0&&Boolean(i.stockUnit));
   const pricesReady=productsReady&&items.every(i=>i.salePrice>0);
@@ -306,16 +284,6 @@ export function PurchaseXmlWorkspace({
   const financialDiff=round((nfe?.totals.invoice??0)-financialTotal);
   const financeReady=Boolean(nfe)&&Boolean(categoryId)&&Boolean(accountId)&&Boolean(costCenterId)&&installments.length>0
     &&installments.every(i=>Boolean(i.due_date)&&i.amount>0)&&Math.abs(financialDiff)<=0.01;
-  const lotsValid=!registerLots||(items.length>0&&items.every(item=>{
-    const rows=lotRows.filter(l=>l.source_item_no===item.itemNo);
-    const sum=rows.reduce((a,l)=>a+num(l.quantity),0);
-    return rows.length>0&&rows.every(l=>l.lot_number.trim()&&l.expiry_date&&num(l.quantity)>0)&&sum<=stockQty(item)+0.0001&&Math.abs(sum-stockQty(item))<0.001;
-  }));
-  function enableLots(enabled:boolean){
-    setRegisterLots(enabled);
-    if(enabled&&lotRows.length===0)setLotRows(items.map(item=>({source_item_no:item.itemNo,lot_number:'',expiry_date:'',quantity:String(stockQty(item))})));
-  }
-  function updateLot(index:number,key:keyof LotDraft,value:string){setLotRows(rows=>rows.map((row,i)=>i===index?{...row,[key]:key==='source_item_no'?Number(value):value}:row));}
   const ready=Boolean(nfe)&&supplierReady&&pricesReady&&financeReady;
   const matchedCount=items.filter(i=>!i.createProduct&&i.productId).length;
   const newCount=items.filter(i=>i.createProduct).length;
@@ -348,10 +316,9 @@ export function PurchaseXmlWorkspace({
   }
 
   async function finish(){
-    if(!nfe||!ready||!lotsValid||completed||!fiscalCostValid)return;
+    if(!nfe||!ready||completed)return;
     setSaving(true);setMessage('');
-    const r=await purchaseXmlImportWithLots({
-      lot_entries:registerLots?lotRows.map(l=>({...l,quantity:num(l.quantity)})):[],
+    const r=await purchaseXmlImport({
       supplier_id:supplierId==='__new__'?null:supplierId,
       supplier:nfe.supplier,
       destination_document:nfe.destination.document,
@@ -364,16 +331,16 @@ export function PurchaseXmlWorkspace({
         product_id:i.createProduct?null:i.productId,create_product:i.createProduct,
         source_item_no:i.itemNo,source_code:i.code,source_ean:i.ean,source_name:i.name,source_unit:i.unit,
         source_quantity:i.quantity,source_unit_cost:i.unitPrice,source_ncm:i.ncm,source_cest:i.cest,source_cfop:i.cfop,
-        stock_unit:i.stockUnit,conversion_factor:i.conversionFactor,quantity:stockQty(i),unit_cost:applyCalculatedCost?unitCost(i):i.netTotal/Math.max(stockQty(i),0.000001),sale_price:i.salePrice
+        stock_unit:i.stockUnit,conversion_factor:i.conversionFactor,quantity:stockQty(i),unit_cost:unitCost(i),sale_price:i.salePrice
       })),
-      xml_metadata:{cost_simulation:{apply_calculated_cost:applyCalculatedCost,confirmed_fiscal_credit:confirmedFiscalCredit,mode:costMode,deduct_icms:deductIcms,include_freight:includeFreight,include_insurance:includeInsurance,include_other:includeOther,estimated_total:totalItemValue+fiscalAdjustment},
+      xml_metadata:{
         file_name:fileName,raw_xml:nfe.rawXml,ide:nfe.ide,totals:nfe.totals,supplier:nfe.supplier,
         destination:nfe.destination,transport:nfe.transport,payments:nfe.payments,imported_from:'thorgestao_purchase_xml'
       },
     });
     setSaving(false);
     if(!r.ok){setMessage(`Não foi possível importar a NF-e: ${importError(r.error)}`);return;}
-    setCompleted({number:nfe.number,purchaseNumber:text(r.number),installments:text(r.installments),lots:num(r.lots_registered)});
+    setCompleted({number:nfe.number,purchaseNumber:text(r.number),installments:text(r.installments)});
     setMessage('');
   }
 
@@ -495,39 +462,6 @@ export function PurchaseXmlWorkspace({
         <div><span>ETAPA 4 DE 6 · PRECIFICAÇÃO</span><h3>Revisar custos e definir preços de venda</h3><p>O custo vem da NF-e já convertido para a unidade de estoque. Defina o preço que ficará ativo após a entrada.</p></div>
         <span className={pricesReady?'pxml-ok':'pxml-warn'}>{pricesReady?'Preços conferidos':'Revisar preços'}</span>
       </header>
-      <div className="pxml-fiscal-cost">
-        <h4>Dados fiscais da NF-e e simulação do custo</h4>
-        <p>Valores lidos do XML. A dedução do ICMS exige confirmação do crédito pela contabilidade; o cálculo mostrado é uma simulação e não altera as regras fiscais do banco.</p>
-        <div className="pxml-fiscal-values">
-          <div>Produtos <b>{money(nfe.totals.products)}</b></div>
-          <div>Descontos <b>{money(nfe.totals.discount)}</b></div>
-          <div>ICMS destacado <b>{money(nfe.totals.icms)}</b></div>
-          <div>ICMS-ST <b>{money(nfe.totals.st)}</b></div>
-          <div>IPI <b>{money(nfe.totals.ipi)}</b></div>
-          <div>Frete <b>{money(nfe.totals.freight)}</b></div>
-          <div>Seguro <b>{money(nfe.totals.insurance)}</b></div>
-          <div>Outras despesas <b>{money(nfe.totals.other)}</b></div>
-          <div>Total NF-e <b>{money(nfe.totals.invoice)}</b></div>
-        </div>
-        <label>Modo de simulação
-          <select value={costMode} onChange={e=>{const mode=e.target.value as 'gross'|'net'|'custom';setCostMode(mode);setDeductIcms(false);setConfirmedFiscalCredit(false);setApplyCalculatedCost(false)}}>
-            <option value="gross">Bruto — sem dedução de crédito tributário</option>
-            <option value="net">Líquido — créditos confirmados</option>
-            <option value="custom">Personalizado — selecionar componentes</option>
-          </select>
-        </label>
-        <div className="pxml-fiscal-options">
-          {costMode!=='gross'&&<label><input type="checkbox" checked={deductIcms} onChange={e=>{setDeductIcms(e.target.checked);setConfirmedFiscalCredit(false);setApplyCalculatedCost(false)}}/> Simular dedução do ICMS recuperável (confirmar com a contabilidade)</label>}
-          <label><input type="checkbox" checked={includeFreight} onChange={e=>setIncludeFreight(e.target.checked)}/> Ratear frete</label>
-          <label><input type="checkbox" checked={includeInsurance} onChange={e=>setIncludeInsurance(e.target.checked)}/> Ratear seguro</label>
-          <label><input type="checkbox" checked={includeOther} onChange={e=>setIncludeOther(e.target.checked)}/> Ratear despesas acessórias</label>
-        </div>
-        <p><strong>Custo calculado total: {money(calculatedCostTotal)}</strong>. DIFAL, ICMS-ST e IPI exigem classificação por produto; valores já incorporados não devem ser somados novamente.</p>
-        {deductIcms&&<label><input type="checkbox" checked={confirmedFiscalCredit} onChange={e=>{setConfirmedFiscalCredit(e.target.checked);setApplyCalculatedCost(false)}}/> Confirmo que o crédito de ICMS é permitido e foi validado pela contabilidade.</label>}
-        {!fiscalCostValid&&<p role="alert" style={{color:'#b4232c'}}>Custo negativo ou crédito não confirmado. Revise os parâmetros antes de prosseguir.</p>}
-        <label><input type="checkbox" checked={applyCalculatedCost} disabled={!fiscalCostValid} onChange={e=>setApplyCalculatedCost(e.target.checked)}/> Aplicar o custo calculado aos itens enviados para importação (requer backend compatível e homologação).</label>
-        <p>Quando desmarcado, o custo persistido usa o valor líquido dos produtos, sem os ajustes simulados. Confira a gravação real após a importação: o servidor pode recalcular o custo.</p>
-      </div>
       <div className="pxml-price-grid">
         {items.map((item,index)=>{
           const cost=unitCost(item);
@@ -573,7 +507,7 @@ export function PurchaseXmlWorkspace({
       </div>
       <div className="pxml-nav">
         <button className="pxml-secondary" type="button" onClick={()=>go(3)}>Voltar</button>
-        <button className="pxml-primary" type="button" disabled={!financeReady||!fiscalCostValid} onClick={next}>Revisar e confirmar</button>
+        <button className="pxml-primary" type="button" disabled={!financeReady} onClick={next}>Revisar e confirmar</button>
       </div>
     </section>}
 
@@ -588,34 +522,14 @@ export function PurchaseXmlWorkspace({
           <div><span>Total NF-e</span><strong>{money(nfe.totals.invoice)}</strong><small>Financeiro: {money(financialTotal)}</small></div>
           <div><span>Classificação</span><b>{text(postingAccounts.find(a=>text(a.id)===accountId)?.code)} · {text(postingAccounts.find(a=>text(a.id)===accountId)?.name)}</b><small>{text(activeCenters.find(c=>text(c.id)===costCenterId)?.name)}</small></div>
         </div>
-        <div className="pxml-card" style={{marginTop:20,padding:18}}>
-          <label style={{display:'flex',alignItems:'center',gap:10,fontWeight:700}}>
-            <input type="checkbox" checked={registerLots} onChange={e=>enableLots(e.target.checked)}/>
-            Deseja cadastrar os lotes e validades dos produtos desta NF-e?
-          </label>
-          <p style={{fontSize:12,opacity:.78}}>Opcional. Ao ativar, informe os lotes por item da nota. As quantidades devem fechar o total de entrada na unidade de estoque. O vínculo com a NF-e será gravado junto com a compra.</p>
-          {registerLots&&<div className="pxml-table-wrap"><table>
-            <thead><tr><th>Produto / item NF-e</th><th>Lote</th><th>Validade</th><th>Quantidade no estoque</th><th>Ações</th></tr></thead>
-            <tbody>{lotRows.map((l,index)=>{const item=items.find(it=>it.itemNo===l.source_item_no);return <tr key={index}>
-              <td><b>{item?.name??'Produto'} · nº {l.source_item_no}</b><small>Entrada: {item?stockQty(item).toLocaleString('pt-BR'):0} {item?.stockUnit??''}</small></td>
-              <td><input aria-label={`Lote do item ${l.source_item_no}`} maxLength={100} value={l.lot_number} onChange={e=>updateLot(index,'lot_number',e.target.value)} placeholder="Número do lote"/></td>
-              <td><input aria-label={`Validade do item ${l.source_item_no}`} type="date" value={l.expiry_date} onChange={e=>updateLot(index,'expiry_date',e.target.value)}/></td>
-              <td><input aria-label={`Quantidade do lote do item ${l.source_item_no}`} type="number" min="0.0001" step="0.0001" value={l.quantity} onChange={e=>updateLot(index,'quantity',e.target.value)}/></td>
-              <td><button type="button" className="pxml-secondary" onClick={()=>setLotRows(rows=>rows.filter((_,i)=>i!==index))}>Remover</button></td>
-            </tr>})}</tbody>
-          </table>
-          <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:12}}>{items.map(item=><button className="pxml-secondary" type="button" key={item.itemNo} onClick={()=>setLotRows(rows=>[...rows,{source_item_no:item.itemNo,lot_number:'',expiry_date:'',quantity:''}])}>+ Lote: {item.name}</button>)}</div>
-          {!lotsValid?<p role="alert" style={{color:'#bc4c4c'}}>Confira lote, validade e total por produto: a soma precisa corresponder à entrada da NF-e.</p>:<p style={{color:'#397953'}}>Conferência de lotes concluída.</p>}
-          </div>}
-        </div>
         <div className="pxml-nav">
           <button className="pxml-secondary" type="button" onClick={()=>go(4)}>Voltar</button>
-          <button className="pxml-import" disabled={!ready||!lotsValid||!fiscalCostValid||saving} onClick={()=>void finish()}>{saving?'Importando NF-e...':'✓ Importar nota fiscal'}</button>
+          <button className="pxml-import" disabled={!ready||saving} onClick={()=>void finish()}>{saving?'Importando NF-e...':'✓ Importar nota fiscal'}</button>
         </div>
       </>:<div className="pxml-success">
         <span>✓</span>
         <h3>NF-e {completed.number} importada com sucesso</h3>
-        <p>Compra nº {completed.purchaseNumber} criada. Estoque, custos, preços e {completed.installments} título(s) a pagar foram atualizados. {completed.lots>0?`${completed.lots} lote(s) vinculados à nota e à compra.`:'Sem lotes cadastrados nesta entrada.'}</p>
+        <p>Compra nº {completed.purchaseNumber} criada. Estoque, custos, preços e {completed.installments} título(s) a pagar foram atualizados.</p>
         <div>
           <button type="button" className="pxml-primary" onClick={()=>resetDraft()}>Importar outra NF-e</button>
           <Link className="pxml-secondary" href="/dashboard/compras">Ver Compras / Entradas</Link>

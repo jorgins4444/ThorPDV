@@ -25,15 +25,6 @@ export async function dashboardLoad(start?: string, end?: string, branchId?: str
   return (data ?? { ok: false }) as Record<string, unknown>;
 }
 
-export async function inventoryIntelligenceLoad(branchId?:string){
- const token=await sessionToken();
- if(!token)return {ok:false,error:'temporary_session_required'};
- const supabase=await createClient();
- const {data,error}=await supabase.rpc('erp_inventory_intelligence',{p_token:token,p_branch:branchId||null});
- if(error)return {ok:false,error:error.message};
- return (data??{ok:false}) as Record<string,unknown>;
-}
-
 export async function dashboardPreferencesLoad(){
   const token=await sessionToken();
   if(!token)return {ok:false,error:'temporary_session_required'};

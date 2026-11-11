@@ -1,7 +1,5 @@
 'use client';
 
-import { useId } from 'react';
-
 export type Format='money'|'number'|'percent';
 export type ChartType='kpi'|'bar'|'column'|'line'|'area'|'donut'|'pie'|'table'|'gauge'|'radial'|'funnel'|'treemap'|'heatmap'|'waterfall'|'combo'|'scatter'|'radar'|'spark';
 export type Point={label:string;value:number;detail?:string;format?:Format};
@@ -19,25 +17,7 @@ function Empty(){return <div className="bi-empty">Sem dados para este período.<
 function Kpi({points,color}:{points:Point[];color:string}){if(!points.length)return <Empty/>;const total=points.reduce((s,p)=>s+p.value,0);return <div className="bi-kpi"><div className="bi-kpi-accent" style={{background:color}}/><strong>{fmt(total,points[0]?.format)}</strong><p>{points.length>1?`${points.length} pontos consolidados`:points[0]?.detail??points[0]?.label}</p></div>}
 function Bar({points,color}:{points:Point[];color:string}){const list=points.slice(0,14),max=Math.max(1,...list.map(p=>Math.abs(p.value)));if(!list.length)return <Empty/>;return <div className="bi-bars">{list.map((p,i)=><div className="bi-bar" key={`${p.label}-${i}`}><div><span>{p.label}</span><b>{display(p)}</b></div><div className="bi-track"><i style={{width:`${Math.max(2,Math.abs(p.value)/max*100)}%`,background:colorAt(color,i)}}/></div></div>)}</div>}
 function Columns({points,color}:{points:Point[];color:string}){const list=points.slice(-18),max=Math.max(1,...list.map(p=>Math.abs(p.value)));if(!list.length)return <Empty/>;return <div className="bi-columns">{list.map((p,i)=><div key={`${p.label}-${i}`} className="bi-col" title={`${p.label} · ${display(p)}`}><div><i style={{height:`${Math.max(3,Math.abs(p.value)/max*100)}%`,background:colorAt(color,i)}}/></div><span>{p.label}</span></div>)}</div>}
-function Line({points,color,area=false,spark=false}:{points:Point[];color:string;area?:boolean;spark?:boolean}){
- const gradientId=useId();
- if(!points.length)return <Empty/>;
- const list=points.slice(-30),values=list.map(p=>Number(p.value)||0);
- const min=Math.min(0,...values),max=Math.max(1,...values),range=Math.max(1,max-min);
- const w=700,h=spark?90:245,pad=spark?8:20;
- const coords=values.map((v,i)=>[list.length===1?w/2:pad+i*(w-pad*2)/(list.length-1),h-pad-(v-min)/range*(h-pad*2)] as const);
- const curve=coords.map(([x,y],i)=>i===0?`M ${x} ${y}`:`L ${x} ${y}`).join(' ');
- const fill=coords.length?`${curve} L ${coords[coords.length-1][0]} ${h-pad} L ${coords[0][0]} ${h-pad} Z`:'';
- return <div className={`bi-line ${spark?'spark':''}`}>
-  <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label="Evolução de valores">
-   <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".17"/><stop offset="1" stopColor={color} stopOpacity=".01"/></linearGradient></defs>
-   {!spark&&[0,.25,.5,.75].map(k=><line key={k} x1={pad} x2={w-pad} y1={h-pad-(h-pad*2)*k} y2={h-pad-(h-pad*2)*k} className="bi-grid-line"/>)}
-   {area?<path d={fill} fill={`url(#${gradientId})`}/>:null}
-   <path d={curve} fill="none" stroke={color} strokeWidth={spark?4:3} strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-  {!spark?<div className="bi-axis"><span>{list[0]?.label}</span><span>{list[Math.floor((list.length-1)/2)]?.label}</span><span>{list[list.length-1]?.label}</span></div>:null}
- </div>;
-}
+function Line({points,color,area=false,spark=false}:{points:Point[];color:string;area?:boolean;spark?:boolean}){if(!points.length)return <Empty/>;const values=points.map(p=>p.value),min=Math.min(0,...values),max=Math.max(1,...values),range=Math.max(1,max-min),w=700,h=spark?90:245,pad=spark?8:22;const coords=values.map((v,i)=>[points.length===1?w/2:pad+i*(w-pad*2)/(points.length-1),h-pad-(v-min)/range*(h-pad*2)] as const),poly=coords.map(([x,y])=>`${x},${y}`).join(' '),gid=`bi-${color.replace('#','')}-${points.length}-${spark?'s':'n'}`;const fill=coords.length?`M ${coords[0][0]} ${h-pad} L ${coords.map(([x,y])=>`${x} ${y}`).join(' L ')} L ${coords[coords.length-1][0]} ${h-pad} Z`:'';return <div className={`bi-line ${spark?'spark':''}`}><svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none"><defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".3"/><stop offset="1" stopColor={color} stopOpacity=".02"/></linearGradient></defs>{!spark&&[.25,.5,.75,1].map(k=><line key={k} x1={pad} x2={w-pad} y1={h-pad-(h-pad*2)*k} y2={h-pad-(h-pad*2)*k} className="bi-grid-line"/>)}{area?<path d={fill} fill={`url(#${gid})`}/>:null}<polyline points={poly} fill="none" stroke={color} strokeWidth={spark?5:4} strokeLinecap="round" strokeLinejoin="round"/></svg>{!spark?<div className="bi-axis"><span>{points[0]?.label}</span><span>{points[Math.floor(points.length/2)]?.label}</span><span>{points[points.length-1]?.label}</span></div>:null}</div>}
 function Circle({points,color,pie=false}:{points:Point[];color:string;pie?:boolean}){const list=points.filter(p=>p.value>0).slice(0,10),total=list.reduce((s,p)=>s+p.value,0);if(!total)return <Empty/>;const stops=list.map((p,i)=>{const start=list.slice(0,i).reduce((s,x)=>s+x.value,0)/total*100,end=start+p.value/total*100;return `${colorAt(color,i)} ${start}% ${end}%`}).join(',');return <div className="bi-circle-layout"><div className={`bi-donut ${pie?'pie':''}`} style={{background:`conic-gradient(${stops})`}}>{!pie?<div><b>{fmt(total,list[0]?.format)}</b><span>Total</span></div>:null}</div><div className="bi-legend">{list.map((p,i)=><div key={`${p.label}-${i}`}><i style={{background:colorAt(color,i)}}/><span>{p.label}</span><b>{display(p)}</b></div>)}</div></div>}
 function Table({points}:{points:Point[]}){if(!points.length)return <Empty/>;return <div className="bi-table">{points.slice(0,16).map((p,i)=><div key={`${p.label}-${i}`}><span>{p.label}</span><b>{display(p)}</b></div>)}</div>}
 function Gauge({points,color,radial=false}:{points:Point[];color:string;radial?:boolean}){if(!points.length)return <Empty/>;const value=points.reduce((s,p)=>s+p.value,0),max=Math.max(1,...points.map(p=>Math.abs(p.value)))*Math.max(1,points.length),pctv=Math.min(100,Math.abs(value)/max*100);return <div className={radial?'bi-radial':'bi-gauge'}><div style={{background:`conic-gradient(${color} 0 ${pctv}%,var(--bi-track) ${pctv}% 100%)`}}><span><b>{fmt(value,points[0]?.format)}</b><small>{radial?'Consolidado':'Indicador'}</small></span></div></div>}
