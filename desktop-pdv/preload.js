@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('thor', {
   setPrinter: (name) => ipcRenderer.invoke('thor:set-printer', name),
   openDrawer: () => ipcRenderer.invoke('thor:open-drawer'),
   readScale: () => ipcRenderer.invoke('thor:read-scale'),
+  readUranoPopS: (settings) => ipcRenderer.invoke('thor:read-urano-pop-s', settings),
   paymentIntegrations: () => ipcRenderer.invoke('thor:payment-integrations'),
   beginPayment: (payload) => ipcRenderer.invoke('thor:begin-payment', payload),
   printSale: (saleKey, type = 'pre_sale', reprint = false) => ipcRenderer.invoke('thor:print-sale', saleKey, type, reprint),
