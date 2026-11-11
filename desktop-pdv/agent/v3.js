@@ -18,6 +18,8 @@ function installThorAgentV3(ThorAgent) {
   ThorAgent.prototype.v3Settings = function () {
     return {
       autoOpenDrawer: this.store.get('v3_auto_open_drawer', 'false') === 'true',
+      askCashOpening: this.store.get('v3_ask_cash_opening', 'true') !== 'false',
+      pendingCashPolicy: this.store.get('v3_pending_cash_policy', 'allow'),
       drawerPrinter: this.store.get('v3_drawer_printer') || this.store.get('printer_name') || '',
       scalePort: this.store.get('v3_scale_port') || '',
       scaleBaud: Number(this.store.get('v3_scale_baud', '9600')) || 9600,
@@ -27,6 +29,11 @@ function installThorAgentV3(ThorAgent) {
   };
 
   ThorAgent.prototype.saveV3Settings = function (input = {}) {
+    if (Object.prototype.hasOwnProperty.call(input, 'askCashOpening')) this.store.set('v3_ask_cash_opening', input.askCashOpening ? 'true' : 'false');
+    if (Object.prototype.hasOwnProperty.call(input, 'pendingCashPolicy')) {
+      if (!['allow', 'warn', 'block'].includes(input.pendingCashPolicy)) throw new Error('invalid_pending_cash_policy');
+      this.store.set('v3_pending_cash_policy', input.pendingCashPolicy);
+    }
     if (Object.prototype.hasOwnProperty.call(input, 'autoOpenDrawer')) this.store.set('v3_auto_open_drawer', input.autoOpenDrawer ? 'true' : 'false');
     if (Object.prototype.hasOwnProperty.call(input, 'drawerPrinter')) this.store.set('v3_drawer_printer', input.drawerPrinter || '');
     if (Object.prototype.hasOwnProperty.call(input, 'scalePort')) this.store.set('v3_scale_port', input.scalePort || '');
@@ -144,6 +151,11 @@ function installThorAgentV3(ThorAgent) {
     if (paid > quote.total + 0.01) throw new Error('payment_exceeds_total');
     const seller = sellerUserId ? this._staffUsersWithHash().find((user) => String(user.id) === String(sellerUserId)) : null;
     const resolvedSellerName = String(sellerName || seller?.name || seller?.full_name || '').trim();
+    if (!this.store.get('cash_open_event_id') && this.v3Settings().askCashOpening === false) {
+      await this.openCash({ openingAmount: 0, notes: 'Abertura automática na primeira venda' });
+    }
+    const cashOpenEventId = this.store.get('cash_open_event_id');
+    if (!cashOpenEventId) throw new Error('cash_not_open');
     const payload = { cash_open_event_id: cashOpenEventId, operator_user_id: operator.id, seller_user_id:sellerUserId || null, seller_name:resolvedSellerName, customer_id: customerId || null, consumer_document: document || null, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount })), payments: normalizedPayments, discount: Number(discount || 0), surcharge: Number(surcharge || 0), supervisor_authorization: auth, notes };
     const event = { id:crypto.randomUUID(), type:'sale_completed', payload:{ ...payload, occurred_at:new Date().toISOString() } };
     const receipt = { eventId: event.id, items: quote.items.map((i) => ({ product_id: i.productId, quantity: i.quantity, unit_price: i.unitPrice, discount: i.discount, name: i.name, sku: i.sku, unit: i.unit, total: i.total })), subtotal: quote.subtotal, discount: Number(discount || 0), surcharge: Number(surcharge || 0), total: quote.total, payments: normalizedPayments, customerId, consumerDocument: document || null, operator: { id: operator.id, name: operator.name }, seller:resolvedSellerName ? { id:sellerUserId || seller?.id || null, name:resolvedSellerName } : null, seller_user_id:sellerUserId || null, seller_name:resolvedSellerName, supervisorAuthorization: auth, createdAt: new Date().toISOString(), context: json(this.store.get('context', '{}'), {}), local_status: 'pending_sync', returned_total: 0 };
