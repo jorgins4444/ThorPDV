@@ -532,9 +532,9 @@ function settingsModal(){
   setTimeout(()=>{void loadSettingsHardware(m,settings);},0);
   m.querySelector('#refreshHardware').onclick=()=>{settingsHardwareCache.loadedAt=0;void loadSettingsHardware(m,settings,{force:true});};
   const uranoSection=document.createElement('section');
-  uranoSection.innerHTML=`<h4>Balança Urano POP-S — Bluetooth / COM</h4><p class="muted">Pareie a balança no Windows e selecione a porta COM de saída Bluetooth (SPP). Configure a POP-S em Prot 1 (F → 3 → P → E). A leitura solicita o peso com comando hexadecimal 04.</p><div class="field"><label>Porta COM</label><input id="uranoPort" placeholder="COM5" value="${esc(settings.scalePort||'')}"></div><div class="field"><label>Velocidade</label><select id="uranoBaud"><option value="9600">9600 bps</option><option value="4800">4800 bps</option><option value="2400">2400 bps</option><option value="1200">1200 bps</option></select></div><button class="secondary" id="uranoTest">Testar leitura da POP-S</button><div id="uranoResult" class="muted" style="overflow-wrap:anywhere"></div>`;
+  uranoSection.innerHTML=`<h4>Balança Urano POP-S — Bluetooth / COM</h4><p class="muted">Pareie a balança no Windows e selecione a porta COM de saída Bluetooth (SPP). Configure a POP-S em Prot 1 (F → 3 → P → E). A leitura solicita o peso com comando hexadecimal 04.</p><div class="field"><label>Porta COM</label><input id="uranoPort" placeholder="COM5" value="${esc(state.status?.v3Settings?.scalePort||'')}"></div><div class="field"><label>Velocidade</label><select id="uranoBaud"><option value="9600">9600 bps</option><option value="4800">4800 bps</option><option value="2400">2400 bps</option><option value="1200">1200 bps</option></select></div><button class="secondary" id="uranoTest">Testar leitura da POP-S</button><div id="uranoResult" class="muted" style="overflow-wrap:anywhere"></div>`;
   m.querySelector('.settings-grid').appendChild(uranoSection);
-  m.querySelector('#uranoBaud').value=String(settings.scaleBaud||9600);
+  m.querySelector('#uranoBaud').value=String(state.status?.v3Settings?.scaleBaud||9600);
   m.querySelector('#uranoTest').onclick=async()=>{
     const output=m.querySelector('#uranoResult');
     output.textContent='Solicitando peso à balança...';
