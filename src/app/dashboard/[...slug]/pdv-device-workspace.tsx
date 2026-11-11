@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { pdvDeviceList, pdvGenerateEnrollment, pdvReconnectDevice, pdvSetDeviceStatus } from './pdv-device-actions';
+import { pdvDeviceList, pdvGenerateEnrollment, pdvReconnectDevice, pdvSetDeviceStatus, pdvRemoveDevice } from './pdv-device-actions';
 
 type Row = Record<string, unknown>;
 
@@ -49,6 +49,17 @@ export function PdvDeviceWorkspace({ posRegisters, initialDevices }: { posRegist
     await refresh();
   });
 
+  const remove = (id: string, name: string) => {
+    if (!window.confirm(`Remover o terminal "${name}"? O acesso será revogado permanentemente, incluindo sincronização e vendas online. O histórico de vendas será preservado. Dados locais ainda não sincronizados NÃO serão transferidos automaticamente. Confirma?`)) return;
+    startTransition(async () => {
+      setMessage('');
+      const result = await pdvRemoveDevice(id);
+      if (!result.ok) return setMessage(text(result.error || 'Não foi possível remover o terminal.'));
+      setMessage('Terminal removido e credenciais revogadas. Histórico preservado.');
+      await refresh();
+    });
+  };
+
   return <div className="pdv-device-grid">
     <section className="pdv-device-card pdv-device-activate">
       <div className="pdv-device-title"><div><span className="pdv-device-kicker">Pareamento seguro</span><h2>{enrollment?.reconnect?'Reconectar ThorPDV Desktop':'Ativar ThorPDV Desktop'}</h2><p>Gere um código de uso único e informe no computador Windows que ficará no caixa.</p></div><div className="pdv-device-badge">SYNC v3</div></div>
@@ -71,7 +82,7 @@ export function PdvDeviceWorkspace({ posRegisters, initialDevices }: { posRegist
           <td><span className={`pdv-status pdv-${text(d.sync_health)||text(d.status)}`}>{healthLabel(d.sync_health||d.status)}</span><small>{text(d.status)==='online'?'Terminal conectado':text(d.status)==='reconnect_required'?'Aguardando novo pareamento':`Último contato: ${when(d.last_seen_at)}`}</small></td>
           <td><strong>↑ {num(d.queue_pending)} pendente(s)</strong><small>{num(d.queue_rejected)>0?`⚠ ${num(d.queue_rejected)} com erro`:`✓ ${num(d.queue_synced)} sincronizado(s)`}</small>{d.last_sync_error?<small className="pdv-sync-error">{text(d.last_sync_error)}</small>:null}</td>
           <td><strong>Venda: {when(d.last_sale_sync_at)}</strong><small>Push: {when(d.last_push_at)} • Pull: {when(d.last_pull_at)}</small></td>
-          <td><div className="pdv-device-actions"><button type="button" className="pdv-device-link" onClick={()=>reconnect(text(d.id))}>Refazer conexão</button><button type="button" className="pdv-device-link" onClick={()=>setStatus(text(d.id), text(d.status)==='blocked'?'offline':'blocked')}>{text(d.status)==='blocked'?'Desbloquear':'Bloquear'}</button></div></td>
+          <td><div className="pdv-device-actions"><button type="button" className="pdv-device-link" onClick={()=>reconnect(text(d.id))}>Refazer conexão</button><button type="button" className="pdv-device-link" onClick={()=>setStatus(text(d.id), text(d.status)==='blocked'?'offline':'blocked')}>{text(d.status)==='blocked'?'Desbloquear':'Bloquear'}</button><button type="button" className="pdv-device-link" style={{color:'var(--danger, #b42318)'}} disabled={pending} onClick={()=>remove(text(d.id),text(d.name))}>Remover terminal</button></div></td>
         </tr>)}
       </tbody></table></div>
     </section>
