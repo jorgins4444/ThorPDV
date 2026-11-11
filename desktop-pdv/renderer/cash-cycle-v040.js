@@ -1,5 +1,6 @@
 let cash40PromptedOperatorId = '';
 let cash40ClosedTransition = false;
+let cash40PendingWarningShownFor = '';
 
 function cash40ProductForItem(item) {
   const sources = [state.products || [], state.allProducts || []];
@@ -103,6 +104,10 @@ async function cash40MaybePromptOpening() {
   if (state.status?.cashOpenEventId) return;
 
   const settings = await window.thor.v3Settings().catch(() => ({}));
+  if (settings.pendingCashPolicy === 'warn' && Number(state.status?.overdueCashCount || 0) > 0 && cash40PendingWarningShownFor !== String(operator.id)) {
+    cash40PendingWarningShownFor = String(operator.id);
+    showToast(`${state.status.overdueCashCount} caixa(s) anterior(es) pendente(s) de fechamento. A abertura do caixa atual está permitida.`);
+  }
   if (!settings.askCashOpening) return;
   if (cash40PromptedOperatorId === String(operator.id)) return;
   cash40PromptedOperatorId = String(operator.id);
