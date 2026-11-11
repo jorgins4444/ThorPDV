@@ -14,7 +14,8 @@ function installDeviceAccessV133(ThorAgent) {
     const reason = this.store.get('device_access_denied', '');
     const checked = Number(this.store.get('device_access_validated_at', '0'));
     const now = Date.now();
-    const clockRollback = checked > now + 60 * 1000;
+    const lastObserved = Number(this.store.get('device_access_last_observed_at', '0'));
+    const clockRollback = checked > now + 60 * 1000 || lastObserved > now + 60 * 1000;
     const expired = !checked || now - checked > OFFLINE_GRACE_MS || clockRollback;
     return { allowed: Boolean(this.deviceToken()) && !reason && !expired,
       reason: reason || (clockRollback ? 'device_clock_invalid' : expired ? 'offline_authorization_expired' : ''),
@@ -41,6 +42,7 @@ function installDeviceAccessV133(ThorAgent) {
         const result = await response.json();
         if (result.ok && response.ok) {
           this.store.set('device_access_validated_at', String(Date.now()));
+          this.store.set('device_access_last_observed_at', String(Date.now()));
           this.store.set('device_access_denied', '');
         } else if (DENIED.has(String(result.error || ''))) {
           this.store.set('device_access_denied', String(result.error));
@@ -64,6 +66,7 @@ function installDeviceAccessV133(ThorAgent) {
   ThorAgent.prototype.requireDeviceAccess = function () {
     const state = this.deviceAccess();
     if (!state.allowed) throw new Error(state.reason || 'device_access_denied');
+    this.store.set('device_access_last_observed_at', String(Math.max(Date.now(), Number(this.store.get('device_access_last_observed_at', '0')))));
   };
 
   ThorAgent.prototype.start = async function (...args) {
@@ -89,6 +92,7 @@ function installDeviceAccessV133(ThorAgent) {
   ThorAgent.prototype.enroll = async function (...args) {
     const result = await originalEnroll.apply(this, args);
     this.store.set('device_access_denied', '');
+    this.store.set('device_access_last_observed_at', '0');
     this.store.set('device_access_checked_at', '0');
     await this.checkDeviceAccess(true);
     return this.status();
@@ -114,7 +118,6 @@ function installDeviceAccessV133(ThorAgent) {
     };
   }
 
-  const originalRequest = ThorAgent.prototype.sync?.request;
   // SyncEngine is an instance, so install the transport guard during startup.
   const startWithSyncGuard = ThorAgent.prototype.start;
   ThorAgent.prototype.start = async function (...args) {
@@ -122,7 +125,15 @@ function installDeviceAccessV133(ThorAgent) {
       const request = this.sync.request.bind(this.sync);
       this.sync.request = async (pathname, body) => {
         if (!this.deviceAccess().allowed) throw new Error(this.deviceAccess().reason || 'device_access_denied');
-        return request(pathname, body);
+        try { return await request(pathname, body); }
+        catch (error) {
+          const code = String(error?.message || '');
+          if (DENIED.has(code) || code === 'device_authorization_denied') {
+            this.store.set('device_access_denied', code);
+            this.sync.stop();
+          }
+          throw error;
+        }
       };
       this.sync._deviceAccessGuardInstalled = true;
     }
