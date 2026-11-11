@@ -354,6 +354,7 @@ function registerIpc() {
   const handle = (name, fn) => ipcMain.handle(name, async (_event, ...args) => fn(...args));
   handle('thor:status', async () => ({ ...(await agent.status()), appVersion: DESKTOP_VERSION, operator: agent.currentOperator(), v3Settings: agent.v3Settings(), paymentIntegrations: agent.paymentIntegrations(), syncDiagnostics: agent.syncDiagnostics(), syncPolicy: agent.syncPolicy?.() || null, update: updater?.updateInfo?.() || null }));
   handle('thor:enroll', (payload) => agent.enroll(payload));
+  handle('thor:check-device-access', async () => { await agent.checkDeviceAccess(true); return agent.status(); });
   handle('thor:sync', () => agent.manualSync());
   handle('thor:sync-diagnostics', () => agent.syncDiagnostics());
   handle('thor:performance-metrics', (limit) => agent.store.recentMetrics(limit));
