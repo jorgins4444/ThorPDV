@@ -12,6 +12,7 @@ const { installProfilePermissions } = require('./agent/v3-profile-permissions');
 const { installAdvancedPermissions } = require('./agent/v4-permissions');
 const { installSyncPolicy } = require('./agent/sync-policy');
 const { installDeviceAccessV133 } = require('./agent/device-access-v133');
+const { readPopS } = require('./agent/urano-pop-s');
 const { installSyncRecovery } = require('./agent/recovery');
 const { installCashClosing } = require('./agent/cash-closing');
 const { installProductionPrinting } = require('./agent/production');
@@ -405,6 +406,7 @@ function registerIpc() {
   handle('thor:set-printer', (name) => agent.setPrinter(name));
   handle('thor:open-drawer', () => agent.manualOpenDrawer());
   handle('thor:read-scale', () => agent.readScale());
+  handle('thor:read-urano-pop-s', (settings) => readPopS(settings));
   handle('thor:payment-integrations', () => agent.paymentIntegrations());
   handle('thor:begin-payment', (payload) => agent.beginIntegratedPayment(payload));
   handle('thor:print-sale', (saleKey, type, reprint) => printSale(saleKey, type, reprint));
