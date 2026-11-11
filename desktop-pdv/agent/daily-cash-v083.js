@@ -213,7 +213,11 @@ function installDailyCashV083(ThorAgent) {
   };
 
   ThorAgent.prototype.returnSale = async function (input = {}) {
-    if (text(input.refundMethod || input.refund_method) === 'cash') this._requireCurrentCashDay();
+    if (text(input.refundMethod || input.refund_method) === 'cash') {
+      const current = this._normalizeCurrentCashDay();
+      if (!current.eventId && this.v3Settings?.().askCashOpening === false) await this.openCash({ openingAmount: 0, notes: 'Abertura automática na devolução em dinheiro' });
+      this._requireCurrentCashDay();
+    }
     return originalReturnSale.call(this, input);
   };
 
