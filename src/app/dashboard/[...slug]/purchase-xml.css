@@ -120,3 +120,20 @@
   .pxml-price-card>div:not(.pxml-price-name),.pxml-price-card label{padding:9px 0 0;border-left:0;border-top:1px solid #edf1f5}
   .pxml-review-grid{grid-template-columns:1fr}
 }
+/* Corrige a moldura oval que ocultava o titulo e as informacoes na entrada de NF-e por XML.
+   Mantem cantos discretos mesmo quando estilos globais sobrescrevem os cards. */
+.erp-module-main .pxml .pxml-card,
+.erp-module-main .pxml .pxml-card.pxml-stage,
+.erp-module-main .pxml .pxml-card.pxml-upload-stage {
+  border-radius: 12px !important;
+  clip-path: none !important;
+  overflow: visible !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.erp-module-main .pxml .pxml-stage-head,
+.erp-module-main .pxml .pxml-branch-lock,
+.erp-module-main .pxml .pxml-upload-actions {
+  position: relative;
+  z-index: 1;
+}
