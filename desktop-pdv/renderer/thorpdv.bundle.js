@@ -532,9 +532,21 @@ function settingsModal(){
   applySettingsHardware(m,settings,initial.printers,initial.ports,{loading:!cached,cached});
   setTimeout(()=>{void loadSettingsHardware(m,settings);},0);
   m.querySelector('#refreshHardware').onclick=()=>{settingsHardwareCache.loadedAt=0;void loadSettingsHardware(m,settings,{force:true});};
+  const uranoSection=document.createElement('section');
+  uranoSection.innerHTML=`<h4>Balança Urano POP-S — Bluetooth / COM</h4><p class="muted">Pareie a balança no Windows e selecione a porta COM de saída Bluetooth (SPP). Configure a POP-S em Prot 1 (F → 3 → P → E). A leitura solicita o peso com comando hexadecimal 04.</p><div class="field"><label>Porta COM</label><input id="uranoPort" placeholder="COM5" value="${esc(settings.scalePort||'')}"></div><div class="field"><label>Velocidade</label><select id="uranoBaud"><option value="9600">9600 bps</option><option value="4800">4800 bps</option><option value="2400">2400 bps</option><option value="1200">1200 bps</option></select></div><button class="secondary" id="uranoTest">Testar leitura da POP-S</button><div id="uranoResult" class="muted" style="overflow-wrap:anywhere"></div>`;
+  m.querySelector('.settings-grid').appendChild(uranoSection);
+  m.querySelector('#uranoBaud').value=String(settings.scaleBaud||9600);
+  m.querySelector('#uranoTest').onclick=async()=>{
+    const output=m.querySelector('#uranoResult');
+    output.textContent='Solicitando peso à balança...';
+    try{
+      const result=await window.thor.readUranoPopS({port:m.querySelector('#uranoPort').value.trim(),baudRate:Number(m.querySelector('#uranoBaud').value)});
+      output.textContent=result.weightKg!==null?`Peso recebido: ${result.weightKg.toFixed(3)} kg. Confira no visor antes de usar.`:`Resposta recebida, protocolo ainda não identificado. HEX: ${result.rawHex}; texto: ${result.rawText}. Envie estes dados para ajustar o decodificador.`;
+    }catch(error){output.textContent='Falha na comunicação: '+String(error.message||error);}
+  };
   m.querySelector('#closeSettings').onclick=()=>m.remove();
   m.querySelectorAll('[data-shortcut]').forEach(input=>{input.onfocus=()=>{state.capturingShortcut=true;input.value='Pressione...';};input.onblur=()=>{state.capturingShortcut=false;if(input.value==='Pressione...')input.value=shortcuts[input.dataset.shortcut]||'';};input.onkeydown=e=>{e.preventDefault();const key=normalizeKey(e);if(!key)return;if(reservedShortcuts.has(key)){m.querySelector('#settingsError').textContent=`${key} é reservado pelo sistema.`;return;}shortcuts[input.dataset.shortcut]=key;input.value=key;m.querySelector('#settingsError').textContent='';input.blur();};});
-  m.querySelector('#saveSettings').onclick=async()=>{const values=Object.values(shortcuts).filter(Boolean);if(new Set(values).size!==values.length){m.querySelector('#settingsError').textContent='Cada forma de pagamento precisa ter uma tecla diferente.';return;}state.settings=await window.thor.saveSettings({printerName:m.querySelector('#printerSelect').value,printMode:m.querySelector('#printMode').value,printDocument:m.querySelector('#printDocument').value,shortcuts});state.status.settings=state.settings;state.status.printer=state.settings.printerName;m.remove();render();showToast('Configurações salvas neste caixa.');};
+  m.querySelector('#saveSettings').onclick=async()=>{const values=Object.values(shortcuts).filter(Boolean);if(new Set(values).size!==values.length){m.querySelector('#settingsError').textContent='Cada forma de pagamento precisa ter uma tecla diferente.';return;}state.settings=await window.thor.saveSettings({printerName:m.querySelector('#printerSelect').value,printMode:m.querySelector('#printMode').value,printDocument:m.querySelector('#printDocument').value,shortcuts});await window.thor.saveV3Settings({scalePort:m.querySelector('#uranoPort').value.trim().toUpperCase(),scaleBaud:Number(m.querySelector('#uranoBaud').value)});state.status.settings=state.settings;state.status.printer=state.settings.printerName;m.remove();render();showToast('Configurações salvas neste caixa.');};
 }
 
 function openCashModal(){
