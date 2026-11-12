@@ -692,7 +692,7 @@ async function v3AutoWeigh(item){
   const requestId=++v3ScaleRequestId;
   let settings={};
   try{settings=await window.thor.v3Settings();}catch{}
-  if(settings.scaleProtocol!=='urano-pop-s'||!settings.scalePort)return;
+  if(!settings.scalePort)return;
   const started=Date.now();
   const panel=modal('<h3>Pesagem automática — Urano POP-S</h3><p id="autoScaleStatus">Aguardando peso na balança (até 30 segundos)...</p><div class="field"><label>Peso manual (kg)</label><input id="autoScaleManual" type="number" min="0.001" max="31" step="0.001" placeholder="Ex.: 0,332"></div><div style="display:flex;gap:8px"><button id="autoScaleApply" type="button">Aplicar peso manual</button><button id="autoScaleCancel" type="button" class="secondary">Cancelar pesagem</button></div>');
   let finished=false;
@@ -721,9 +721,9 @@ async function v3AutoWeigh(item){
     if(!panel.isConnected){finish();break;}
     status.textContent='Aguardando peso na COM '+settings.scalePort+' — '+remaining+' s restantes.';
     try{
-      const reading=await window.thor.readScale();
+      const reading=await window.thor.readUranoPopS({port:settings.scalePort,baudRate:Number(settings.scaleBaud)||9600,timeoutMs:2500});
       if(finished||requestId!==v3ScaleRequestId)break;
-      const weight=Number(reading.weight);
+      const weight=Number(reading.weightKg);
       if(validWeight(weight)){await apply(weight,'da balança');break;}
     }catch(error){
       if(finished||requestId!==v3ScaleRequestId)break;
