@@ -397,7 +397,20 @@ function registerIpc() {
   handle('thor:operator-logout', () => agent.logoutOperator());
   handle('thor:supervisor-authorize', (payload) => agent.authorizeSupervisor(payload));
   handle('thor:open-cash', (payload) => agent.openCash(payload));
-  handle('thor:cash-movement', (payload) => agent.cashMovement(payload));
+  // One IPC transaction: persist once, then print the receipt from the exact
+  // same registered movement. Printer errors must NEVER repeat cashMovement.
+  handle('thor:cash-movement', async (payload) => {
+    const result = await agent.cashMovement(payload);
+    if (!result?.ok || !result?.eventId) return result;
+    const expectedType = String(payload?.movementType || '').trim().toLowerCase();
+    const receipt = { ...(result.receipt || {}), event_id: result.eventId, movement_type: expectedType };
+    try {
+      const printed = await printCashMovement(receipt);
+      return { ...result, receipt, printStatus: { ok: true, method: printed?.method || 'printer' } };
+    } catch (error) {
+      return { ...result, receipt, printStatus: { ok: false, error: String(error?.message || error) } };
+    }
+  });
   handle('thor:cash-preview', (options) => agent.cashClosingPreview(options || {}));
   handle('thor:cash-sessions', (filters) => agent.cashSessions(filters || {}));
   handle('thor:close-historical-cash', (payload) => agent.closeHistoricalCash(payload || {}));
