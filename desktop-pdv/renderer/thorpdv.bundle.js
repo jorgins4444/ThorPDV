@@ -1173,11 +1173,11 @@ async function cashClosingMovement(type,previewModal){
     const operator=v3State()?.operator||state?.status?.operator||{};
     const result=await window.thor.cashMovement({movementType:type,amount,notes,reason:notes,operatorId:operator.id||null,operatorName:operator.name||operator.full_name||operator.display_name||'',supervisorAuthorization:auth});
     if(result?.receipt?.movement_type&&String(result.receipt.movement_type)!==type)throw new Error('O registro retornou um tipo diferente de movimentação. Confira o histórico do caixa.');
-    let printWarning='';
-    try{
-      const receipt={...(result?.receipt||{}),event_id:result?.receipt?.event_id||result?.eventId||'',movement_type:type,amount,notes,reason:notes};
-      await window.thor.printCashMovement(receipt);
-    }catch(printError){printWarning=friendlyError(printError?.message||'print_failed');}
+    // The backend prints the exact movement that it has just registered.
+    // Do not invoke a second print IPC or repeat the financial transaction.
+    const printWarning=result?.printStatus?.ok===false
+      ? friendlyError(result.printStatus.error||'print_failed')
+      : (result?.printStatus?.ok===true?'':'Impressão não confirmada pelo sistema.');
     previewModal?.remove();await window.thor.sync().catch(()=>{});await refreshStatus();
     showToast(printWarning?`${label} registrado. Impressão pendente: ${printWarning}`:`${label} registrado e comprovante impresso.`);openCashModal();
   }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,/cash_movement_reason_min_15/.test(String(e.message||''))?'Informe um motivo com pelo menos 15 caracteres.':friendlyError(e.message));}
