@@ -2113,3 +2113,29 @@ h1{font-size:24px!important}h2{font-size:20px!important}h3{font-size:18px!import
 .fiscal-status,.sale-status{font-size:12px!important}.fiscal-meta,.fiscal-diagnostic{font-size:14px!important}
 .fiscal-progress-step,.fiscal-progress-details summary{font-size:13px!important}.fiscal-event b{font-size:14px!important}.fiscal-event small{font-size:12px!important}
 @media(max-width:1180px){.v090-fiscal-table-card .fiscal-table td,.fiscal-table td{font-size:13px!important}.v090-fiscal-nav button{font-size:12px!important}}
+
+
+/* Operator readability: sale action bar and cart, 2026-11. Keep existing layout and colors. */
+.thor-v089 .v089-actionbar .v089-actions-pill,
+.thor-v089 .v089-actionbar .v089-sale-label {font-size:14px!important;font-weight:800!important}
+.thor-v089 .v089-party button b {font-size:14px!important;line-height:1.25!important}
+.thor-v089 .v089-party button small {font-size:12px!important;line-height:1.3!important}
+.thor-v089 .v089-party button kbd {font-size:11px!important}
+.thor-v089 .v089-items-title b {font-size:17px!important;font-weight:850!important}
+.thor-v089 .v089-items-title em {font-size:12px!important}
+.thor-v089 .v089-quick button {font-size:14px!important;line-height:1.2!important}
+.thor-v089 .v089-quick button b {font-size:13px!important;line-height:1.25!important}
+.thor-v089 .v089-quick button small {font-size:11px!important}
+.thor-v089 .v089-cart-item .cart-v43-product strong,
+.thor-v089 .v089-cart-item .cart-v43-product b {font-size:14px!important;line-height:1.3!important}
+.thor-v089 .v089-cart-item .cart-v43-product small {font-size:12px!important;line-height:1.35!important}
+.thor-v089 .v089-cart-item .discount-v45-item-button {font-size:12px!important;min-height:26px!important}
+.thor-v089 .v089-cart-item .cart-v43-qty b {font-size:13px!important}
+.thor-v089 .v089-cart-item .cart-v43-total b {font-size:15px!important}
+.thor-v089 .v089-cart-item .cart-v43-total small {font-size:11px!important}
+.thor-v089 .v089-actionbar button {min-height:40px!important}
+@media(max-width:1100px){
+  .thor-v089 .v089-quick button b {font-size:12px!important}
+  .thor-v089 .v089-party button b {font-size:13px!important}
+  .thor-v089 .v089-items-title b {font-size:15px!important}
+}
