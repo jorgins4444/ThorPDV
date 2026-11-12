@@ -708,7 +708,7 @@ async function v3AutoWeigh(item){
     await v3Reprice();
     showToast('Peso '+source+': '+Number(value).toFixed(3)+' kg.');
   };
-  const finish=()=>{finished=true;v3ScaleRequestId++;panel.remove();};
+  const finish=()=>{finished=true;v3ScaleRequestId++;panel.remove();if(item.quantity===0){const idx=state.cart.indexOf(item);if(idx>=0){state.cart.splice(idx,1);void v3Reprice();}}};
   panel.querySelector('#autoScaleCancel').onclick=finish;
   panel.querySelector('#autoScaleApply').onclick=()=>{
     const weight=Number(String(manual.value).replace(',','.'));
