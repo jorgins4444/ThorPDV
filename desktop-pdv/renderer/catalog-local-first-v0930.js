@@ -170,23 +170,41 @@ function renderBody(){
     body.querySelectorAll('[data-cl930-stock]').forEach(b=>b.onclick=()=>openProductEdit(b.dataset.cl930Stock,'stock_adjust'));
   }else if(tab==='history'){
     body.innerHTML='<p>Consultando histórico de sincronização...</p>';
-    window.thor.catalogStatus().then(rows=>{
+    Promise.all([window.thor.catalogStatus(),window.thor.status()]).then(([catalogRows,agentStatus])=>{
+      // Unified read-only history: catalog mutations plus operational sync events.
+      // Deduplicate by event ID, preferring the catalog record with retry controls.
+      const operational=(Array.isArray(agentStatus?.syncHistory)?agentStatus.syncHistory:[])
+        .filter(entry=>entry.entity && entry.direction==='outgoing')
+        .map(entry=>({
+          event_id:String(entry.id||''),
+          kind:String(entry.entity||'event'),
+          state:entry.status==='success'?'synced':entry.status==='failed'?'rejected':'pending',
+          created_at:entry.recordedAt||entry.startedAt||'',
+          error:entry.error||null,
+          payload:{},
+          source:'operational'
+        }));
+      const catalog=Array.isArray(catalogRows)?catalogRows:[];
+      const existing=new Set(catalog.map(row=>String(row.event_id||'')));
+      rows=[...catalog,...operational.filter(row=>!existing.has(row.event_id))]
+        .sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')))
+        .slice(0,300);
       if(tab!=='history'||!panel)return;
       rows=Array.isArray(rows)?rows:[];
       const counts={synced:0,pending:0,retry:0,rejected:0};
       rows.forEach(r=>{if(Object.hasOwn(counts,r.state))counts[r.state]++;});
-      const labels={customer_save:'Cadastro de cliente',product_create:'Novo produto',product_price:'Alteração de preço',stock_adjust:'Ajuste de estoque'};
+      const labels={customer_save:'Cadastro de cliente',product_create:'Novo produto',product_price:'Alteração de preço',stock_adjust:'Ajuste de estoque',sale_completed:'Venda concluída',sale_cancelled:'Cancelamento de venda',sale_returned:'Devolução de venda',cash_open:'Abertura de caixa',cash_close:'Fechamento de caixa',cash_movement:'Sangria ou suprimento',payment_received:'Recebimento',credit_payment:'Recebimento de crediário',sale_payment:'Pagamento de venda'};
       const states={pending:'Pendente',retry:'Falha temporária / aguardando reenvio',synced:'Sucesso — recebido pelo servidor',rejected:'Falha — rejeitado pelo servidor',discarded:'Descartado'};
       body.innerHTML=`<div class="cl930-actions"><button id="cl930ForceSync" class="cl930-primary">Tentar sincronizar novamente</button><button id="cl930Reload">Atualizar histórico</button></div>
-        <p class="cl930-note">Últimas ${rows.length} operações deste caixa. Sucesso indica confirmação da API; falhas exibem o motivo informado pelo servidor. Não repita ajustes de estoque manualmente.</p>
+        <p class="cl930-note">Últimas ${rows.length} operações de cadastro, estoque, vendas, caixa e demais eventos sincronizados neste caixa. Sucesso indica confirmação da API; falhas exibem o motivo informado pelo servidor. Não repita ajustes de estoque manualmente.</p>
         <div class="cl930-actions"><strong>Sucesso: ${counts.synced}</strong><strong>Pendentes: ${counts.pending}</strong><strong>Aguardando reenvio: ${counts.retry}</strong><strong>Falhas: ${counts.rejected}</strong></div>
         <div class="cl930-list">${rows.map(r=>{
           let payload={};try{payload=typeof r.payload==='string'?JSON.parse(r.payload):(r.payload||{});}catch{}
           const details=[payload.name,payload.sku,payload.id].filter(Boolean).slice(0,2).join(' • ');
           const reason=r.error?err(r.error):'Nenhum erro informado';
-          const canRetry=r.state==='rejected';
+          const canRetry=r.state==='rejected'&&r.source!=='operational';
           return `<article><div><b>${esc(labels[r.kind]||r.kind)}</b><small>${esc(details)} • ${esc(r.created_at||'Data indisponível')}</small><small><b>${esc(states[r.state]||r.state)}</b></small>${r.error?`<small>Motivo: ${esc(reason)} (${esc(r.error)})</small>`:''}</div><div class="cl930-actions">${canRetry?`<button data-cl930-retry="${esc(r.event_id)}">Reenviar</button><button data-cl930-discard="${esc(r.event_id)}">Descartar</button>`:''}</div></article>`;
-        }).join('')||'<p>Nenhuma operação de cadastro ou estoque registrada neste caixa.</p>'}</div>`;
+        }).join('')||'<p>Nenhuma operação sincronizada registrada neste caixa.</p>'}</div>`;
       body.querySelector('#cl930ForceSync').onclick=async()=>{
         message('Tentando enviar operações pendentes...');
         try{
