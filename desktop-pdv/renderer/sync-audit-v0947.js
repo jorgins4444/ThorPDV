@@ -3,17 +3,22 @@
 (() => {
   const css = document.createElement('style');
   css.textContent = `
-  .thor-sync-panel{position:fixed;inset:0;background:rgba(7,15,30,.70);z-index:2147483000;display:grid;place-items:center;padding:20px}
-  .thor-sync-card{background:#152238;color:#eef5ff;width:min(760px,96vw);max-height:85vh;overflow:auto;border-radius:16px;padding:24px;box-shadow:0 20px 70px #0008;font:14px system-ui,sans-serif}
-  .thor-sync-head{display:flex;justify-content:space-between;align-items:center;gap:16px}.thor-sync-head h2{margin:0 0 12px;font-size:20px}
-  .thor-sync-card button{padding:9px 14px;border:1px solid #63728b;background:#263b59;color:white;border-radius:8px;cursor:pointer}
-  .thor-sync-track{height:18px;border-radius:20px;background:#33455d;overflow:hidden;margin:16px 0 8px}
-  .thor-sync-fill{height:100%;width:0;background:linear-gradient(90deg,#24a5ff,#56e3ad);transition:width .35s ease}
-  .thor-sync-meta{display:flex;justify-content:space-between;color:#c3d0e1;gap:12px}
+  .thor-sync-panel{position:fixed;inset:0;background:rgba(17,35,44,.38);backdrop-filter:blur(3px);z-index:2147483000;display:grid;place-items:center;padding:20px}
+  .thor-sync-card{background:#fff;color:#17382f;width:min(760px,96vw);max-height:85vh;overflow:auto;border:1px solid #dceae5;border-radius:18px;padding:26px;box-shadow:0 24px 70px rgba(13,50,44,.22);font:14px system-ui,sans-serif}
+  .thor-sync-head{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #e8f0ed;padding-bottom:14px;margin-bottom:18px}
+  .thor-sync-head h2{margin:0;font-size:21px;letter-spacing:-.3px;color:#11674e}
+  .thor-sync-card button{padding:10px 17px;border:1px solid #c6ddd3;background:#f1f8f5;color:#155843;border-radius:9px;font-weight:650;cursor:pointer}
+  .thor-sync-card button:hover{background:#e2f3eb}
+  .thor-sync-track{height:18px;border-radius:20px;background:#e5eee9;overflow:hidden;margin:18px 0 10px}
+  .thor-sync-fill{height:100%;width:0;background:linear-gradient(90deg,#1a9fd0,#18bd82);transition:width .35s ease}
+  .thor-sync-meta{display:flex;justify-content:space-between;align-items:center;color:#56716a;gap:12px}
+  .thor-sync-meta strong{color:#087e5b;font-size:20px;font-variant-numeric:tabular-nums}
+  .thor-sync-card [data-phase]{color:#1b5141;font-weight:650;font-size:15px}
   .thor-sync-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px}
-  .thor-sync-table td,.thor-sync-table th{padding:9px;border-bottom:1px solid #3b4a62;text-align:left;overflow-wrap:anywhere}
+  .thor-sync-table td,.thor-sync-table th{padding:10px;border-bottom:1px solid #e4efea;text-align:left;overflow-wrap:anywhere;color:#25483d}
+  .thor-sync-table th{background:#f4f9f6;color:#12644c}
   .thor-sync-filters{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-  .thor-sync-filters input,.thor-sync-filters select{background:#263b59;color:white;border:1px solid #63728b;padding:8px;border-radius:6px}
+  .thor-sync-filters input,.thor-sync-filters select{background:#fff;color:#234a3c;border:1px solid #c7ddd3;padding:9px;border-radius:8px}
   `;
   document.head.appendChild(css);
   const escape = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\u0027':'&#39;'}[c]));
