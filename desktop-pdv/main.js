@@ -293,6 +293,19 @@ async function printCashMovement(receipt) {
       : receipt?.operator,
   };
   const started = Date.now();
+  // Resolve the movement type from the recorded event whenever possible.
+  // A missing type must never silently turn a supply into a withdrawal.
+  let persistedType = '';
+  if (enriched.event_id) {
+    const row = agent.store.db.prepare('select payload from queue where id=? limit 1').get(String(enriched.event_id));
+    if (row?.payload) {
+      try { persistedType = String(JSON.parse(row.payload)?.movement_type || '').trim().toLowerCase(); } catch {}
+    }
+  }
+  const providedType = String(enriched.movement_type || '').trim().toLowerCase();
+  if (persistedType && providedType && persistedType !== providedType) throw new Error('cash_movement_type_mismatch');
+  enriched.movement_type = persistedType || providedType;
+  if (!['supply', 'withdrawal'].includes(enriched.movement_type)) throw new Error('cash_invalid_movement_type');
   const doc = agent.cashMovementDocument(enriched);
   const target = agent.settings().printerName;
   if (!target) throw new Error('printer_not_configured');
