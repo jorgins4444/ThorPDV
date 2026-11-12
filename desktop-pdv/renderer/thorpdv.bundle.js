@@ -2846,32 +2846,74 @@ window.ThorErrorCenter={parse:v44Parse,last:()=>v44LastError};
     const scale = m.querySelector('#w46Scale');
     const apply = m.querySelector('#w46Apply');
 
-    m.querySelector('#w46Cancel').onclick = () => m.remove();
+    let active = true;
+    let committing = false;
+    let timer = null;
+    let autoToken = 0;
+    const stopAuto = () => { autoToken++; if (timer) clearInterval(timer); timer = null; };
+    const close = () => { active = false; stopAuto(); m.remove(); };
+    m.querySelector('#w46Cancel').onclick = close;
+    const readOnce = async () => {
+      const settings = await window.thor.v3Settings();
+      if (settings.scaleProtocol === 'urano-pop-s' && settings.scalePort) {
+        const response = await window.thor.readUranoPopS({
+          port: settings.scalePort, baudRate: Number(settings.scaleBaud) || 9600, timeoutMs: 2500
+        });
+        return Number(response?.weightKg);
+      }
+      const response = await window.thor.readScale();
+      return w46ScaleWeight(response?.weight).weight;
+    };
+    let submit;
     if (scale) {
       const allowed = w46Allowed('hardware.scale', true);
       scale.disabled = !allowed;
       scale.title = allowed ? 'Ler peso da balança configurada' : 'Perfil sem permissão para usar a balança';
-      scale.onclick = async () => {
-        if (!allowed) return;
-        try {
-          scale.disabled = true;
-          status.textContent = 'Lendo balança...';
-          const result = await window.thor.readScale();
-          const reading = w46ScaleWeight(result?.weight);
-          input.value = w46Qty(reading.weight);
-          status.textContent = reading.grams
-            ? `Leitura recebida: ${reading.raw} g = ${w46Qty(reading.weight)} ${flags.unit}. Confirme em ${options.replace ? 'Atualizar' : 'Adicionar'}.`
-            : `Peso recebido: ${w46Qty(reading.weight)} ${flags.unit}. Confirme em ${options.replace ? 'Atualizar' : 'Adicionar'}.`;
+      const autoRead = async () => {
+        if (!allowed || !active || committing) return;
+        stopAuto();
+        const token = autoToken;
+        const deadline = Date.now() + 30000;
+        const updateCountdown = () => {
+          if (!active || token !== autoToken) return;
+          const seconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+          status.textContent = 'Lendo balança automaticamente... ' + seconds + ' segundos restantes.';
+        };
+        timer = setInterval(updateCountdown, 250);
+        updateCountdown();
+        scale.disabled = true;
+        while (active && token === autoToken && !committing && Date.now() < deadline) {
+          try {
+            const weight = Number(await readOnce());
+            if (!active || token !== autoToken || committing) break;
+            if (Number.isFinite(weight) && weight > 0 && weight <= 31) {
+              input.value = w46Qty(weight);
+              stopAuto();
+              status.textContent = 'Peso recebido: ' + w46Qty(weight) + ' kg. Adicionando produto...';
+              await submit();
+              return;
+            }
+          } catch (error) {
+            // Retry until the overall 30-second deadline; allow manual fallback.
+          }
+          if (active && token === autoToken && Date.now() < deadline)
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        if (active && token === autoToken && !committing) {
+          stopAuto();
+          status.textContent = 'Tempo de 30 segundos esgotado. Digite o peso manualmente e clique em ' + (options.replace ? 'Atualizar.' : 'Adicionar.');
           input.focus();
-        } catch (error) {
-          status.textContent = friendlyError(error?.message);
-        } finally {
-          scale.disabled = !allowed;
+          scale.disabled = false;
         }
       };
+      scale.onclick = () => { void autoRead(); };
+      // Start immediately when the weighed-product modal opens.
+      if (allowed) setTimeout(() => { if (active) void autoRead(); }, 0);
+      else status.textContent = 'Sem permissão para usar a balança. Informe o peso manualmente.';
     }
 
-    const submit = async () => {
+    submit = async () => {
+      if (!active || committing) return;
       const qty = w46Number(String(input.value || '').replace(',', '.'));
       if (qty <= 0) {
         status.textContent = 'Informe ou leia um peso/quantidade maior que zero.';
@@ -2883,13 +2925,13 @@ window.ThorErrorCenter={parse:v44Parse,last:()=>v44LastError};
         input.focus();
         return;
       }
-      m.remove();
+      committing = true;
+      close();
       await w46Commit(product, qty, Boolean(options.replace), Number(options.itemIndex ?? -1));
     };
     apply.onclick = submit;
     input.onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); submit(); } };
-    input.focus();
-    input.select();
+    if (!flags.isWeighable) { input.focus(); input.select(); }
   }
 
   async function w46Add(product) {
