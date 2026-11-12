@@ -46,3 +46,28 @@
 .nfe-danfe-total{text-align:right;font-weight:800;margin-top:14px}
 @media(max-width:640px){.nfe-danfe-overlay{padding:8px}.nfe-danfe-dialog{padding:10px}.nfe-danfe-paper{padding:14px}.nfe-danfe-grid{grid-template-columns:1fr}.nfe-danfe-watermark{font-size:27px}}
 @media print{body:has(.nfe-danfe-overlay) *{visibility:hidden!important}.nfe-danfe-overlay,.nfe-danfe-overlay .nfe-danfe-paper,.nfe-danfe-overlay .nfe-danfe-paper *{visibility:visible!important}.nfe-danfe-overlay{position:absolute;inset:0;padding:0;background:white;overflow:visible}.nfe-danfe-dialog{padding:0;box-shadow:none;background:white}.nfe-danfe-toolbar{display:none}.nfe-danfe-paper{border:0;box-shadow:none;width:100%;max-width:none}}
+
+
+/* DANFE model 55 draft — traditional monochrome ruled blocks, not a fiscal document */
+.nfe-danfe-sefaz{font-family:Arial,Helvetica,sans-serif;color:#111;background:#fff;max-width:1050px;padding:18px}
+.nfe-danfe-sefaz h4{font-size:11px;font-weight:800;margin:9px 0 2px;line-height:1.2}
+.nfe-danfe-sefaz .nfe-danfe-receipt{display:grid;grid-template-columns:1fr 170px;border:1px solid #111;margin-bottom:10px;font-size:10px;line-height:1.4}
+.nfe-danfe-receipt>div{padding:7px}.nfe-danfe-receipt>strong{border-left:1px solid #111;text-align:center;padding:10px;font-size:12px}
+.nfe-danfe-receipt-sign{display:flex;gap:20px;border-top:1px solid #111;margin-top:8px;padding-top:5px;font-size:8px;min-height:24px}
+.nfe-danfe-head{display:grid;grid-template-columns:1.3fr .8fr 1.4fr;border:1px solid #111}
+.nfe-danfe-head>div{min-width:0;text-align:center;padding:10px;border-right:1px solid #111}
+.nfe-danfe-head>div:last-child{border-right:0}
+.nfe-danfe-head strong{font-size:12px}.nfe-danfe-head p{font-size:10px;margin:7px 0}
+.nfe-danfe-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #111;border-left:1px solid #111}
+.nfe-danfe-fields>div{min-width:0;min-height:45px;border-right:1px solid #111;border-bottom:1px solid #111;padding:4px 6px;overflow-wrap:anywhere}
+.nfe-danfe-fields small{display:block;font-size:8px;font-weight:700;line-height:1.3;color:#333}
+.nfe-danfe-fields strong{display:block;font-size:11px;margin-top:6px;font-weight:600}
+.nfe-danfe-totals{grid-template-columns:repeat(5,minmax(0,1fr))}
+.nfe-danfe-table-scroll{overflow-x:auto;max-width:100%;border:1px solid #111}
+.nfe-danfe-sefaz table{min-width:1120px;margin:0;border:0;table-layout:auto}
+.nfe-danfe-sefaz table th,.nfe-danfe-sefaz table td{border:1px solid #444;font-size:9px;padding:4px 3px;line-height:1.25}
+.nfe-danfe-sefaz table th{background:#fff;font-weight:800}
+.nfe-danfe-sefaz .nfe-danfe-watermark{top:38%;z-index:1}
+.nfe-danfe-sefaz>p{font-size:10px}
+@media(max-width:650px){.nfe-danfe-head{grid-template-columns:1fr}.nfe-danfe-head>div{border-right:0;border-bottom:1px solid #111}.nfe-danfe-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.nfe-danfe-totals{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media print{@page{size:A4 portrait;margin:8mm}.nfe-danfe-sefaz{width:194mm;max-width:none;min-height:0;padding:0;box-sizing:border-box}.nfe-danfe-sefaz .nfe-danfe-head{grid-template-columns:1.3fr .8fr 1.4fr}.nfe-danfe-sefaz .nfe-danfe-fields{grid-template-columns:repeat(3,minmax(0,1fr))}.nfe-danfe-sefaz .nfe-danfe-totals{grid-template-columns:repeat(5,minmax(0,1fr))}.nfe-danfe-table-scroll{overflow:visible}.nfe-danfe-sefaz table{min-width:0;width:100%;font-size:7px}.nfe-danfe-sefaz table th,.nfe-danfe-sefaz table td{font-size:6px;padding:2px 1px}.nfe-danfe-sefaz h4{break-after:avoid}.nfe-danfe-sefaz table tr{break-inside:avoid}}
