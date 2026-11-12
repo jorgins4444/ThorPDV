@@ -32,11 +32,20 @@ function installOperationsServerV125(ThorAgent){
     for(const row of remote)this._serverOperationDocuments.set(row.id,row);
     while(this._serverOperationDocuments.size>1500)this._serverOperationDocuments.delete(this._serverOperationDocuments.keys().next().value);
     const map=new Map();
+    const remoteReceivables=remote.filter(row=>row.type==='receivable');
+    const amountOf=row=>Number(row.payload?.amount??row.payload?.total_amount??row.payload?.total??0);
     for(const row of [...remote,...local]){
+      // Old PDV versions saved an incomplete R$0 local receipt alongside
+      // the confirmed server cash movement. Suppress ONLY that placeholder
+      // when a server receipt exists at the same timestamp (within 3s).
+      if(row.origin==='local'&&row.type==='receivable'&&amountOf(row)===0&&
+         remoteReceivables.some(server=>amountOf(server)>0&&
+           Math.abs(Date.parse(server.created_at)-Date.parse(row.created_at))<=3000))continue;
       const key=`${row.type}|${row.source_event_id||row.reference||row.id}`;
-      // Prefer the local document ID when both sources describe the same sale.
-      // The printer's original handler resolves IDs in local operation_documents.
-      if(!map.has(key)||row.origin==='local')map.set(key,row);
+      // Prefer the authenticated server record for receivables; it has the
+      // real amount and registered cash-session information.
+      if(!map.has(key)||row.type==='receivable'&&row.origin==='server'||
+         row.type!=='receivable'&&row.origin==='local')map.set(key,row);
     }
     return [...map.values()].sort((a,b)=>Date.parse(b.created_at||0)-Date.parse(a.created_at||0)).slice(0,Math.min(Math.max(Number(filters.limit)||250,1),500));
   };
