@@ -186,7 +186,7 @@ function renderBody(){
         }));
       const catalog=Array.isArray(catalogRows)?catalogRows:[];
       const existing=new Set(catalog.map(row=>String(row.event_id||'')));
-      rows=[...catalog,...operational.filter(row=>!existing.has(row.event_id))]
+      let rows=[...catalog,...operational.filter(row=>!existing.has(row.event_id))]
         .sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')))
         .slice(0,300);
       if(tab!=='history'||!panel)return;
