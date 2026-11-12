@@ -147,6 +147,7 @@ class SyncEngine {
   applyPushResults(push){
     let rejectedSale=false;
     for(const r of push?.results||[]){
+      this.auditSync({id:String(r.id),direction:'outgoing',entity:this.store.db.prepare('select type from queue where id=?').get(r.id)?.type||'event',status:r.status==='processed'?'success':'failed',error:r.status==='processed'?null:(r.error||r.result?.error||'rejected')});
       if(r.status==='processed'){
         this.store.markProcessed(r.id,r.result);
       }else{
@@ -247,6 +248,9 @@ class SyncEngine {
       const applyStarted=Date.now();
       this.progress('Aplicando atualizações locais',5,7);
       this.store.applyPull(pull);
+      for(const [entity,items] of Object.entries(pull||{})){
+        if(Array.isArray(items)&&items.length)this.auditSync({id:crypto.randomUUID(),direction:'incoming',entity,count:items.length,status:'success'});
+      }
       this.store.metric('sync.apply_local',Date.now()-applyStarted,{products:(pull.products||[]).length,inventory:(pull.inventory||[]).length});
       this.store.set('last_pull_at',new Date().toISOString());
       if(Array.isArray(pull.staff_users)) this.store.set('staff_users',JSON.stringify(pull.staff_users));
