@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const hardware = require('./hardware');
+const { readPopS } = require('./urano-pop-s');
 
 function json(value, fallback) {
   try { return JSON.parse(value || ''); } catch { return fallback; }
@@ -22,6 +23,7 @@ function installThorAgentV3(ThorAgent) {
       pendingCashPolicy: this.store.get('v3_pending_cash_policy', 'allow'),
       drawerPrinter: this.store.get('v3_drawer_printer') || this.store.get('printer_name') || '',
       scalePort: this.store.get('v3_scale_port') || '',
+      scaleProtocol: this.store.get('v3_scale_protocol', 'generic') || 'generic',
       scaleBaud: Number(this.store.get('v3_scale_baud', '9600')) || 9600,
       scaleTimeoutMs: Number(this.store.get('v3_scale_timeout', '1500')) || 1500,
       localPaymentUrl: this.store.get('v3_local_payment_url') || '',
@@ -37,6 +39,10 @@ function installThorAgentV3(ThorAgent) {
     if (Object.prototype.hasOwnProperty.call(input, 'autoOpenDrawer')) this.store.set('v3_auto_open_drawer', input.autoOpenDrawer ? 'true' : 'false');
     if (Object.prototype.hasOwnProperty.call(input, 'drawerPrinter')) this.store.set('v3_drawer_printer', input.drawerPrinter || '');
     if (Object.prototype.hasOwnProperty.call(input, 'scalePort')) this.store.set('v3_scale_port', input.scalePort || '');
+    if (Object.prototype.hasOwnProperty.call(input, 'scaleProtocol')) {
+      if (!['generic', 'urano-pop-s'].includes(input.scaleProtocol)) throw new Error('scale_invalid_protocol');
+      this.store.set('v3_scale_protocol', input.scaleProtocol);
+    }
     if (Object.prototype.hasOwnProperty.call(input, 'scaleBaud')) this.store.set('v3_scale_baud', Number(input.scaleBaud || 9600));
     if (Object.prototype.hasOwnProperty.call(input, 'scaleTimeoutMs')) this.store.set('v3_scale_timeout', Number(input.scaleTimeoutMs || 1500));
     if (Object.prototype.hasOwnProperty.call(input, 'localPaymentUrl')) this.store.set('v3_local_payment_url', input.localPaymentUrl || '');
@@ -382,6 +388,17 @@ function installThorAgentV3(ThorAgent) {
   ThorAgent.prototype.readScale = async function () {
     const settings = this.v3Settings();
     if (!settings.scalePort) throw new Error('scale_port_not_configured');
+    if (settings.scaleProtocol === 'urano-pop-s') {
+      const reading = await readPopS({
+        port: settings.scalePort,
+        baudRate: settings.scaleBaud,
+        timeoutMs: Math.max(2500, settings.scaleTimeoutMs || 2500),
+      });
+      if (!Number.isFinite(reading.weightKg) || reading.weightKg <= 0) {
+        throw new Error('POP-S: resposta recebida, mas o protocolo de peso ainda não foi identificado. Abra Configurações > Urano POP-S > Testar leitura e confira os dados HEX antes de vender.');
+      }
+      return { ok: true, weight: reading.weightKg, port: reading.port, protocol: 'urano-pop-s' };
+    }
     const value = await hardware.readScale(settings.scalePort, settings.scaleBaud, settings.scaleTimeoutMs);
     return { ok: true, weight: value, port: settings.scalePort };
   };
