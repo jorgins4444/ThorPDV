@@ -38,7 +38,7 @@ const dateTime = (v: unknown) => {
   return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 };
 const today = () => new Date().toISOString().slice(0, 10);
-const statusLabel = (s: unknown) => ({ open: 'Aberto', partial: 'Aberto', overdue: 'Vencido', paid: 'Quitado', cancelled: 'Estornado' }[String(s)] || String(s || '—'));
+const statusLabel = (s: unknown) => ({ open: 'Aberto', partial: 'Parcial', overdue: 'Vencido', paid: 'Quitado', cancelled: 'Estornado' }[String(s)] || String(s || '—'));
 const docLabel = (s: unknown) => (String(s) === 'boleto' ? 'Boleto' : 'Crediário');
 const methodLabel = (s: unknown) => ({ cash: 'Dinheiro', pix: 'PIX', credit_card: 'Cartão de crédito', debit_card: 'Cartão de débito', voucher: 'Voucher', bank_transfer: 'Transferência', bank_slip: 'Boleto' }[String(s)] || String(s || '—'));
 const empty: ReceivableFilters = { customerName: '', status: '', documentType: '', customerId: '', issuedFrom: '', issuedTo: '', dueFrom: '', dueTo: '', paidFrom: '', paidTo: '' };
@@ -65,7 +65,9 @@ const errorLabel = (value: unknown) => {
 export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMethods, categories, chartAccounts, costCenters, currentBranchId }: Props) {
   const [rows, setRows] = useState<Row[]>(initial);
   const [filters, setFilters] = useState<ReceivableFilters>(empty);
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState<ReceivableFilters>(empty);
+  const [filterOpen, setFilterOpen] = useState(true);
+  const [filterError, setFilterError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [pending, startTransition] = useTransition();
@@ -112,17 +114,49 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
     if (s !== 'cancelled') a.total += Number(r.remaining || 0);
     return a;
   }, { overdue: 0, overdueValue: 0, open: 0, openValue: 0, paid: 0, total: 0 }), [rows]);
-  const activeFilterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
+  const activeFilters = useMemo(() => {
+    const items: string[] = [];
+    if (appliedFilters.customerName) items.push(`Nome: ${appliedFilters.customerName}`);
+    if (appliedFilters.customerId) items.push(`Cliente: ${text(customers.find(c => text(c.id) === appliedFilters.customerId)?.name) || 'Selecionado'}`);
+    if (appliedFilters.status) items.push(`Status: ${statusLabel(appliedFilters.status)}`);
+    if (appliedFilters.documentType) items.push(docLabel(appliedFilters.documentType));
+    for (const [label, from, to] of [
+      ['Vencimento', appliedFilters.dueFrom, appliedFilters.dueTo],
+      ['Emissão', appliedFilters.issuedFrom, appliedFilters.issuedTo],
+      ['Quitação', appliedFilters.paidFrom, appliedFilters.paidTo],
+    ]) {
+      if (from || to) items.push(`${label}: ${from ? date(from) : 'início'} a ${to ? date(to) : 'sem limite final'}`);
+    }
+    return items;
+  }, [appliedFilters, customers]);
   const detailTitle = (detail?.title as Row | undefined) || {};
   const detailReceipts = Array.isArray(detail?.receipts) ? detail.receipts as Row[] : [];
 
   const set = (key: keyof ReceivableFilters, value: string) => setFilters(v => ({ ...v, [key]: value }));
-  const load = (next: ReceivableFilters = filters) => startTransition(async () => {
-    const r = await erpReceivablesList(next);
-    if (r.ok) { setRows(r.data); setMessage(''); } else setMessage(errorLabel(r.error));
-  });
-  const clear = () => { setFilters(empty); load(empty); };
-  const reload = async () => { const r = await erpReceivablesList(filters); if (r.ok) setRows(r.data); };
+  const load = (next: ReceivableFilters = filters) => {
+    for (const [label, from, to] of [
+      ['vencimento', next.dueFrom, next.dueTo],
+      ['emissão', next.issuedFrom, next.issuedTo],
+      ['quitação', next.paidFrom, next.paidTo],
+    ]) {
+      if (from && to && from > to) {
+        setFilterError(`No período de ${label}, a data final deve ser igual ou posterior à inicial.`);
+        return;
+      }
+    }
+    setFilterError('');
+    startTransition(async () => {
+      try {
+        const r = await erpReceivablesList(next);
+        if (r.ok) { setRows(r.data); setAppliedFilters({ ...next }); setMessage(''); }
+        else setFilterError(errorLabel(r.error));
+      } catch {
+        setFilterError('Não foi possível consultar os títulos. Tente novamente.');
+      }
+    });
+  };
+  const clear = () => { setFilters({ ...empty }); load(empty); };
+  const reload = async () => { const r = await erpReceivablesList(appliedFilters); if (r.ok) setRows(r.data); };
 
   function syncAccountFromCategory(select:HTMLSelectElement){
     const category=receivableCategories.find(c=>text(c.id)===select.value);
@@ -221,28 +255,56 @@ export function ReceivablesWorkspaceV2({ initial, customers, accounts, paymentMe
 
   return <div className="recv2">
     <section className="recv2-head">
-      <div><span>FINANCEIRO</span><h2>Contas a Receber</h2><p>Boleto e Crediário ligados diretamente ao Plano de Contas e Centro de Custo cadastrados.</p></div>
-      <div className="recv2-head-actions"><button type="button" className="recv2-filter-btn" onClick={() => setFilterOpen(v => !v)}>⌕ Filtros {activeFilterCount ? `(${activeFilterCount})` : ''}</button><button type="button" className="recv2-primary" onClick={() => setCreateOpen(true)}>＋ Novo lançamento</button></div>
+      <div><span>FINANCEIRO</span><h2>Contas a Receber</h2><p>Acompanhe sua carteira, consulte quitações e organize os próximos recebimentos.</p></div>
+      <div className="recv2-head-actions"><button type="button" className="recv2-filter-btn" aria-expanded={filterOpen} aria-controls="recv2-filters" onClick={() => setFilterOpen(v => !v)}>{filterOpen ? 'Ocultar filtros' : 'Exibir filtros'}</button><button type="button" className="recv2-primary" onClick={() => setCreateOpen(true)}>＋ Novo lançamento</button></div>
     </section>
     {message && <div className="recv2-message"><span>{message}</span><button type="button" onClick={() => setMessage('')}>×</button></div>}
-    <section className="recv2-stats"><article className="danger"><span>Vencidos</span><strong>{stats.overdue}</strong><small>{money(stats.overdueValue)} em atraso</small></article><article><span>Em aberto</span><strong>{stats.open}</strong><small>{money(stats.openValue)} a vencer</small></article><article><span>Quitados</span><strong>{stats.paid}</strong><small>no resultado atual</small></article><article><span>Plano de Contas</span><strong>{postingAccounts.length}</strong><small>contas analíticas de receita</small></article></section>
+    <section className="recv2-stats" aria-label="Resumo do resultado atual">
+      <article><span>Saldo a receber</span><strong>{money(stats.total)}</strong><small>total em aberto no resultado</small></article>
+      <article className="danger"><span>Em atraso</span><strong>{money(stats.overdueValue)}</strong><small>{stats.overdue} título(s) vencido(s)</small></article>
+      <article><span>A vencer</span><strong>{money(stats.openValue)}</strong><small>{stats.open} título(s) em aberto</small></article>
+      <article className="success"><span>Títulos quitados</span><strong>{stats.paid}</strong><small>no resultado atual</small></article>
+    </section>
 
-    {filterOpen && <section className="recv2-filters"><header><div><b>Filtros</b><span>Use somente quando precisar refinar a carteira.</span></div><button type="button" onClick={() => setFilterOpen(false)}>×</button></header><div className="recv2-filter-grid"><label className="wide">Nome do cliente<input value={filters.customerName || ''} onChange={e => set('customerName', e.target.value)} placeholder="Digite parte do nome..." /></label><label>Status<select value={filters.status || ''} onChange={e => set('status', e.target.value)}><option value="">Todos</option><option value="overdue">Vencido</option><option value="open">Aberto</option><option value="paid">Quitado</option><option value="cancelled">Estornado</option></select></label><label>Documento<select value={filters.documentType || ''} onChange={e => set('documentType', e.target.value)}><option value="">Boleto + Crediário</option><option value="boleto">Boleto</option><option value="crediario">Crediário</option></select></label><label>Cliente<select value={filters.customerId || ''} onChange={e => set('customerId', e.target.value)}><option value="">Todos</option>{activeCustomers.map(c => <option key={String(c.id)} value={String(c.id)}>{String(c.name)}</option>)}</select></label><label>Vencimento de<input type="date" value={filters.dueFrom || ''} onChange={e => set('dueFrom', e.target.value)} /></label><label>Vencimento até<input type="date" value={filters.dueTo || ''} onChange={e => set('dueTo', e.target.value)} /></label><label>Emissão de<input type="date" value={filters.issuedFrom || ''} onChange={e => set('issuedFrom', e.target.value)} /></label><label>Emissão até<input type="date" value={filters.issuedTo || ''} onChange={e => set('issuedTo', e.target.value)} /></label></div><footer><button type="button" onClick={clear}>Limpar</button><button type="button" className="recv2-primary" disabled={pending} onClick={() => load()}>{pending ? 'Consultando...' : 'Aplicar filtros'}</button></footer></section>}
+    <section id="recv2-filters" className="recv2-filters" hidden={!filterOpen}>
+      <header><div><b>Filtrar recebimentos</b><span>Combine cliente, situação e períodos para consultar sua carteira.</span></div></header>
+      <form onSubmit={e => { e.preventDefault(); load(); }}>
+        <fieldset disabled={pending} className="recv2-filter-fields">
+          <legend className="recv2-sr-only">Filtros da carteira</legend>
+          <div className="recv2-filter-grid">
+            <label className="wide">Buscar por nome<input value={filters.customerName || ''} onChange={e => set('customerName', e.target.value)} placeholder="Digite o nome do cliente" /></label>
+            <label>Situação<select value={filters.status || ''} onChange={e => set('status', e.target.value)}><option value="">Todas as situações</option><option value="overdue">Vencidos</option><option value="open">Em aberto (inclui parciais)</option><option value="paid">Quitados</option><option value="cancelled">Estornados</option></select></label>
+            <label>Tipo de documento<select value={filters.documentType || ''} onChange={e => set('documentType', e.target.value)}><option value="">Todos os documentos</option><option value="boleto">Boleto</option><option value="crediario">Crediário</option></select></label>
+            <label className="recv2-filter-customer">Cliente cadastrado<select value={filters.customerId || ''} onChange={e => set('customerId', e.target.value)}><option value="">Todos os clientes</option>{activeCustomers.map(c => <option key={String(c.id)} value={String(c.id)}>{String(c.name)}</option>)}</select></label>
+          </div>
+          <div className="recv2-date-groups">
+            <fieldset><legend>Vencimento</legend><div className="recv2-date-range"><label>Vencimento de<input type="date" value={filters.dueFrom || ''} onChange={e => set('dueFrom', e.target.value)} /></label><label>Vencimento até<input type="date" min={filters.dueFrom || undefined} value={filters.dueTo || ''} onChange={e => set('dueTo', e.target.value)} /></label></div></fieldset>
+            <fieldset><legend>Emissão</legend><div className="recv2-date-range"><label>Emissão de<input type="date" value={filters.issuedFrom || ''} onChange={e => set('issuedFrom', e.target.value)} /></label><label>Emissão até<input type="date" min={filters.issuedFrom || undefined} value={filters.issuedTo || ''} onChange={e => set('issuedTo', e.target.value)} /></label></div></fieldset>
+            <fieldset className="recv2-paid-period"><legend>Quitação</legend><div className="recv2-date-range"><label>Quitação de<input type="date" value={filters.paidFrom || ''} onChange={e => set('paidFrom', e.target.value)} /></label><label>Quitação até<input type="date" min={filters.paidFrom || undefined} value={filters.paidTo || ''} onChange={e => set('paidTo', e.target.value)} /></label></div><p>Consulta a data registrada de quitação do título.</p></fieldset>
+          </div>
+        </fieldset>
+        {filterError && <p className="recv2-filter-error" role="alert">{filterError}</p>}
+        <footer><span>Os indicadores acompanham o resultado da consulta.</span><button type="button" disabled={pending} onClick={clear}>Limpar filtros</button><button type="submit" className="recv2-primary" disabled={pending}>{pending ? 'Consultando...' : 'Aplicar filtros'}</button></footer>
+      </form>
+    </section>
+    {!filterOpen && filterError && <p className="recv2-filter-error" role="alert">{filterError}</p>}
+    {activeFilters.length > 0 && <div className="recv2-applied" aria-label="Filtros aplicados"><b>Consulta atual</b>{activeFilters.map(item => <span key={item}>{item}</span>)}<button type="button" disabled={pending} onClick={clear}>Limpar todos</button></div>}
 
-    <section className="recv2-card">
-      <div className="recv2-list-head"><div><b>Carteira de recebimentos</b><span>Categoria, conta analítica e centro de custo acompanham cada título.</span></div><span>{rows.length} título(s)</span></div>
-      {rows.length === 0 ? <div className="recv2-empty">Nenhuma conta encontrada.</div> : <div className="recv2-table-wrap"><table><thead><tr><th>Cliente / descrição</th><th>Documento</th><th>Categoria / Plano de Contas</th><th>Vencimento</th><th>Valor</th><th>Saldo</th><th>Status</th><th>Ações</th></tr></thead><tbody>{rows.map(row => {
+    <section className="recv2-card" aria-busy={pending}>
+      <div className="recv2-list-head"><div><b>Carteira de recebimentos</b><span>Consulte saldos, vencimentos e a data de quitação de cada título.</span></div><span className="recv2-result-count" role="status">{pending ? 'Atualizando resultado...' : `${rows.length} título(s) encontrado(s)`}</span></div>
+      {rows.length === 0 ? <div className="recv2-empty"><b>Nenhum título encontrado</b><span>Ajuste os filtros ou limpe a consulta para visualizar a carteira.</span><button type="button" disabled={pending} onClick={clear}>Limpar filtros</button></div> : <div className="recv2-table-wrap"><table><thead><tr><th>Cliente / descrição</th><th>Documento</th><th>Categoria / Plano de Contas</th><th>Vencimento</th><th>Quitação</th><th className="recv2-money">Valor original</th><th className="recv2-money">Saldo a receber</th><th>Situação</th><th>Ações</th></tr></thead><tbody>{rows.map(row => {
         const s = String(row.status);
         const overdue = s === 'overdue';
         const canReceive = !['paid', 'cancelled'].includes(s) && Number(row.remaining || 0) > 0;
         return <tr key={String(row.id)} className={overdue ? 'is-overdue' : s === 'cancelled' ? 'is-cancelled' : ''}>
-          <td><b>{String(row.customer || 'Cliente')}</b><span>{String(row.description || '—')}</span><small>{row.manual ? 'Lançamento manual' : `Venda #${String(row.sale_number || '—')}`} · emissão {date(row.issued_at)}</small></td>
-          <td><span className={`recv2-doc ${String(row.document_type)}`}>{docLabel(row.document_type)}</span></td>
-          <td><b>{text(row.financial_category) || 'Sem categoria'}</b><span>{text(row.account_code)} {text(row.account)}</span><small>{text(row.cost_center) || 'Sem centro de custo'}</small></td>
-          <td>{overdue ? <span className="recv2-due-alert"><i>⚠</i>{date(row.due_date)}</span> : <span className="recv2-due">{date(row.due_date)}</span>}</td>
-          <td><b>{money(row.amount)}</b></td><td><b>{money(row.remaining)}</b></td>
-          <td><span className={`recv2-status ${s}`}>{statusLabel(s)}</span></td>
-          <td><div className="recv2-row-actions"><button type="button" disabled={detailLoading === String(row.id)} onClick={() => void openDetail(row)}>Detalhes</button><button type="button" onClick={() => setClassifyTarget(row)}>Classificar</button>{canReceive && <button type="button" className="receive" onClick={() => openSettlement(row)}>Receber</button>}{s !== 'cancelled' && <button type="button" className="more" onClick={() => { setReverseTarget(row); setReverseReason(''); }}>Estornar</button>}</div></td>
+          <td data-label="Cliente / descrição"><b>{String(row.customer || 'Cliente')}</b><span>{String(row.description || '—')}</span><small>{row.manual ? 'Lançamento manual' : `Venda #${String(row.sale_number || '—')}`} · emissão {date(row.issued_at)}</small></td>
+          <td data-label="Documento"><span className={`recv2-doc ${String(row.document_type)}`}>{docLabel(row.document_type)}</span></td>
+          <td data-label="Classificação" className="recv2-classification"><b>{text(row.financial_category) || 'Sem categoria'}</b><span>{text(row.account_code)} {text(row.account)}</span><small>{text(row.cost_center) || 'Sem centro de custo'}</small></td>
+          <td data-label="Vencimento">{overdue ? <span className="recv2-due-alert"><i>⚠</i>{date(row.due_date)}</span> : <span className="recv2-due">{date(row.due_date)}</span>}</td>
+          <td data-label="Quitação"><span className="recv2-paid-date">{s === 'paid' ? date(row.paid_at) : '—'}</span></td>
+          <td data-label="Valor original" className="recv2-money"><b>{money(row.amount)}</b></td><td data-label="Saldo a receber" className="recv2-money"><b>{money(row.remaining)}</b></td>
+          <td data-label="Situação"><span className={`recv2-status ${s}`}>{statusLabel(s)}</span></td>
+          <td data-label="Ações"><div className="recv2-row-actions"><button type="button" disabled={detailLoading === String(row.id)} onClick={() => void openDetail(row)}>Detalhes</button><button type="button" onClick={() => setClassifyTarget(row)}>Classificar</button>{canReceive && <button type="button" className="receive" onClick={() => openSettlement(row)}>Receber</button>}{s !== 'cancelled' && <button type="button" className="more" onClick={() => { setReverseTarget(row); setReverseReason(''); }}>Estornar</button>}</div></td>
         </tr>;
       })}</tbody></table></div>}
     </section>

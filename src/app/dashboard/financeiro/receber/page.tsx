@@ -18,7 +18,7 @@ export default async function ReceivablesPage(){
   ]);
   const rows=Array.isArray(receivables.data)?receivables.data:[];
   const customerRows=Array.isArray(customers.data)?customers.data:[];
-  return <AdvancedShell title="Contas a Receber" subtitle="Boleto e Crediário alinhados ao Plano de Contas e Centro de Custo cadastrados, com parcelamento mensal real e baixa no Caixa Interno." activePath="/dashboard/financeiro/receber">
+  return <AdvancedShell title="Contas a Receber" subtitle="Gerencie boletos e crediários com visão de saldos, vencimentos e quitações." activePath="/dashboard/financeiro/receber">
     <ReceivablesWorkspaceV2
       initial={rows}
       customers={customerRows}
