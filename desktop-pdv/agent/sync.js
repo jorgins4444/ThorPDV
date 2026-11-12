@@ -33,6 +33,20 @@ class SyncEngine {
     this.requestWorker=null;
     this.requestPending=new Map();
     this.stopping=false;
+    this.auditLimit=300;
+  }
+
+  auditSync(entry){
+    try{
+      const history=JSON.parse(this.store.get('sync_audit_history','[]')||'[]');
+      history.unshift({...entry,recordedAt:new Date().toISOString()});
+      this.store.set('sync_audit_history',JSON.stringify(history.slice(0,this.auditLimit)));
+    }catch(error){this.store.metric('sync.audit_error',0,{error:String(error.message||error)});}
+  }
+
+  progress(phase,completed,total){
+    const percent=total>0?Math.min(99,Math.floor(completed/total*100)):null;
+    this.onState({syncing:true,syncProgress:{phase,percent,completed,total}});
   }
 
   rejectWorkerPending(worker,error){
@@ -50,6 +64,7 @@ class SyncEngine {
       const pending=this.requestPending.get(String(row.id));if(!pending||pending.worker!==worker)return;
       this.requestPending.delete(String(row.id));
       this.store.metric('sync.http',row.durationMs||0,{path:pending.path,ok:row.ok,status:row.status||0});
+      this.auditSync({id:String(row.id),direction:pending.path==='/api/pdv/pull'?'incoming':'outgoing',endpoint:pending.path,status:row.ok?'success':'failed',durationMs:row.durationMs||0,httpStatus:row.status||0,error:row.ok?null:(row.error||row.data?.error||'http_error')});
       if(row.ok)pending.resolve(row.data);else pending.reject(new Error(row.error||row.data?.error||`http_${row.status||0}`));
     });
     worker.on('error',(error)=>{
@@ -202,14 +217,18 @@ class SyncEngine {
     if(!force&&this.backoffUntil>Date.now()) return {ok:false,error:'sync_backoff',retryAt:new Date(this.backoffUntil).toISOString()};
 
     this.running=true;
-    this.onState({syncing:true});
+    const auditId=crypto.randomUUID();
+    const startedAt=new Date().toISOString();
+    this.progress('Preparando catálogo',0,7);
     try{
       // Register catalog changes before replaying sales that may reference new SKUs.
       if(typeof this.beforeCatalogPush==='function')await this.beforeCatalogPush();
+      this.progress('Enviando pendências anteriores',1,7);
       const today=syncBusinessDate();
       const historical=await this.flushPreviousBusinessDays(today);
       if(!historical.drained) throw new Error('historical_sync_queue_too_large');
 
+      this.progress('Validando caixa',2,7);
       await this.control('cash_rollover',{});
 
       const pending=this.store.pending(100);
@@ -217,19 +236,23 @@ class SyncEngine {
         const date=syncEventBusinessDate(event);
         return !date||date>=today;
       });
+      this.progress('Enviando operações',3,7);
       const pushed=await this.pushEvents(current);
       if(pushed?.blocked) throw new Error('catalog_dependency_unsynced');
 
       await this.control('cash_rollover',{});
 
+      this.progress('Recebendo atualizações',4,7);
       const pull=await this.request('/api/pdv/pull',{since:this.store.get('cursor')||null});
       const applyStarted=Date.now();
+      this.progress('Aplicando atualizações locais',5,7);
       this.store.applyPull(pull);
       this.store.metric('sync.apply_local',Date.now()-applyStarted,{products:(pull.products||[]).length,inventory:(pull.inventory||[]).length});
       this.store.set('last_pull_at',new Date().toISOString());
       if(Array.isArray(pull.staff_users)) this.store.set('staff_users',JSON.stringify(pull.staff_users));
       if(Array.isArray(pull.payment_integrations)) this.store.set('payment_integrations',JSON.stringify(pull.payment_integrations));
 
+      this.progress('Confirmando comunicação',6,7);
       await this.request('/api/pdv/heartbeat',{
         appVersion:this.appVersion,
         capabilities:{offline:true,printing:true,serial:true,fiscalMenu:true,returns:true,pdf:true,configurableShortcuts:true,operators:true,multiPayment:true,cashDrawer:true,scale:true,tefBridge:true,stockConsistency:true,syncBackoff:true,autoSyncFiveMinutes:true,syncAfterOperatorLogin:true,operatorSyncProgress:true,searchOnlySaleCatalog:true,fullProductCatalogScreen:true,dailyCashSessions:true,dynamicCashPaymentMethods:true,overdueCashClosing:true,historicalQueueBeforeRollover:true,authoritativeStockAfterReject:true},
@@ -246,7 +269,8 @@ class SyncEngine {
       this.backoffUntil=0;
       this.store.set('last_sync_at',new Date().toISOString());
       this.store.set('last_sync_error','');
-      this.onState({online:true,syncing:false,lastSyncAt:this.store.get('last_sync_at'),failures:0});
+      this.auditSync({id:auditId,startedAt,endedAt:new Date().toISOString(),direction:'bidirectional',trigger:force?'manual':'automatic',status:'success',sent:current.length,received:(pull.products||[]).length+(pull.inventory||[]).length});
+      this.onState({online:true,syncing:false,syncProgress:{phase:'Concluído',percent:100,completed:7,total:7},lastSyncAt:this.store.get('last_sync_at'),failures:0});
       return {ok:true,pull};
     }catch(error){
       this.failures+=1;
@@ -255,7 +279,8 @@ class SyncEngine {
       this.store.set('last_sync_error',error.message);
       this.store.set('last_sync_backoff_ms',delay);
       for(const p of this.store.pending(100)) this.store.markRetry(p.id,error.message);
-      this.onState({online:false,syncing:false,error:error.message,failures:this.failures,backoffUntil:new Date(this.backoffUntil).toISOString()});
+      this.auditSync({id:auditId,startedAt,endedAt:new Date().toISOString(),direction:'bidirectional',trigger:force?'manual':'automatic',status:'failed',error:error.message});
+      this.onState({online:false,syncing:false,syncProgress:{phase:'Falha',percent:null,error:error.message},error:error.message,failures:this.failures,backoffUntil:new Date(this.backoffUntil).toISOString()});
       return {ok:false,error:error.message,retryInMs:delay};
     }finally{
       this.running=false;
