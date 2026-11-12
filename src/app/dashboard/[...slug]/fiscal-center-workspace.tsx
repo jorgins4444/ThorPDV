@@ -12,16 +12,23 @@ export function FiscalCenterWorkspace({settings}:{settings:Row}){
   const pos=(Array.isArray(settings.pos_registers)?settings.pos_registers:[]) as Row[];
   const cfops=(Array.isArray(settings.cfops)?settings.cfops:[]) as Row[];
   const cert=(settings.certificate&&typeof settings.certificate==='object'?settings.certificate:null) as Row|null;
-  const activeSeries=series.filter(s=>s.active!==false).length;
+  const readiness=(settings.fiscal_readiness&&typeof settings.fiscal_readiness==='object'?settings.fiscal_readiness:{}) as Row;
+  const missing=new Set(Array.isArray(readiness.missing_fields)?readiness.missing_fields.map(String):[]);
+  const issuerComplete=Boolean(txt(issuer.cnpj).replace(/\\D/g,'').length===14)&&!['company','branch','cnpj','state_registration','tax_regime','street','number','district','city','state','postal_code','ibge_city_code'].some(field=>missing.has(field));
+  const certificateValid=Boolean(cert)&&!bool(cert?.expired)&&!['certificate','certificate_expired','cnpj_certificate_mismatch'].some(field=>missing.has(field));
+  const activeSeries=series.filter(s=>s.active===true).length;
+  const activeCfops=cfops.filter(c=>c.active===true).length;
+  const danfe=(settings.danfe&&typeof settings.danfe==='object'?settings.danfe:{}) as Row;
+  const danfeConfigured=bool(danfe.active)&&Number(danfe.unit_decimal_places)>=0&&Number(danfe.product_name_lines)>0;
   const linkedPos=pos.filter(p=>bool(p.in_use)&&txt(p.fiscal_series_id)).length;
   const cards=[
-    {icon:'🏢',title:'Emitente fiscal',desc:'CNPJ, IE, CRT e endereço fiscal utilizados na emissão.',href:'/dashboard/fiscal/emitente',status:txt(issuer.cnpj)?'Configurado':'Revisar',tone:txt(issuer.cnpj)?'ok':'warn',meta:txt(issuer.cnpj)||'CNPJ não informado'},
+    {icon:'🏢',title:'Emitente fiscal',desc:'CNPJ, IE, CRT e endereço fiscal utilizados na emissão.',href:'/dashboard/fiscal/emitente',status:issuerComplete?'Configurado':'Revisar',tone:issuerComplete?'ok':'warn',meta:txt(issuer.cnpj)||'CNPJ não informado'},
     {icon:'⚡',title:'NFC-e / CSC',desc:'Ambiente de emissão, ID CSC e token de segurança da NFC-e.',href:'/dashboard/fiscal/nfce-config',status:bool(settings.csc_token_configured)?'Configurado':'Pendente',tone:bool(settings.csc_token_configured)?'ok':'warn',meta:`Ambiente: ${txt(settings.environment)==='production'?'Produção':'Homologação'}`},
     {icon:'№',title:'Séries e numeração',desc:'Séries de NF-e e NFC-e, sequência e série padrão.',href:'/dashboard/fiscal/series',status:`${activeSeries} ativa(s)`,tone:activeSeries?'ok':'warn',meta:`${series.length} série(s) cadastrada(s)`},
-    {icon:'▣',title:'Caixas × Série',desc:'Vínculo de cada terminal/PDV com sua série exclusiva de NFC-e.',href:'/dashboard/fiscal/caixas',status:`${linkedPos} vinculado(s)`,tone:linkedPos||pos.length===0?'ok':'warn',meta:`${pos.length} caixa(s) cadastrado(s)`},
-    {icon:'▤',title:'DANFE / Impressão',desc:'Casas decimais, linhas, ordenação e formação do nome do produto.',href:'/dashboard/fiscal/danfe',status:'Configurar',tone:'neutral',meta:'Layout de impressão fiscal'},
-    {icon:'↔',title:'CFOPs',desc:'Tabela de CFOPs disponível para produtos e operações fiscais.',href:'/dashboard/fiscal/cfops',status:`${cfops.filter(c=>c.active!==false).length} ativo(s)`,tone:'ok',meta:`${cfops.length} código(s) cadastrados`},
-    {icon:'🔐',title:'Certificado Digital A1',desc:'Certificado PFX/P12 usado para assinatura e comunicação com a SEFAZ.',href:'/dashboard/fiscal/certificado',status:cert?(bool(cert.expired)?'Expirado':'Válido'):'Não configurado',tone:cert&&!bool(cert.expired)?'ok':'warn',meta:cert?txt(cert.subject_cn)||txt(cert.filename):'Anexe o certificado da empresa'},
+    {icon:'▣',title:'Caixas × Série',desc:'Vínculo de cada terminal/PDV com sua série exclusiva de NFC-e.',href:'/dashboard/fiscal/caixas',status:`${linkedPos} vinculado(s)`,tone:linkedPos>0?'ok':'warn',meta:`${pos.length} caixa(s) cadastrado(s)`},
+    {icon:'▤',title:'DANFE / Impressão',desc:'Casas decimais, linhas, ordenação e formação do nome do produto.',href:'/dashboard/fiscal/danfe',status:danfeConfigured?'Configurado':'Revisar',tone:danfeConfigured?'ok':'warn',meta:danfeConfigured?'Parâmetros de impressão disponíveis':'Verifique os parâmetros de impressão'},
+    {icon:'↔',title:'CFOPs',desc:'Tabela de CFOPs disponível para produtos e operações fiscais.',href:'/dashboard/fiscal/cfops',status:`${activeCfops} ativo(s)`,tone:activeCfops>0?'ok':'warn',meta:`${cfops.length} código(s) cadastrados`},
+    {icon:'🔐',title:'Certificado Digital A1',desc:'Certificado PFX/P12 usado para assinatura e comunicação com a SEFAZ.',href:'/dashboard/fiscal/certificado',status:cert?(certificateValid?'Válido':'Revisar'):'Não configurado',tone:certificateValid?'ok':'warn',meta:cert?txt(cert.subject_cn)||txt(cert.filename):'Anexe o certificado da empresa'},
     {icon:'🧾',title:'Emissão de NF-e',desc:'NF-e modelo 55 a partir das vendas, com validação fiscal, série, numeração e acompanhamento.',href:'/dashboard/fiscal/nfe',status:'Abrir emissão',tone:'primary',meta:'Fluxo dedicado para NF-e'},
     {icon:'📄',title:'Documentos Fiscais',desc:'Histórico de NF-e e NFC-e, XML, DANFE, protocolos, rejeições e cancelamentos.',href:'/dashboard/documentos-fiscais',status:'Abrir histórico',tone:'primary',meta:'Consulta centralizada dos documentos'},
   ];
