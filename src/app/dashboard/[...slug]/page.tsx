@@ -149,7 +149,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   }
   if (slug === 'fiscal') {
     const settings=await erpFiscalSettingsGet();
-    return <AdvancedShell title="Fiscal" subtitle="Central das configurações fiscais da empresa e das filiais." activePath="/dashboard/fiscal">{settings.ok===true?<FiscalCenterWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/>:<section role="alert" style={{padding:24,background:"#fff7ed",border:"1px solid #fdba74",borderRadius:12,color:"#9a3412"}}><h2>Não foi possível consultar a configuração fiscal</h2><p>Os indicadores não foram carregados. Atualize a página ou verifique a conexão e as permissões do usuário.</p></section>}</AdvancedShell>
+    return <AdvancedShell title="Fiscal" subtitle="Central das configurações fiscais da empresa e das filiais." activePath="/dashboard/fiscal">{settings.ok===true?<FiscalCenterWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/>:<section role="alert" style={{padding:24,background:"#fff7ed",border:"1px solid #fdba74",borderRadius:12,color:"#9a3412"}}><h2>Não foi possível consultar a configuração fiscal</h2><p>Os indicadores não foram carregados porque a consulta fiscal não foi concluída. Nenhuma configuração fiscal foi alterada.</p><p style={{marginTop:12,fontWeight:600}}>Detalhes da consulta: {typeof settings.error==="string"&&settings.error.trim()?settings.error:"A função fiscal não retornou uma resposta válida (ok=true)."}</p><p style={{marginTop:8}}>Informe esta mensagem ao suporte para identificar o problema na função erp_fiscal_settings_get ou nas permissões da sessão.</p></section>}</AdvancedShell>
   }
   if (fiscalSectionBySlug[slug]) {
     const target=fiscalSectionBySlug[slug];
