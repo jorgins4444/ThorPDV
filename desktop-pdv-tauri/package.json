@@ -1,0 +1,14 @@
+{
+  "name": "thorpdv-tauri-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:ui": "node scripts/prepare-ui.mjs",
+    "dev": "npm run prepare:ui && tauri dev",
+    "build": "npm run prepare:ui && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
