@@ -48,7 +48,14 @@ function installCashMovementReceiptV123(ThorAgent) {
       return output;
     };
 
-    const isSupply = String(receipt.movement_type || '').toLowerCase() === 'supply';
+    // The persisted event is the authoritative source for the receipt type.
+    // Never silently print an unknown or missing type as a withdrawal.
+    const persistedType = String(eventPayload.movement_type || '').trim().toLowerCase();
+    const requestedType = String(receipt.movement_type || '').trim().toLowerCase();
+    if (persistedType && requestedType && persistedType !== requestedType) throw new Error('cash_movement_type_mismatch');
+    const actualType = persistedType || requestedType;
+    if (!['supply', 'withdrawal'].includes(actualType)) throw new Error('cash_invalid_movement_type');
+    const isSupply = actualType === 'supply';
     const type = isSupply ? 'SUPRIMENTO' : 'SANGRIA';
     const signal = isSupply ? '+' : '-';
     const occurred = receipt.occurred_at ? new Date(receipt.occurred_at) : new Date();
