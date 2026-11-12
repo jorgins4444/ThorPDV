@@ -149,7 +149,7 @@ export default async function ModulePage({ params }: { params: Promise<{ slug: s
   }
   if (slug === 'fiscal') {
     const settings=await erpFiscalSettingsGet();
-    return <AdvancedShell title="Fiscal" subtitle="Central das configurações fiscais da empresa e das filiais." activePath="/dashboard/fiscal"><FiscalCenterWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/></AdvancedShell>;
+    return <AdvancedShell title="Fiscal" subtitle="Central das configurações fiscais da empresa e das filiais." activePath="/dashboard/fiscal">{settings.ok===true?<FiscalCenterWorkspace settings={(settings.settings??{}) as Record<string,unknown>}/>:<section role="alert" style={{padding:24,background:"#fff7ed",border:"1px solid #fdba74",borderRadius:12,color:"#9a3412"}}><h2>Não foi possível consultar a configuração fiscal</h2><p>Os indicadores não foram carregados. Atualize a página ou verifique a conexão e as permissões do usuário.</p></section>}</AdvancedShell>
   }
   if (fiscalSectionBySlug[slug]) {
     const target=fiscalSectionBySlug[slug];
