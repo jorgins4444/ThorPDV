@@ -681,7 +681,72 @@ renderSaleWorkspace=function(){
   renderProducts();v3RenderCart();v3Reprice();
 };
 
-async function v3Add(p){const v=v3State();const found=state.cart.find(i=>i.productId===p.id);if(found)found.quantity++;else state.cart.push({productId:p.id,name:p.name,sku:p.sku,quantity:1,unitPrice:Number(p.base_price||p.sale_price||0)});v.lastProductId=p.id;await v3Reprice();}
+// Auto scale: only explicitly KG/weighted products. No guessing for unit items.
+function v3IsWeighedProduct(p){
+  const unit=String(p.unit||p.unit_name||p.unitName||p.measure_unit||p.measurement_unit||p.unit_measure||p.unidade||p.unidade_medida||'').trim().toUpperCase();
+  return ['KG','KILO','QUILO','KILOGRAMA','KILOGRAMAS'].includes(unit)||
+    p.is_weighted===true||p.is_weighed===true||p.sold_by_weight===true||p.pesavel===true;
+}
+let v3ScaleRequestId=0;
+async function v3AutoWeigh(item){
+  const requestId=++v3ScaleRequestId;
+  let settings={};
+  try{settings=await window.thor.v3Settings();}catch{}
+  if(settings.scaleProtocol!=='urano-pop-s'||!settings.scalePort)return;
+  const started=Date.now();
+  const panel=modal('<h3>Pesagem automática — Urano POP-S</h3><p id="autoScaleStatus">Aguardando peso na balança (até 30 segundos)...</p><div class="field"><label>Peso manual (kg)</label><input id="autoScaleManual" type="number" min="0.001" max="31" step="0.001" placeholder="Ex.: 0,332"></div><div style="display:flex;gap:8px"><button id="autoScaleApply" type="button">Aplicar peso manual</button><button id="autoScaleCancel" type="button" class="secondary">Cancelar pesagem</button></div>');
+  let finished=false;
+  const status=panel.querySelector('#autoScaleStatus');
+  const manual=panel.querySelector('#autoScaleManual');
+  const validWeight=(value)=>Number.isFinite(value)&&value>0&&value<=31;
+  const apply=async(value,source)=>{
+    if(finished||requestId!==v3ScaleRequestId||!validWeight(value))return;
+    if(!state.cart.includes(item)){finish();return;}
+    finished=true;v3ScaleRequestId++;
+    item.quantity=Number(value);
+    panel.remove();
+    await v3Reprice();
+    showToast('Peso '+source+': '+Number(value).toFixed(3)+' kg.');
+  };
+  const finish=()=>{finished=true;v3ScaleRequestId++;panel.remove();};
+  panel.querySelector('#autoScaleCancel').onclick=finish;
+  panel.querySelector('#autoScaleApply').onclick=()=>{
+    const weight=Number(String(manual.value).replace(',','.'));
+    if(!validWeight(weight)){status.textContent='Informe um peso válido entre 0,001 e 31 kg.';return;}
+    void apply(weight,'manual');
+  };
+  // Poll the device until a valid reading or the 30-second deadline.
+  while(!finished&&requestId===v3ScaleRequestId&&Date.now()-started<30000){
+    const remaining=Math.max(0,Math.ceil((30000-(Date.now()-started))/1000));
+    if(!panel.isConnected){finish();break;}
+    status.textContent='Aguardando peso na COM '+settings.scalePort+' — '+remaining+' s restantes.';
+    try{
+      const reading=await window.thor.readScale();
+      if(finished||requestId!==v3ScaleRequestId)break;
+      const weight=Number(reading.weight);
+      if(validWeight(weight)){await apply(weight,'da balança');break;}
+    }catch(error){
+      if(finished||requestId!==v3ScaleRequestId)break;
+      status.textContent='Aguardando comunicação com a balança. Você pode informar o peso manualmente.';
+    }
+    if(!finished&&requestId===v3ScaleRequestId)await new Promise(resolve=>setTimeout(resolve,400));
+  }
+  if(!finished&&requestId===v3ScaleRequestId){
+    status.textContent='Tempo de 30 segundos esgotado. Informe o peso manualmente ou cancele.';
+    manual.focus();
+  }
+}
+async function v3Add(p){
+  const v=v3State();
+  const weighted=v3IsWeighedProduct(p);
+  const found=state.cart.find(i=>i.productId===p.id);
+  // Do not add a fictitious 1 kg to a weighed item before the scale responds.
+  if(found){if(!weighted)found.quantity++;}else state.cart.push({productId:p.id,name:p.name,sku:p.sku,quantity:weighted?0:1,unitPrice:Number(p.base_price||p.sale_price||0)});
+  const item=found||state.cart[state.cart.length-1];
+  v.lastProductId=p.id;
+  await v3Reprice();
+  if(weighted)void v3AutoWeigh(item);
+}
 add=v3Add;
 
 async function v3Reprice(){const v=v3State();try{v.quote=await window.thor.quoteCheckout({items:state.cart.map(i=>({productId:i.productId,quantity:i.quantity})),discount:v.discount,surcharge:v.surcharge});for(const q of v.quote.items||[]){const i=state.cart.find(x=>x.productId===q.productId);if(i)i.unitPrice=Number(q.unitPrice||0);}}catch{v.quote={subtotal:state.cart.reduce((s,i)=>s+i.quantity*i.unitPrice,0),discount:v.discount,surcharge:v.surcharge,total:Math.max(state.cart.reduce((s,i)=>s+i.quantity*i.unitPrice,0)-v.discount+v.surcharge,0)};}v3RenderCart();}
