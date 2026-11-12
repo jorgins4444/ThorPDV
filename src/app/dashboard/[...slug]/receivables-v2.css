@@ -1,4 +1,4 @@
-.recv2 { display: grid; gap: 24px; min-width: 0; color: #243247; color-scheme: light; container-type: inline-size; }
+.recv2 { display: grid; gap: 24px; min-width: 0; color: #243247; color-scheme: light; }
 .recv2 *, .recv2 *::before, .recv2 *::after { box-sizing: border-box; }
 .recv2 button, .recv2 input, .recv2 select, .recv2 textarea { font-family: inherit; }
 .recv2 button { cursor: pointer; }
@@ -24,7 +24,7 @@
 .recv2-stats article.danger strong { color: #b42332; }
 .recv2-stats article.success { border-top: 3px solid #008653; padding-top: 20px; }
 .recv2-stats article.success strong { color: #08764b; }
-.recv2-filters { border: 1px solid #e0e6ed; border-radius: 12px; background: #fff; overflow: hidden; }
+.recv2-filters { container-type: inline-size; border: 1px solid #e0e6ed; border-radius: 12px; background: #fff; overflow: hidden; }
 .recv2-filters header { padding: 22px 24px 0; }
 .recv2-filters header b { display: block; font-size: 16px; color: #172033; }
 .recv2-filters header span { display: block; margin-top: 6px; color: #64748b; font-size: 13px; line-height: 1.5; }
