@@ -87,7 +87,12 @@ function installCashClosing(ThorAgent) {
   ThorAgent.prototype.cashMovement = async function (payload = {}) {
     const openId = this.store.get('cash_open_event_id') || '';
     const occurredAt = new Date().toISOString();
-    const result = await originalCashMovement.call(this, payload);
+    const movementType = String(payload.movementType || '').trim().toLowerCase();
+    const amount = Number(payload.amount);
+    if (!['supply', 'withdrawal'].includes(movementType)) throw new Error('cash_invalid_movement_type');
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('cash_invalid_movement_amount');
+    const normalizedPayload = { ...payload, movementType, amount };
+    const result = await originalCashMovement.call(this, normalizedPayload);
     const authorization = payload.supervisorAuthorization || null;
     const current = this.currentOperator?.() || {};
     const staff = typeof this._staffUsersWithHash === 'function' ? this._staffUsersWithHash() : [];
@@ -105,8 +110,8 @@ function installCashClosing(ThorAgent) {
       receipt: {
         event_id: result?.eventId || '',
         cash_open_event_id: openId,
-        movement_type: payload.movementType,
-        amount: money(payload.amount),
+        movement_type: movementType,
+        amount,
         notes: reason,
         reason,
         occurred_at: occurredAt,
@@ -190,7 +195,11 @@ function installCashClosing(ThorAgent) {
       if (line.trim()) result.push(line);
       return result;
     };
-    const type = String(r.movement_type || '') === 'supply' ? 'SUPRIMENTO' : 'SANGRIA';
+    const movementType = String(r.movement_type || '').trim().toLowerCase();
+    if (!['supply', 'withdrawal'].includes(movementType)) throw new Error('cash_invalid_movement_type');
+    const type = movementType === 'supply' ? 'SUPRIMENTO' : 'SANGRIA';
+    const direction = movementType === 'supply' ? '+' : '-';
+    const balanceEffect = movementType === 'supply' ? 'ENTRADA NO CAIXA' : 'SAÍDA DO CAIXA';
     const occurred = r.occurred_at ? new Date(r.occurred_at) : new Date();
     const documentNumber = clean(r.event_id || '').slice(0, 8).toUpperCase() || 'LOCAL';
     const company = context.company_name || context.tenant_name || context.organization_name || 'THORPDV';
@@ -209,8 +218,8 @@ function installCashClosing(ThorAgent) {
       pair('Caixa:', pos),
       ...wrap('Responsável: ', operator),
       '-'.repeat(width),
-      center('VALOR DA OPERAÇÃO'),
-      center(`R$ ${money(r.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`),
+      center(balanceEffect),
+      center(`${direction} R$ ${Math.abs(money(r.amount)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`),
       '-'.repeat(width),
       ...(r.notes ? [center('MOTIVO / OBSERVAÇÃO'), ...wrap('', r.notes), '-'.repeat(width)] : []),
       ...(r.supervisor?.name ? [...wrap('Autorizado por: ', r.supervisor.name), '-'.repeat(width)] : []),
