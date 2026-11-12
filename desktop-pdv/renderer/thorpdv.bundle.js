@@ -1172,9 +1172,12 @@ async function cashClosingMovement(type,previewModal){
     if(!v3Perm('cash.movement',false))auth=await v3NeedSupervisor('cash_movement',amount,notes||label);
     const operator=v3State()?.operator||state?.status?.operator||{};
     const result=await window.thor.cashMovement({movementType:type,amount,notes,reason:notes,operatorId:operator.id||null,operatorName:operator.name||operator.full_name||operator.display_name||'',supervisorAuthorization:auth});
-    if(String(result?.receipt?.movement_type||'')!==type)throw new Error('O registro retornou um tipo diferente de movimentação. Não imprima o comprovante; confira o histórico do caixa.');
+    if(result?.receipt?.movement_type&&String(result.receipt.movement_type)!==type)throw new Error('O registro retornou um tipo diferente de movimentação. Confira o histórico do caixa.');
     let printWarning='';
-    try{await window.thor.printCashMovement(result?.receipt||{});}catch(printError){printWarning=friendlyError(printError?.message||'print_failed');}
+    try{
+      const receipt={...(result?.receipt||{}),event_id:result?.receipt?.event_id||result?.eventId||'',movement_type:type,amount,notes,reason:notes};
+      await window.thor.printCashMovement(receipt);
+    }catch(printError){printWarning=friendlyError(printError?.message||'print_failed');}
     previewModal?.remove();await window.thor.sync().catch(()=>{});await refreshStatus();
     showToast(printWarning?`${label} registrado. Impressão pendente: ${printWarning}`:`${label} registrado e comprovante impresso.`);openCashModal();
   }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,/cash_movement_reason_min_15/.test(String(e.message||''))?'Informe um motivo com pelo menos 15 caracteres.':friendlyError(e.message));}
