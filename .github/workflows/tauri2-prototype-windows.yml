@@ -1,0 +1,43 @@
+name: ThorPDV Tauri 2 Prototype (Windows)
+on:
+  push:
+    branches:
+      - prototype/tauri2-thorpdv-windows
+    paths:
+      - 'desktop-pdv-tauri/**'
+      - '.github/workflows/tauri2-prototype-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tauri2-prototype:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop-pdv-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Prepare original ThorPDV interface
+        run: |
+          npm install --no-audit --no-fund
+          npm run prepare:ui
+          node scripts/prepare-icon.mjs
+        shell: pwsh
+      - name: Build experimental Tauri Windows installer
+        run: npm run build
+        shell: pwsh
+      - name: Upload experimental Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThorPDV-Tauri2-Prototype-Windows
+          path: |
+            desktop-pdv-tauri/src-tauri/target/release/bundle/nsis/*.exe
+            desktop-pdv-tauri/src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 14
