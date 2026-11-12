@@ -1163,17 +1163,21 @@ async function cashClosingMovement(type,previewModal){
   const label=type==='supply'?'Suprimento':'Sangria';
   const value=prompt(`Valor do ${label.toLowerCase()}:`,'0');if(value===null)return;
   const amount=Number(String(value).replace(',','.'));if(!Number.isFinite(amount)||amount<=0)return infoModal(label,'Informe um valor maior que zero.');
-  const notes=prompt(`Motivo / observação do ${label.toLowerCase()}:`,'')||'';
+  const entered=prompt(`Motivo / observação do ${label.toLowerCase()} (mínimo de 15 caracteres):`,'');
+  if(entered===null)return;
+  const notes=entered.trim();
+  if(notes.length<15)return infoModal(label,`Informe um motivo com pelo menos 15 caracteres. Você digitou ${notes.length}; faltam ${15-notes.length}.`);
   try{
     let auth=null;
     if(!v3Perm('cash.movement',false))auth=await v3NeedSupervisor('cash_movement',amount,notes||label);
     const operator=v3State()?.operator||state?.status?.operator||{};
     const result=await window.thor.cashMovement({movementType:type,amount,notes,reason:notes,operatorId:operator.id||null,operatorName:operator.name||operator.full_name||operator.display_name||'',supervisorAuthorization:auth});
+    if(String(result?.receipt?.movement_type||'')!==type)throw new Error('O registro retornou um tipo diferente de movimentação. Não imprima o comprovante; confira o histórico do caixa.');
     let printWarning='';
     try{await window.thor.printCashMovement(result?.receipt||{});}catch(printError){printWarning=friendlyError(printError?.message||'print_failed');}
     previewModal?.remove();await window.thor.sync().catch(()=>{});await refreshStatus();
     showToast(printWarning?`${label} registrado. Impressão pendente: ${printWarning}`:`${label} registrado e comprovante impresso.`);openCashModal();
-  }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,friendlyError(e.message));}
+  }catch(e){if(e.message!=='authorization_cancelled')infoModal(label,/cash_movement_reason_min_15/.test(String(e.message||''))?'Informe um motivo com pelo menos 15 caracteres.':friendlyError(e.message));}
 }
 
 // Fechamento e impressao sao operacoes separadas: falha na impressora nao
