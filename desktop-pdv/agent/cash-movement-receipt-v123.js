@@ -15,6 +15,8 @@ function json(value, fallback = {}) {
 function installCashMovementReceiptV123(ThorAgent) {
   ThorAgent.prototype.cashMovementDocument = function (receiptInput = {}) {
     const receipt = receiptInput || {};
+    // Printing must work after sync removes an event from the local queue.
+    // The immutable receipt returned by cashMovement is sufficient on its own.
     const eventRow = receipt.event_id ? this.store.db.prepare('select payload from queue where id=? limit 1').get(String(receipt.event_id)) : null;
     const eventPayload = json(eventRow?.payload, {});
     const context = receipt.context || json(this.store.get('context', '{}'), {});
