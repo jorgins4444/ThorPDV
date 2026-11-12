@@ -66,6 +66,17 @@
     };
     body.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',render));await render();
   }
+  // The sale-actions modal uses a separate sync button; the header #sync handler
+  // alone cannot intercept it. Capture the click before the legacy handler.
+  document.addEventListener('click',event=>{
+    const action=event.target?.closest?.('.v089-actions-modal [data-act="sync"]');
+    if(!action)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const oldModal=action.closest('.modal');
+    oldModal?.remove();
+    manualSync();
+  },true);
   const install=()=>{
     const sync=document.getElementById('sync');
     if(sync&&!sync.dataset.thorSyncUi){
