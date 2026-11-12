@@ -303,6 +303,9 @@ async function printCashMovement(receipt) {
     }
   }
   const providedType = String(enriched.movement_type || '').trim().toLowerCase();
+  // If a queued event has already synced and disappeared, the complete receipt
+  // returned by cashMovement remains sufficient to print it without re-registering.
+  if (!persistedType && !providedType) throw new Error('cash_receipt_missing_type');
   if (persistedType && providedType && persistedType !== providedType) throw new Error('cash_movement_type_mismatch');
   enriched.movement_type = persistedType || providedType;
   if (!['supply', 'withdrawal'].includes(enriched.movement_type)) throw new Error('cash_invalid_movement_type');
