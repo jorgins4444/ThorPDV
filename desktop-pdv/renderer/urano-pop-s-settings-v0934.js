@@ -112,8 +112,10 @@
         return;
       }
       test.disabled = true;
-      output.textContent = 'Solicitando peso à Urano POP-S...';
+      output.textContent = 'Salvando COM e testando a Urano POP-S...';
       try {
+        model.value = 'urano-pop-s';
+        await persist();
         const reading = await window.thor.readUranoPopS({
           port: port.value.trim().toUpperCase(),
           baudRate: Number(baud.value),
