@@ -42,4 +42,8 @@ const png = Buffer.concat([
 const folder = resolve('src-tauri/icons');
 await mkdir(folder, { recursive: true });
 await writeFile(resolve(folder, 'icon.png'), png);
+const icoHeader = Buffer.from([0, 0, 1, 0, 1, 0, 32, 32, 0, 0, 1, 0, 32, 0]);
+const sizeBytes = Buffer.alloc(4); sizeBytes.writeUInt32LE(png.length);
+const offsetBytes = Buffer.alloc(4); offsetBytes.writeUInt32LE(22);
+await writeFile(resolve(folder, 'icon.ico'), Buffer.concat([icoHeader, sizeBytes, offsetBytes, png]));
 console.log('Generated prototype icon:', png.length, 'bytes');
