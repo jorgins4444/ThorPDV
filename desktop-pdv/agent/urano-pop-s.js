@@ -44,11 +44,13 @@ try {
       const data=Buffer.from(String(stdout||'').trim(),'base64');
       if(!data.length) return reject(new Error('scale_no_response'));
       const ascii=data.toString('latin1').replace(/[\x00-\x1f\x7f]/g,' ').trim();
-      // Different POP-S firmware/protocol selections have different frames.
-      // Do not guess a decimal position from an unverified frame.
-      const decimal=ascii.match(/(?:^|\s)([+]?[0-9]{1,2}[.,][0-9]{2,3})(?:\s|$)/);
-      const weight=decimal?Number(decimal[1].replace(',','.')):null;
-      resolve({ok:true,port:String(port).toUpperCase(),protocol:'urano-pop-s',weightKg:weight!==null&&weight>0&&weight<=31?weight:null,rawHex:data.toString('hex').toUpperCase(),rawText:ascii,requiresProtocolVerification:weight===null||weight<=0||weight>31});
+      // POP-S response confirmed on a real COM7 Bluetooth reading:
+      // "TARA: 0.000kg  PESO L: 0.332kg  R$/kg: 0.00  TOTAL R$: 0.00".
+      // Parse ONLY the explicitly labelled net weight, never tara/price/total.
+      const match=ascii.match(/\bPESO\s*L\s*:\s*([0-9]{1,2}(?:[.,][0-9]{1,3})?)\s*kg\b/i);
+      const weight=match?Number(match[1].replace(',','.')):null;
+      const verified=Number.isFinite(weight)&&weight>0&&weight<=31;
+      resolve({ok:true,port:String(port).toUpperCase(),protocol:'urano-pop-s',weightKg:verified?weight:null,rawHex:data.toString('hex').toUpperCase(),rawText:ascii,requiresProtocolVerification:!verified});
     });
   });
 }
